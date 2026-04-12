@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚾ DUGOUT - Baseball Manager Simulator</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="titleScreen" class="screen active">
+  <div class="title-screen">
+    <div class="title-emoji">⚾</div>
+    <div class="title-logo">DUGOUT</div>
+    <div class="title-sub">Baseball Manager Simulator</div>
+    <p style="color:var(--text-dim);margin-bottom:24px;max-width:520px;font-size:0.88rem;">감독이 되어 팀을 이끌어 우승을 향해 나아가세요.<br>타선 구성, 투수 로테이션, 불펜 운용까지 당신의 손에.</p>
+    <div id="titleContinue"></div>
+    <p style="color:var(--text-dim);margin-bottom:14px;font-size:0.85rem;">🏟️ 팀을 선택하세요:</p>
+    <div class="team-select" id="teamSelect"></div>
+    <div style="margin-top:24px;">
+      <button class="btn btn-secondary" onclick="importGame()" style="font-size:0.8rem;">📥 세이브 파일 불러오기</button>
+    </div>
+  </div>
+</div>
+
+<div id="gameHeader" style="display:none;">
+  <div class="header">
+    <div class="header-title">⚾ DUGOUT</div>
+    <div class="header-info">
+      <div class="header-stat" id="hdrTeam"></div>
+      <div class="header-stat">시즌 <span id="hdrSeason">1</span></div>
+      <div class="header-stat">💰 <span id="hdrBudget">0</span>억</div>
+      <div class="header-stat" id="hdrPop"></div>
+      <div class="header-stat">📅 <span id="hdrGame">0</span>/84</div>
+      <div class="header-stat" id="hdrPhase" style="color:var(--accent);"></div>
+      <div class="game-menu-wrap">
+        <button class="game-menu-btn" onclick="toggleGameMenu()">☰</button>
+        <div class="game-menu" id="gameMenu">
+          <div class="game-menu-item" onclick="saveGame();showToast('💾 저장 완료');toggleGameMenu();">💾 게임 저장</div>
+          <div class="game-menu-item" onclick="exportGame();toggleGameMenu();">📤 내보내기</div>
+          <div class="game-menu-item" onclick="importGame();toggleGameMenu();">📥 불러오기</div>
+          <div class="game-menu-divider"></div>
+          <div class="game-menu-item" style="color:#ef4444;" onclick="newGame();">🔄 새 게임</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="nav-tabs">
+    <div class="nav-tab active" data-tab="dashboard">📊 대시보드</div>
+    <div class="nav-tab" data-tab="roster">📋 로스터</div>
+    <div class="nav-tab" data-tab="match">⚾ 경기</div>
+    <div class="nav-tab" data-tab="training">🏋️ 훈련</div>
+    <div class="nav-tab" data-tab="market">🔄 이적시장</div>
+    <div class="nav-tab" data-tab="standings">🏆 순위</div>
+    <div class="nav-tab" data-tab="analysis">📈 분석</div>
+    <div class="nav-tab" data-tab="invest">💼 투자</div>
+    <div class="nav-tab" data-tab="draft">🎓 드래프트</div>
+    <div class="nav-advance-wrap"><button class="btn-nav-advance" id="btnNavAdvance" onclick="navAdvance()">▶ 다음</button></div>
+  </div>
+</div>
+
+<div id="dashboardScreen" class="screen">
+  <div class="finance-grid" id="financeGrid"></div>
+  <div class="dash-row">
+    <div class="card"><div class="card-title">▸ 구단 현황</div><div id="dashTeamInfo"></div></div>
+    <div class="card"><div class="card-title">▸ 시설 & 육성</div><div id="dashFacility"></div></div>
+  </div>
+  <!-- 팀 기록 섹션 -->
+  <div class="dash-row" style="margin-top:14px;">
+    <div class="card"><div class="card-title">📊 타자 기록 순위</div><div id="dashBatterStats"></div></div>
+    <div class="card"><div class="card-title">📊 투수 기록 순위</div><div id="dashPitcherStats"></div></div>
+  </div>
+  <div class="dash-row" style="margin-top:14px;">
+    <div class="card"><div class="card-title">⚾ 1군 주전 라인업</div><div id="dashLineup"></div></div>
+    <div class="card"><div class="card-title">⚾ 선발 로테이션 · 불펜</div><div id="dashPitching"></div></div>
+  </div>
+</div>
+
+<!-- ROSTER with sub-tabs -->
+<div id="rosterScreen" class="screen">
+  <div class="roster-tabs">
+    <div class="roster-tab active" onclick="switchRosterTab('batters')">🏏 1군 타자</div>
+    <div class="roster-tab" onclick="switchRosterTab('pitchers')">⚾ 1군 투수</div>
+    <div class="roster-tab" onclick="switchRosterTab('futures')">🌱 2군 <span id="futuresCountBadge" style="font-size:0.65rem;color:var(--text-dim);"></span></div>
+    <div class="roster-tab" onclick="switchRosterTab('developmental')">⭐ 육성 <span id="devCountBadge" style="font-size:0.65rem;color:var(--text-dim);"></span></div>
+    <div class="roster-tab" onclick="switchRosterTab('il')">🏥 IL <span id="ilCountBadge" style="font-size:0.65rem;color:#ef4444;"></span></div>
+  </div>
+  <div style="font-size:0.68rem;color:var(--text-dim);margin-bottom:8px;font-family:'JetBrains Mono',monospace;" id="activeRosterInfo"></div>
+
+  <div class="roster-section active" id="rosterBatters">
+    <div class="roster-ootp-layout">
+      <!-- Left: Compact roster list -->
+      <div class="roster-ootp-left">
+        <div class="card" style="padding:10px;">
+          <div class="section-divider" style="margin-top:6px;">⭐ 선발 라인업 <span class="section-count" id="startingCount">0/9</span></div>
+          <div style="overflow-x:auto;">
+            <table class="data-table compact-roster"><thead><tr><th>#</th><th>이름</th><th>포지션</th><th>나이</th><th>CON</th><th>POW</th><th>EYE</th><th>SPD</th><th>FLD</th><th>ARM</th><th>OVR</th><th></th></tr></thead>
+            <tbody id="startingBattersBody"></tbody></table>
+          </div>
+          <div class="section-divider" style="margin-top:14px;">📋 후보 <span class="section-count" id="benchCount">0</span></div>
+          <div style="overflow-x:auto;">
+            <table class="data-table compact-roster"><thead><tr><th>이름</th><th>포지션</th><th>나이</th><th>CON</th><th>POW</th><th>EYE</th><th>SPD</th><th>FLD</th><th>ARM</th><th>OVR</th><th></th></tr></thead>
+            <tbody id="benchBattersBody"></tbody></table>
+          </div>
+        </div>
+      </div>
+      <!-- Right: Field view (larger) -->
+      <div class="roster-ootp-right">
+        <div id="lineupFieldView"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="roster-section" id="rosterFutures"></div>
+  <div class="roster-section" id="rosterDevelopmental"></div>
+  <div class="roster-section" id="rosterIL"></div>
+
+  <div class="roster-section" id="rosterPitchers">
+    <div class="card">
+      <div class="section-divider">🔥 선발 로테이션 <span class="section-count" id="rotationCount">0/5</span></div>
+      <div style="margin-bottom:8px;font-size:0.7rem;color:var(--text-dim);">5명의 선발 투수가 로테이션을 돌며 등판합니다. 클릭하여 불펜으로 이동.</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table"><thead><tr><th>#</th><th>이름</th><th>역할</th><th>나이</th><th>구위</th><th>제구</th><th>구속</th><th>무브</th><th>위기</th><th>지구력</th><th>OVR</th><th>컨디션</th><th>스태미나</th><th>관리</th></tr></thead>
+        <tbody id="rotationBody"></tbody></table>
+      </div>
+
+      <div class="section-divider" style="margin-top:20px;">🛡️ 불펜 <span class="section-count" id="bullpenCount">0</span></div>
+      <div style="margin-bottom:8px;font-size:0.7rem;color:var(--text-dim);">보직 내 1번 투수가 우선 등판하며, 스태미나 부족 시 2번으로 자동 교체됩니다.</div>
+      <div style="overflow-x:auto;">
+        <table class="data-table"><thead><tr><th></th><th>이름</th><th>역할</th><th>나이</th><th>구위</th><th>제구</th><th>구속</th><th>무브</th><th>위기</th><th>지구력</th><th>OVR</th><th>컨디션</th><th>스태미나</th><th>관리</th></tr></thead>
+        <tbody id="bullpenBody"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="matchScreen" class="screen">
+  <!-- 상단 컨트롤 -->
+  <div class="season-controls">
+    <button class="btn btn-primary" id="btnPlayMatch" onclick="startMatch()">▶ 다음 경기 시작</button>
+    <div class="speed-control">
+      <span style="font-size:0.72rem;color:var(--text-dim);">속도:</span>
+      <button class="speed-btn active" onclick="setSpeed(500,this)">1x</button>
+      <button class="speed-btn" onclick="setSpeed(250,this)">2x</button>
+      <button class="speed-btn" onclick="setSpeed(100,this)">4x</button>
+      <button class="speed-btn" onclick="setSpeed(30,this)">⚡</button>
+    </div>
+    <div class="auto-sim-control">
+      <button class="btn btn-ghost" id="btnAutoSim10" onclick="autoSimGames(10)">⏩ 10경기</button>
+      <button class="btn btn-ghost" id="btnAutoSim30" onclick="autoSimGames(30)">⏩ 30경기</button>
+      <button class="btn btn-ghost" id="btnAutoSimHalf" onclick="autoSimToBreak()">⏩ 끝까지</button>
+    </div>
+    <span style="font-size:0.75rem;color:var(--text-dim);" id="matchStatus"></span>
+  </div>
+
+  <!-- ===== OOTP 스타일 경기 화면 ===== -->
+  <div class="match-broadcast" id="matchStadium">
+
+    <!-- ① 상단: 스코어보드 -->
+    <div class="bc-scoreboard">
+      <div class="bc-sb-left">
+        <div class="bc-team-row bc-away" id="sbTeamAway">
+          <span class="bc-team-emoji" id="sbAwayEmoji">⚾</span>
+          <span class="bc-team-name" id="sbAwayName">AWAY</span>
+          <span class="bc-rhe"><span id="sbAwayR">0</span></span>
+          <span class="bc-rhe"><span id="sbAwayH">0</span></span>
+          <span class="bc-rhe"><span id="sbAwayE">0</span></span>
+        </div>
+        <div class="bc-team-row bc-home" id="sbTeamHome">
+          <span class="bc-team-emoji" id="sbHomeEmoji">⚾</span>
+          <span class="bc-team-name" id="sbHomeName">HOME</span>
+          <span class="bc-rhe"><span id="sbHomeR">0</span></span>
+          <span class="bc-rhe"><span id="sbHomeH">0</span></span>
+          <span class="bc-rhe"><span id="sbHomeE">0</span></span>
+        </div>
+        <div class="bc-rhe-label"><span></span><span></span><span>R</span><span>H</span><span>E</span></div>
+      </div>
+      <div class="bc-sb-center">
+        <div class="bc-inning-badge" id="sbInningBadge">1회초</div>
+        <div class="bc-outs-row">
+          <span class="bc-out-dot" id="outDot0"></span>
+          <span class="bc-out-dot" id="outDot1"></span>
+          <span class="bc-out-dot" id="outDot2"></span>
+        </div>
+      </div>
+      <div class="bc-sb-right">
+        <div class="bc-detail-grid" id="scoreGrid"></div>
+      </div>
+    </div>
+
+    <!-- ② 중단: 야구장 DOM 필드 + 중계 로그 -->
+    <div class="bc-field-row">
+      <div class="bc-field-wrap">
+        <div class="bc-diamond" id="bcDiamond">
+          <!-- 수비수 이름표 (JS가 동적 생성) -->
+          <div class="bc-defenders" id="bcDefenders"></div>
+          <!-- 베이스 -->
+          <div class="bc-base bc-base-home" id="baseHome">◆</div>
+          <div class="bc-base bc-base-1b" id="base1B">◇</div>
+          <div class="bc-base bc-base-2b" id="base2B">◇</div>
+          <div class="bc-base bc-base-3b" id="base3B">◇</div>
+          <!-- 주자 (JS가 토글) -->
+          <div class="bc-runner bc-runner-1b" id="runner1B"></div>
+          <div class="bc-runner bc-runner-2b" id="runner2B"></div>
+          <div class="bc-runner bc-runner-3b" id="runner3B"></div>
+          <!-- 마운드 투수 표시 -->
+          <div class="bc-mound-pitcher" id="bcMoundPitcher"></div>
+          <!-- 타석 타자 표시 -->
+          <div class="bc-batter-box" id="bcBatterBox"></div>
+        </div>
+      </div>
+      <!-- 실시간 중계 로그 -->
+      <div class="bc-log-panel">
+        <div class="bc-log-title">PLAY-BY-PLAY</div>
+        <div class="play-log" id="playLog"></div>
+      </div>
+    </div>
+
+    <!-- ③ 하단: 3분할 대시보드 — 정적 뼈대, JS는 textContent만 갱신 -->
+    <div class="bc-dashboard" id="bcDashboard">
+      <!-- 좌: 라인업 -->
+      <div class="bc-panel bc-panel-lineup">
+        <div class="bc-panel-title" id="luTitle">LINEUP</div>
+        <table class="lineup-table"><thead><tr><th>#</th><th></th><th>POS</th><th>NAME</th><th>TODAY</th><th>AVG</th></tr></thead>
+          <tbody id="luBody"></tbody>
+        </table>
+      </div>
+      <!-- 중: 투수 -->
+      <div class="bc-panel bc-panel-pitcher">
+        <div class="pitcher-detail">
+          <div class="pd-role">PITCHING</div>
+          <div class="pd-name" id="pdName">-</div>
+          <div class="pd-season" id="pdSeason">-</div>
+          <div class="pd-today">
+            <div class="pd-stat-box"><div class="pd-stat-label">IP</div><div class="pd-stat-val" id="pdIP">0</div></div>
+            <div class="pd-stat-box"><div class="pd-stat-label">H</div><div class="pd-stat-val" id="pdH">0</div></div>
+            <div class="pd-stat-box"><div class="pd-stat-label">ER</div><div class="pd-stat-val" id="pdER">0</div></div>
+            <div class="pd-stat-box"><div class="pd-stat-label">BB</div><div class="pd-stat-val" id="pdBB">0</div></div>
+            <div class="pd-stat-box"><div class="pd-stat-label">K</div><div class="pd-stat-val" id="pdK">0</div></div>
+            <div class="pd-stat-box"><div class="pd-stat-label">NP</div><div class="pd-stat-val" id="pdNP">0</div></div>
+          </div>
+          <div class="stamina-bar-wrap">
+            <div class="stamina-bar-label" id="pdStamLabel">STAMINA 0</div>
+            <div class="stamina-bar-bg"><div class="stamina-bar-fill" id="pdStamBar"></div></div>
+          </div>
+        </div>
+      </div>
+      <!-- 우: 타자 -->
+      <div class="bc-panel bc-panel-batter">
+        <div class="batter-detail">
+          <div class="bd-pos" id="bdPos">AT BAT</div>
+          <div class="bd-name" id="bdName">-</div>
+          <div class="bd-season" id="bdSeason">-</div>
+          <div class="bd-today">
+            <div class="bd-stat-box"><div class="bd-stat-label">AB</div><div class="bd-stat-val" id="bdAB">0</div></div>
+            <div class="bd-stat-box"><div class="bd-stat-label">H</div><div class="bd-stat-val" id="bdH">0</div></div>
+            <div class="bd-stat-box"><div class="bd-stat-label">HR</div><div class="bd-stat-val" id="bdHR">0</div></div>
+            <div class="bd-stat-box"><div class="bd-stat-label">RBI</div><div class="bd-stat-val" id="bdRBI">0</div></div>
+            <div class="bd-stat-box"><div class="bd-stat-label">BB</div><div class="bd-stat-val" id="bdBB">0</div></div>
+            <div class="bd-stat-box"><div class="bd-stat-label">K</div><div class="bd-stat-val" id="bdK">0</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 숨겨진 호환용 요소 -->
+  <div style="display:none;">
+    <span id="miInning"></span><span id="miOuts"></span>
+    <span id="miPitcher"></span><span id="miBatter"></span>
+    <span id="sbAR"></span><span id="sbHR"></span>
+    <span id="sbAH"></span><span id="sbHH"></span>
+    <span id="sbAE"></span><span id="sbHE"></span>
+    <span id="sbAwayScore"></span><span id="sbHomeScore"></span>
+  </div>
+</div>
+
+<div id="trainingScreen" class="screen">
+  <div class="card">
+    <div class="card-title">▸ 팀 훈련 (경기당 1회)</div>
+    <div style="margin-bottom:12px;font-size:0.72rem;color:var(--text-dim);">육성 레벨: <span id="trainingLevelDisp" style="color:var(--accent);font-weight:700;"></span></div>
+    <div id="trainingContent"></div>
+    <p style="margin-top:10px;font-size:0.75rem;color:var(--text-dim);" id="trainingStatus"></p>
+  </div>
+</div>
+
+
+<div id="marketScreen" class="screen">
+  <div class="card">
+    <div class="card-title">▸ 이적 시장</div>
+    <div class="roster-tabs" style="margin-bottom:10px;">
+      <div class="roster-tab active" onclick="switchMarketTab('bat')">🏏 타자</div>
+      <div class="roster-tab" onclick="switchMarketTab('pitch')">⚾ 투수</div>
+      <div class="roster-tab" onclick="switchMarketTab('trade')">🔄 트레이드</div>
+    </div>
+    <div class="market-grid" id="marketGrid"></div>
+  </div>
+</div>
+
+<div id="standingsScreen" class="screen">
+  <div class="card">
+    <div class="card-title">▸ 리그 순위</div>
+    <table class="data-table"><thead><tr><th>#</th><th>팀</th><th>승률</th><th>게임차</th><th>승</th><th>패</th><th>경기</th><th>연속</th><th>타율</th><th>평균자책</th><th>최근 5</th></tr></thead>
+    <tbody id="standingsBody"></tbody></table>
+  </div>
+  <div class="dash-row" style="margin-top:14px;">
+    <div class="card"><div class="card-title">🏅 리그 타자 리더</div><div id="leagueBatLeaders"></div></div>
+    <div class="card"><div class="card-title">🏅 리그 투수 리더</div><div id="leaguePitLeaders"></div></div>
+  </div>
+</div>
+
+<div id="analysisScreen" class="screen">
+  <div class="roster-tabs" id="analysisTabs">
+    <div class="roster-tab active" data-tab="batters" onclick="switchAnalysisTab('batters')">🏏 타자 성적</div>
+    <div class="roster-tab" data-tab="pitchers" onclick="switchAnalysisTab('pitchers')">⚾ 투수 성적</div>
+    <div class="roster-tab" data-tab="scout" onclick="switchAnalysisTab('scout')">📋 스카우트 리포트</div>
+    <div class="roster-tab" data-tab="contracts" onclick="switchAnalysisTab('contracts')">💰 계약 현황</div>
+  </div>
+  <div id="analysisContent"></div>
+</div>
+
+<div id="investScreen" class="screen">
+  <div class="roster-tabs" style="margin-bottom:14px;">
+    <div class="roster-tab active" onclick="switchInvestTab('finance')">💰 재정</div>
+    <div class="roster-tab" onclick="switchInvestTab('infra')">🏗️ 인프라 & 시설</div>
+    <div class="roster-tab" onclick="switchInvestTab('coaching')">👔 코치</div>
+    <!-- 팬 이벤트 삭제 (무한 흑자 익스플로잇 방지) -->
+    <div class="roster-tab" onclick="switchInvestTab('overseas')">✈️ 해외연수</div>
+    <div class="roster-tab" onclick="switchInvestTab('scoutcamp')">🌎 스카우팅</div>
+    <div class="roster-tab" onclick="switchInvestTab('medical')">🏥 해외 의료</div>
+  </div>
+  <div id="investContent"></div>
+</div>
+
+<div id="draftScreen" class="screen">
+  <div id="draftContent"></div>
+</div>
+
+<div class="modal-overlay" id="seasonModal" onclick="if(event.target===this)this.classList.remove('active');">
+  <div class="modal"><button class="modal-close" onclick="$('seasonModal').classList.remove('active');">&times;</button><h2 id="modalTitle"></h2><div id="modalBody"></div></div>
+</div>
+
+<!-- Scripts: 의존성 순서대로 로드 -->
+<script src="js/constants.js"></script>
+<script src="js/helpers.js"></script>
+<script src="js/players.js"></script>
+<script src="js/state.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/roster.js"></script>
+<script src="js/match/match-state.js"></script>
+<script src="js/match/match-engine.js"></script>
+<script src="js/match/match-ui.js"></script>
+<script src="js/match/match-flow.js"></script>
+<script src="js/match/match.js"></script>
+<script src="js/training.js"></script>
+<script src="js/facility.js"></script>
+<script src="js/market.js"></script>
+<script src="js/trade.js"></script>
+<script src="js/standings.js"></script>
+<script src="js/analysis/analysis-batters.js"></script>
+<script src="js/analysis/analysis-pitchers.js"></script>
+<script src="js/analysis/analysis-scout.js"></script>
+<script src="js/analysis/analysis-contracts.js"></script>
+<script src="js/analysis/analysis.js"></script>
+<script src="js/season.js"></script>
+<script src="js/season-flow.js"></script>
+<script src="js/invest.js"></script>
+<script src="js/draft.js"></script>
+<script src="js/title.js"></script>
+</body>
+</html>
