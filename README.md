@@ -112,10 +112,10 @@ PRESEASON → FIRST_HALF (42경기) → ALLSTAR (올스타+드래프트) → SEC
 |--------|------|
 | **PRESEASON** | 선수 평가, 로스터 정비 |
 | **FIRST_HALF** | 전반기 42경기 |
-| **ALLSTAR** | 올스타전 + 아마추어 드래프트 |
+| **ALLSTAR** | 올스타 + 신인 드래프트 |
 | **SECOND_HALF** | 후반기 42경기 |
-| **POSTSEASON** | 5팀 플레이오프 (5전 3선승제 시리즈) |
-| **AWARDS** | MVP, 신인왕, 사이영상 시상 / 은퇴 |
+| **POSTSEASON** | 플레이오프 |
+| **AWARDS** | MVP, 신인왕, 골든글러브 시상 / 은퇴 |
 | **STOVE_LEAGUE** | FA 시장, 계약 협상, 로스터 정비 |
 
 ### 3.2 8개 팀 아키타입
@@ -144,7 +144,7 @@ PRESEASON → FIRST_HALF (42경기) → ALLSTAR (올스타+드래프트) → SEC
 - **공개 스탯 (20-80 스케일)**
   - 타자: `contact, power, eye, speed, fielding, arm`
   - 투수: `stuff, control, velocity, movement, stamina, clutch`
-- **히든 스탯 (7-20 스케일)**: `_potential, _durability, _consistency, _clutchHidden, _workEthic`
+- **히든 스탯 (1-20 스케일)**: `_potential, _durability, _consistency, _clutchHidden, _workEthic`
 - **계약**: `salary(억원), _contractYears, _serviceTime`
 - **잠재력 상한**: `maxOVR = 30 + (potential × 2.5)`
 
@@ -161,10 +161,10 @@ PRESEASON → FIRST_HALF (42경기) → ALLSTAR (올스타+드래프트) → SEC
 
 #### 3.6.1 TTO + BABIP 타석 판정
 
-매 타석은 **TTO(Three True Outcomes) → 인플레이** 2단계 확률 모델로 처리된다.
+매 타석은 **TTO(Three True Outcomes) → 인플레이** 2단계 확률 모델로 처리.
 
 ```
-[투구 전 도루 시도] → [1차 TTO 판정: HR / K / BB] → (인플레이 시) [2차 판정: 에러 / 안타 / 범타]
+[투구 전 도루 시도] → [1차 TTO 판정: /HR / K / BB] → (인플레이 시) [2차 판정: 에러 / 안타 / 범타]
 ```
 
 **1차 TTO 확률:**
@@ -191,7 +191,7 @@ HR+K+BB 합계 최대 53% → 인플레이 최소 47% 보장.
 
 주자는 **선수 객체 참조**로 저장되어 각 주자의 실제 speed 스탯이 진루 판정에 사용된다.
 
-| 상황 | 확률 공식 | MLB 근사치 |
+| 상황 | 확률 공식 | 근사치 |
 |------|-----------|-----------|
 | 단타 시 3루→홈 | 자동 득점 | ~95% |
 | 단타 시 2루→홈 | `min(75, 주자speed × armPenalty × 1.5)` | ~60% |
