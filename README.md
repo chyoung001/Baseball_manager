@@ -421,6 +421,8 @@ OVR ≥ maxOvrFromPot(potential) → 성장 차단
 ## 4. 알려진 문제점
 
 > **범례:**  ❌ 미수정 / N/A 해당없음
+<img width="576" height="323" alt="image" src="https://github.com/user-attachments/assets/c3df11e4-28d1-4eba-9b46-a66bf4416644" />
+
 
 ### 버그 통합 트래커
 
