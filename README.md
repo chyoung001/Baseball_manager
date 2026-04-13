@@ -2,6 +2,8 @@
 
 웹 기반 야구 구단 경영 시뮬레이션 게임
 
+[프론트엔드 라이브 데모](https://chyoung001.github.io/Baseball_manager/)
+
 ## 1. 프로젝트 개요
 
 | 항목 | 내용 |
