@@ -16,7 +16,7 @@ const ALL_POS_NAMES={...BAT_POS_NAMES,...PITCH_ROLE_NAMES};
 
 const TEAMS_DATA=[
   {name:'바이킹스',emoji:'🪓',desc:'파이어볼러 에이스의 선발 왕국',concept:'power_hit',conceptLabel:'투수 왕국',conceptColor:'#f59e0b',basePop:65,baseBudget:100,baseFacility:60,baseDevLevel:65},
-  {name:'세이버스',emoji:'⚔️',desc:'거대 자본의 악의 제국',concept:'pitching',conceptLabel:'악의 제국',conceptColor:'#8b5cf6',basePop:80,baseBudget:9000,baseFacility:75,baseDevLevel:55}, // TODO: 테스트 후 160으로 복원
+  {name:'세이버스',emoji:'⚔️',desc:'거대 자본의 악의 제국',concept:'pitching',conceptLabel:'악의 제국',conceptColor:'#8b5cf6',basePop:80,baseBudget:160,baseFacility:75,baseDevLevel:55},
   {name:'드림즈',emoji:'🌟',desc:'무한한 잠재력의 유망주 리빌딩',concept:'prospect',conceptLabel:'육성 명가',conceptColor:'#06b6d4',basePop:45,baseBudget:75,baseFacility:50,baseDevLevel:90},
   {name:'이글스',emoji:'🦅',desc:'6회부터 잠가버리는 철벽 불펜',concept:'bullpen',conceptLabel:'불펜 야구',conceptColor:'#ec4899',basePop:60,baseBudget:95,baseFacility:60,baseDevLevel:55},
   {name:'트윈스',emoji:'👯',desc:'도루·번트·히트앤런 스몰볼의 달인',concept:'speed',conceptLabel:'발야구',conceptColor:'#10b981',basePop:55,baseBudget:85,baseFacility:50,baseDevLevel:60},
@@ -90,7 +90,31 @@ const FUTURES_PITCHER_DEBUFF = 0.80; // 2군 투수 스탯 20% 하향
 const SLUMP_CONDITION_THRESHOLD = 40; // 컨디션 이하 → 슬럼프 디버프
 const SLUMP_DEBUFF        = 12;   // 슬럼프 시 컨택·파워 패널티
 const REHAB_DEBUFF        = 15;   // 재활 중 스탯 패널티
-const IL_COOLDOWN_ON_RETURN = 10; // IL 복귀 후 콜업 쿨타임
+const IL_COOLDOWN_ON_RETURN = 5; // IL 복귀 후 콜업 쿨타임
+
+// ── 규정타석/규정이닝 (리더보드 최소 기준) ──
+const QUALIFY_PA_PER_GAME   = 2.0;  // 규정타석 계수 (PA/경기)
+const QUALIFY_OUTS_PER_GAME = 1.0;  // 규정이닝 계수 (outs/경기)
+const QUALIFY_RATIO_LEAGUE  = 0.50; // 리그 리�� (규정의 50%)
+const QUALIFY_RATIO_AWARDS  = 0.70; // 시상 (규정의 70%)
+const QUALIFY_RATIO_DASH    = 0.30; // 대시보드 (규정의 30%)
+
+// ── 부상 유형 (가중 랜덤 선택) ──
+const INJURY_TYPES = [
+  { type:'minor',    weight:50, minGames:3,  maxGames:7,  label:'경미한 부상' },
+  { type:'moderate', weight:35, minGames:8,  maxGames:18, label:'중등도 부상' },
+  { type:'severe',   weight:12, minGames:20, maxGames:40, label:'���증 부상' },
+  { type:'season',   weight:3,  minGames:84, maxGames:84, label:'시즌 아웃' },
+];
+function rollInjuryDuration(){
+  const total=INJURY_TYPES.reduce((s,t)=>s+t.weight,0);
+  let roll=rand(1,total);
+  for(const t of INJURY_TYPES){
+    roll-=t.weight;
+    if(roll<=0) return {type:t.type, games:rand(t.minGames,t.maxGames), label:t.label};
+  }
+  return {type:'minor', games:rand(3,7), label:'경미한 부상'};
+}
 const FUTURES_COND_RECOVERY_MIN = 5;
 const FUTURES_COND_RECOVERY_MAX = 8;
 
@@ -127,7 +151,7 @@ const DRAFT_ROUNDS=6;             // 드래프트 라운드 수 (6라운드 × 8
 const DRAFT_POOL_SIZE=32;         // 드래프트 풀 크기 (4라운드 × 8팀)
 
 // ===================== FA & SALARY CONSTANTS (KBO-style, 단위: 억원) =====================
-const FA_SERVICE_TIME_THRESHOLD=7;   // FA 자격 서비스 타임 (KBO 기준)
+const FA_SERVICE_TIME_THRESHOLD=6;   // FA 자격 서비스 타임 (KBO 기준)
 const PRE_ARB_MAX_SERVICE=3;         // 프리FA: 0~3시즌 (최저 연봉 고정)
 const ARB_MIN_SERVICE=4;             // 연봉조정 시작: 4시즌
 const ARB_MAX_SERVICE=6;             // 연봉조정 종료: 6시즌
@@ -161,11 +185,9 @@ const POS_WEIGHT={
   DH:0.8, CP:0.8, SU:0.8, MR:0.8, LR:0.8
 };
 
-// ===================== RETIREMENT & HOF =====================
+// ===================== RETIREMENT =====================
 const RETIRE_BASE_PROB=10;        // 은퇴 기본 확률 (%)
 const RETIRE_PROB_PER_SEASON=12;  // 초과 시즌당 추가 확률 (%)
-const HOF_OVR_THRESHOLD=62;       // 명예의 전당 최소 커리어 OVR (20-80 스케일)
-const HOF_MIN_SEASONS=10;         // 명예의 전당 최소 시즌
 
 // ===================== STAT SCALE (MLB 20-80) =====================
 const STAT_MIN=20;
@@ -180,10 +202,3 @@ const FOREIGN_PLAYER_MAX=3;      // 1군 외국인 선수 최대 등록 수
 
 // ===================== POSTSEASON =====================
 const POSTSEASON_TICKET_MULTIPLIER=2; // 포스트시즌 티켓 수익 배율
-
-const FAN_EVENTS = [
-  {icon:'🪆', name:'밥블헤드 데이',    desc:'굿즈 배포로 팬심 상승, 사기 부스트',      cost:5,  popMin:3,  popMax:6,  morale:5,  revenue:8},
-  {icon:'🎆', name:'불꽃놀이 쇼',      desc:'경기 후 대형 불꽃놀이, 관중 대폭 증가',    cost:8,  popMin:5,  popMax:10, morale:8,  revenue:14},
-  {icon:'🏆', name:'레전드 은퇴식',    desc:'구단 레전드 헌정식, 팬심 폭발·사기 최고조', cost:15, popMin:8,  popMax:15, morale:15, revenue:25},
-  {icon:'👨‍👩‍👧‍👦', name:'패밀리 데이', desc:'가족 초청 이벤트, 어린이 팬층 확보',       cost:6,  popMin:4,  popMax:8,  morale:6,  revenue:10},
-];

@@ -4,8 +4,8 @@ function renderTraining(){
   const db=Math.floor((tm.devLevel||0)/30);
   $('trainingLevelDisp').textContent=`${tm.devLevel||0} (시설 보너스 +${db})`;
 
-  const batDone=G.trainedBatter;
-  const pitDone=G.trainedPitcher;
+  const cd=G.trainingCooldown||0;
+  const locked=cd>0;
 
   function section(title, items, done){
     return `<div style="margin-bottom:16px;">
@@ -31,29 +31,23 @@ function renderTraining(){
   const batters=TRAININGS.filter(t=>t.target==='batter');
   const pitchers=TRAININGS.filter(t=>t.target==='pitcher');
   const common=TRAININGS.filter(t=>t.target==='all');
-  const commonDone=batDone&&pitDone;
 
   $('trainingContent').innerHTML=
-    section('🏏 타자 훈련', batters, batDone)+
-    section('⚾ 투수 훈련', pitchers, pitDone)+
-    section('🧘 공통', common, commonDone);
+    section('🏏 타자 훈련', batters, locked)+
+    section('⚾ 투수 훈련', pitchers, locked)+
+    section('🧘 공통', common, locked);
 
-  let statusParts=[];
-  if(batDone) statusParts.push('타자 ✅');
-  if(pitDone) statusParts.push('투수 ✅');
-  $('trainingStatus').textContent=statusParts.length>0
-    ?'훈련 상태: '+statusParts.join(' · ')
-    :'타자 훈련과 투수 훈련을 각각 1회씩 선택하세요.';
+  $('trainingStatus').textContent=locked
+    ?`⏳ 훈련 쿨타임: ${cd}경기 후 사용 가능`
+    :'훈련 가능 — 타자 또는 투수 훈련을 선택하세요.';
 }
 
 function doTraining(idx){
   const t=TRAININGS[idx];
   const type=t.target; // 'batter' | 'pitcher' | 'all'
 
-  // 타자/투수 분리 체크
-  if(type==='batter'&&G.trainedBatter){showToast('⚠️ 이미 타자 훈련을 완료했습니다!');return;}
-  if(type==='pitcher'&&G.trainedPitcher){showToast('⚠️ 이미 투수 훈련을 완료했습니다!');return;}
-  if(type==='all'&&G.trainedBatter&&G.trainedPitcher){showToast('⚠️ 이미 모든 훈련을 완료했습니다!');return;}
+  // 6경기 쿨타임 체크
+  if((G.trainingCooldown||0)>0){showToast(`⚠️ 훈련 쿨타임: ${G.trainingCooldown}경기 후 사용 가능!`);return;}
 
   const tm=G.myTeam;
   const devBonus=Math.floor((tm.devLevel||0)/30);
@@ -76,10 +70,8 @@ function doTraining(idx){
     }
   });
 
-  // 플래그 설정
-  if(type==='batter') G.trainedBatter=true;
-  else if(type==='pitcher') G.trainedPitcher=true;
-  else { G.trainedBatter=true; G.trainedPitcher=true; } // 공통은 양쪽 다 소모
+  // 쿨타임 설정 (6경기 후 재사용)
+  G.trainingCooldown=6;
 
   showToast(`✅ ${t.name} 완료! ${affected}명 적용 (×${mult.toFixed(2)})`);
   renderTraining();

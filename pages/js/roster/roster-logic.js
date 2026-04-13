@@ -1,0 +1,132 @@
+// ===================== ROSTER LOGIC (Status & Validation) =====================
+function getPosGroup(pos, player) {
+  // 외야수: 외야수끼리 + DH 옵션
+  if(['LF','CF','RF'].includes(pos)) return ['LF','CF','RF','DH'];
+  // 내야수: 내야수끼리 + DH 옵션
+  if(['1B','2B','3B','SS'].includes(pos)) return ['1B','2B','3B','SS','DH'];
+  // 포수: DH 옵션만
+  if(pos === 'C') return ['C','DH'];
+  // DH: 원래 포지션 그룹으로 복귀
+  if(pos === 'DH') {
+    const nat = player && player._naturalPos;
+    if(!nat) return ['C','1B','2B','3B','SS','LF','CF','RF'];
+    if(['LF','CF','RF'].includes(nat)) return ['LF','CF','RF'];
+    if(['1B','2B','3B','SS'].includes(nat)) return ['1B','2B','3B','SS'];
+    if(nat === 'C') return ['C'];
+    return ['C','1B','2B','3B','SS','LF','CF','RF'];
+  }
+  // 투수: 자유 변경
+  if(['SP','CP','SU','MR','LR','RP'].includes(pos)) return ['SP','CP','SU','MR','LR'];
+  return null;
+}
+
+// 행 클릭 시 포지션 드롭다운 클릭이면 무시
+function _isPosDrop(e){return e&&e.target&&e.target.closest&&e.target.closest('.pos-changeable');}
+function moveToBench(idx,e){
+  if(_isPosDrop(e)||G.matchInProgress) return;
+  const p = G.myTeam.roster[idx];
+  if(getStartingBatters(G.myTeam).length <= 1) return;
+  p.role = 'bench';
+  renderRoster();saveGame();
+}
+function moveToStarting(idx,e){
+  if(_isPosDrop(e)||G.matchInProgress) return;
+  if(getStartingBatters(G.myTeam).length >= 9) return;
+  G.myTeam.roster[idx].role = 'starting';
+  renderRoster();saveGame();
+}
+function moveToBullpen(idx,e){
+  if(_isPosDrop(e)||G.matchInProgress) return;
+  const p = G.myTeam.roster[idx];
+  if(getRotation(G.myTeam).length <= 1) return;
+  p.role = 'bullpen';
+  renderRoster();saveGame();
+}
+function moveToRotation(idx,e){
+  if(_isPosDrop(e)||G.matchInProgress) return;
+  G.myTeam.roster[idx].role = 'rotation';
+  renderRoster();saveGame();
+}
+
+// ===================== 1군/2군/육성 로스터 관리 =====================
+function sendToFutures(idx) {
+  if(G.matchInProgress) return;
+  const p = G.myTeam.roster[idx];
+  if(!p || (p.status||'active')!=='active') return;
+  // 옵션 횟수 체크 (시즌당 1회 카운트)
+  if((p._optionYearsUsed||0)>=MAX_OPTION_YEARS){
+    showToast(`🚫 ${p.name}은(는) 마이너 옵션 ${MAX_OPTION_YEARS}회 소진! 강등 불가 (방출/트레이드만 가능)`);return;
+  }
+  if(!canRemoveFromActive(G.myTeam,p)){
+    showToast(`🚫 강등 불가 — 최소 로스터 규정 위반`);return;
+  }
+  p.status='futures'; p.cooldown=CALLUP_COOLDOWN;
+  p._optionYearsUsed=(p._optionYearsUsed||0)+1;
+  showToast(`⬇️ ${p.name} 2군 강등 (옵션 ${p._optionYearsUsed}/${MAX_OPTION_YEARS}). ${CALLUP_COOLDOWN}경기 콜업 불가`);
+  renderRoster();saveGame();
+}
+
+function sendToIL(idx) {
+  if(G.matchInProgress) return;
+  const p = G.myTeam.roster[idx];
+  if(!p || (p.status||'active')!=='active') return;
+  // IL은 인원 제외 → 최소 로스터 체크
+  if(!canRemoveFromActive(G.myTeam,p)){
+    showToast(`🚫 IL 등재 불가 — 최소 로스터 규정 위반. 먼저 2군에서 콜업하세요.`);return;
+  }
+  const days = rand(5,20);
+  p.status='il'; p.isOnIL=true; p.ilGamesLeft=days;
+  showToast(`🏥 ${p.name} IL 등재. ${days}경기 후 자동 복귀`);
+  renderRoster();saveGame();
+}
+
+function callUp(idx) {
+  if(G.matchInProgress) return;
+  const p = G.myTeam.roster[idx];
+  if(!p || p.status!=='futures') return;
+  if(!canPlayerDebut(p)){showToast(`🚫 ${p.name}은(는) 시즌 ${p.canDebutYear}부터 1군 등록 가능`);return;}
+  if(p.isForeign&&!canAddForeign(G.myTeam)){showToast(`🚫 외국인 선수 등록 한도 ${FOREIGN_PLAYER_MAX}명 초과`);return;}
+  if((p.cooldown||0)>0){showToast(`⏳ 콜업 불가 — 쿨다운 ${p.cooldown}경기 남음`);return;}
+  if(!canCallUp(G.myTeam)){showToast(`🚫 1군 한도 초과`);return;}
+  p.status='active';
+  showToast(`⬆️ ${p.name} 1군 콜업!`);
+  renderRoster();saveGame();
+}
+
+function promoteFromDev(idx) {
+  if(G.matchInProgress) return;
+  const p = G.myTeam.roster[idx];
+  if(!p || p.status!=='developmental') return;
+  const orgCount = G.myTeam.roster.filter(r=>r.status==='active'||r.status==='futures').length;
+  if(orgCount >= FUTURES_ORG_MAX){showToast(`🚫 조직 한도 ${FUTURES_ORG_MAX}명 초과`);return;}
+  p.status='futures';
+  showToast(`📋 ${p.name} 정식 등록 — 2군 합류`);
+  renderRoster();saveGame();
+}
+
+function releasePlayer(idx) {
+  if(G.matchInProgress) return;
+  const p = G.myTeam.roster[idx];
+  if(!p) return;
+  // 조직 최소 인원 체크
+  const orgCount = G.myTeam.roster.length;
+  if(orgCount <= ORG_MIN_TOTAL){showToast(`🚫 방출 불가 — 조직 최소 인원(${ORG_MIN_TOTAL}명)`);return;}
+  // 1군 선수라면 최소 로스터 체크
+  if((p.status||'active')==='active' && !canRemoveFromActive(G.myTeam,p)){
+    showToast(`🚫 방출 불가 — 1군 최소 로스터 규정 위반`);return;
+  }
+  if(!confirm(`${p.name}을(를) 방출하시겠습니까?`)) return;
+  G.myTeam.roster.splice(idx,1);
+  renderRoster();saveGame();
+}
+
+function emergencyILReturn(idx) {
+  if(G.matchInProgress) return;
+  const p = G.myTeam.roster[idx];
+  if(!p || p.status!=='il') return;
+  if(!confirm(`${p.name} 조기 복귀 시 재활 5경기 패널티가 부과됩니다. 진행하시겠습니까?`)) return;
+  p.status='futures'; p.isOnIL=false; p.ilGamesLeft=0;
+  p.cooldown=5; p.rehabGamesLeft=5; // 조기 복귀 패널티
+  showToast(`🏥 ${p.name} IL 조기 복귀! 2군 재활 5경기`);
+  renderFutures();
+}

@@ -2,11 +2,15 @@
 // DOM 접근 없음. TTO/BABIP 엔진, 피로도, 회귀, XP, 불펜 선택 등 순수 로직만 포함.
 // 의존: match-state.js (TTO 상수), constants.js, helpers.js (clamp, rand, ovr, pick), state.js (getBullpen)
 
-// ── 투구수 기반 피로도 커브 (점진적 스탯 감산) ──
+// ── 투구수 기반 피로도 커브 (50구부터 점진적 감산) ──
 function _fatigueDebuff(np){
-  if(np>=FATIGUE_NP2) return {vel:-12, ctrl:-12, mov:-10};
-  if(np>=FATIGUE_NP1) return {vel:-5,  ctrl:-5,  mov:0};
-  return {vel:0, ctrl:0, mov:0};
+  if(np<50) return {vel:0, ctrl:0, mov:0};
+  const f=Math.min(1.0, (np-50)/60); // 50~110구에서 0→1 선형 보간
+  return {
+    vel:  Math.round(-12*f),
+    ctrl: Math.round(-12*f),
+    mov:  Math.round(-10*f),
+  };
 }
 
 // ── 84경기 맞춤형 동적 회귀 보정 ──
@@ -32,12 +36,12 @@ function _calcRegression(batter, pitcher){
 
 // ── TTO 기반 간이 타석 판정 (AI/빠른 시뮬용) ──
 function _ttoSimAB(adjPow, adjCon, adjEye, effStuff, effControl, effMovement, avgFld, babipMod){
-  const pHR=clamp(TTO_BASE_HR+(adjPow-effMovement)/100*0.16, 0.005, 0.12);
-  const pK =clamp(TTO_BASE_K +(effStuff-adjCon)/100*0.15, 0.04, 0.35);
-  const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/100*0.12, 0.02, 0.18);
+  const pHR=clamp(TTO_BASE_HR+(adjPow-effMovement)/100*0.16, 0.005, 0.08);
+  const pK =clamp(TTO_BASE_K +(effStuff-adjCon)/100*0.15, 0.04, 0.30);
+  const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/100*0.12, 0.02, 0.15);
   const contactMod=1+(adjCon-50)/200;
   const defMod=1-(avgFld-50)/250;
-  const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*(babipMod||1.0), 0.180, 0.450);
+  const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*(babipMod||1.0), 0.200, 0.380);
   const pError=clamp(0.02-(avgFld-50)/2000, 0.005, 0.04);
   const r=Math.random();
   if(r<pHR) return 'HR';
@@ -49,10 +53,37 @@ function _ttoSimAB(adjPow, adjCon, adjEye, effStuff, effControl, effMovement, av
   return 'OUT';
 }
 
+// ── 투구수 한계 산정 (스태미나 스탯 기반) ──
+function getMaxPitches(pitcher){
+  const base=pitcher.stamina||50;
+  if(pitcher.role==='rotation') return Math.floor(base+40); // stamina 50→90구, 80→120구
+  const bonus=pitcher.pos==='LR'?15:0;
+  return Math.floor(base/2+10+bonus); // 불펜 50→35구, LR 50→50구
+}
+
+// ── 통합 강판 판정 (유저/AI 공용) ──
+function shouldHookPitcher(pitcher, inning, runsGivenToday, teamConcept){
+  if(!pitcher) return false;
+  const np=(pitcher.today&&pitcher.today.np)||pitcher._simNP||0;
+  const maxNp=getMaxPitches(pitcher);
+  // 1. 투구수 한계 도달
+  if(np>=maxNp) return true;
+  // 2. 대량 실점 조기 강판 (5회 이전에 5실점 이상)
+  if(runsGivenToday>=5&&inning<=5) return true;
+  // 3. 이글스(bullpen 컨셉) 전용: 6회부터 선발 교체
+  if(teamConcept==='bullpen'&&inning>=6&&pitcher.role==='rotation') return true;
+  // 4. 불펜 투수 35구 이상이면 교체
+  if(pitcher.role!=='rotation'&&np>=35) return true;
+  return false;
+}
+
 // ── 불펜 보직 우선순위 기반 투수 선택 ──
-// roster 순서 = 보직 내 우선순위, 스태미나 부족 시 다음 투수로 폴백
 function _pickReliever(team, inn, lead){
-  const bp=getBullpen(team).filter(p=>p.currentStamina>25&&(p.condition||100)>=50);
+  const bp=getBullpen(team).filter(p=>
+    (p._consecutiveDaysPitched||0)<3 && // 3연투 금지
+    (p.condition||100)>=20 &&            // 컨디션 20 이상
+    !p._pitchedThisGame                  // 이번 경기 미등판
+  );
   if(bp.length===0)return null;
   let roles;
   if(inn>=9&&lead>=1&&lead<=3)        roles=['CP','SU','MR','LR'];  // 세이브 상황

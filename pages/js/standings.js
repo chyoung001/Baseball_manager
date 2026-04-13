@@ -51,18 +51,26 @@ function renderStandings(){
 
 // ===================== LEAGUE LEADERS =====================
 function renderLeagueLeaders(){
-  // 모든 팀의 모든 선수 수집
-  const allBatters=[];
-  const allPitchers=[];
+  // 모든 팀의 모든 선수 수집 (비율 스탯용 규정 충족자 / 누적 스탯용 전체)
+  const qualBatters=[];  // 비율 스탯: 규정타석 충족
+  const allBatters=[];   // 누적 스탯: AB>0이면 포함
+  const qualPitchers=[]; // 비율 스탯: 규정이닝 충족
+  const allPitchers=[];  // 누적 스탯: outs>0이면 포함
   G.teams.forEach(t=>{
     t.roster.forEach(p=>{
       if(!p.ss)return;
-      if(!p.isPitcher && p.ss.ab>=10) allBatters.push({p,team:t});
-      if(p.isPitcher && _ssOuts(p.ss)>=9) allPitchers.push({p,team:t});
+      if(!p.isPitcher && p.ss.ab>0){
+        allBatters.push({p,team:t});
+        if(qualifyBatter(p, QUALIFY_RATIO_LEAGUE)) qualBatters.push({p,team:t});
+      }
+      if(p.isPitcher && _ssOuts(p.ss)>0){
+        allPitchers.push({p,team:t});
+        if(qualifyPitcher(p, QUALIFY_RATIO_LEAGUE)) qualPitchers.push({p,team:t});
+      }
     });
   });
 
-  const noData=allBatters.length===0;
+  const noData=allBatters.length===0&&qualBatters.length===0;
 
   function leaderRow(entry,i,val,isMine){
     const p=entry.p,t=entry.team;
@@ -89,12 +97,12 @@ function renderLeagueLeaders(){
     return;
   }
 
-  // 타자 리더
-  const byAvg=[...allBatters].sort((a,b)=>ssAvg(b.p)-ssAvg(a.p));
+  // 타자 리더 — 비율(AVG/OBP)은 규정타석 충족자, 누적(HR/RBI/SB)은 전체
+  const byAvg=[...qualBatters].sort((a,b)=>ssAvg(b.p)-ssAvg(a.p));
   const byHR=[...allBatters].sort((a,b)=>b.p.ss.hr-a.p.ss.hr);
   const byRBI=[...allBatters].sort((a,b)=>b.p.ss.rbi-a.p.ss.rbi);
   const bySB=[...allBatters].sort((a,b)=>b.p.ss.sb-a.p.ss.sb);
-  const byOBP=[...allBatters].sort((a,b)=>ssOBP(b.p)-ssOBP(a.p));
+  const byOBP=[...qualBatters].sort((a,b)=>ssOBP(b.p)-ssOBP(a.p));
 
   $('leagueBatLeaders').innerHTML=
     leaderSection('타율 (AVG)',byAvg,e=>ssAvg(e.p).toFixed(3))+
@@ -103,12 +111,12 @@ function renderLeagueLeaders(){
     leaderSection('도루 (SB)',bySB,e=>e.p.ss.sb)+
     leaderSection('출루율 (OBP)',byOBP,e=>ssOBP(e.p).toFixed(3));
 
-  // 투수 리더
-  const byERA=[...allPitchers].sort((a,b)=>ssERA(a.p)-ssERA(b.p));
+  // 투수 리더 — 비율(ERA/WHIP)은 규정이닝 충족자, 누적(W/K/SV)은 전체
+  const byERA=[...qualPitchers].sort((a,b)=>ssERA(a.p)-ssERA(b.p));
   const byW=[...allPitchers].sort((a,b)=>b.p.ss.w-a.p.ss.w);
   const byK=[...allPitchers].sort((a,b)=>b.p.ss.pk-a.p.ss.pk);
   const bySV=[...allPitchers].sort((a,b)=>b.p.ss.sv-a.p.ss.sv);
-  const byWHIP=[...allPitchers].sort((a,b)=>ssWHIP(a.p)-ssWHIP(b.p));
+  const byWHIP=[...qualPitchers].sort((a,b)=>ssWHIP(a.p)-ssWHIP(b.p));
 
   $('leaguePitLeaders').innerHTML=
     leaderSection('방어율 (ERA)',byERA,e=>ssERA(e.p).toFixed(2))+

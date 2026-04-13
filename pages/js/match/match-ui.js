@@ -115,7 +115,7 @@ function _renderDashboard(s,batTeam,fldTeam,fldKey,batKey,pitcher,curBat){
   if(title)title.textContent=`${batTeam.emoji||'⚾'} ${batTeam.name} LINEUP`;
   const lineup=getStartingBatters(batTeam);
   _ensureLineupRows(lineup.length);
-  const onBase=new Set((s.bases||[]).filter(Boolean));
+  const onBase=new Set((s.bases||[]).filter(Boolean).map(p=>typeof p==='string'?p:p.name));
   lineup.forEach((p,i)=>{
     const row=_t('luR'+i);if(!row)return;
     const act=p===curBat;const ob=onBase.has(p.name);

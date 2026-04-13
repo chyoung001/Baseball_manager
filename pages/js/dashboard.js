@@ -66,9 +66,11 @@ function renderDashTeamStats(t) {
   const starters = getStartingBatters(t);
   const bench = getBenchBatters(t);
   const allBatters = [...starters,...bench].filter(p=>p.ss&&p.ss.ab>0);
+  const qualBatters = allBatters.filter(p=>qualifyBatter(p, QUALIFY_RATIO_DASH));
   const rot = getRotation(t);
   const bp = getBullpen(t);
   const allPitchers = [...rot,...bp].filter(p=>p.ss&&_ssOuts(p.ss)>0);
+  const qualPitchers = allPitchers.filter(p=>qualifyPitcher(p, QUALIFY_RATIO_DASH));
   const noGames = (t.wins+t.losses)===0;
 
   // 리더 테이블 생성 헬퍼
@@ -92,8 +94,8 @@ function renderDashTeamStats(t) {
     return;
   }
 
-  // ── 타자 기록 순위 ──
-  const byAvg=[...allBatters].sort((a,b)=>ssAvg(b)-ssAvg(a)).slice(0,5);
+  // ── 타자 기록 순위 — 비율(AVG)은 규정타석 충족자, 누적(HR/RBI)은 전체 ──
+  const byAvg=[...(qualBatters.length>0?qualBatters:allBatters)].sort((a,b)=>ssAvg(b)-ssAvg(a)).slice(0,5);
   const byHR=[...allBatters].sort((a,b)=>(b.ss.hr)-(a.ss.hr)).slice(0,5);
   const byRBI=[...allBatters].sort((a,b)=>(b.ss.rbi)-(a.ss.rbi)).slice(0,5);
   $('dashBatterStats').innerHTML=
@@ -101,9 +103,9 @@ function renderDashTeamStats(t) {
     leaderSection('홈런 (HR)',byHR.map((p,i)=>leaderRow(p,i,p.ss.hr)).join(''))+
     leaderSection('타점 (RBI)',byRBI.map((p,i)=>leaderRow(p,i,p.ss.rbi)).join(''));
 
-  // ── 투수 기록 순위 ──
-  const byERA=[...allPitchers].sort((a,b)=>ssERA(a)-ssERA(b)).slice(0,5);
-  const byK9=[...allPitchers].sort((a,b)=>ssK9(b)-ssK9(a)).slice(0,5);
+  // ── 투수 기록 순위 — 비율(ERA/K9)은 규정이닝 충족자, 누적(W)은 전체 ──
+  const byERA=[...(qualPitchers.length>0?qualPitchers:allPitchers)].sort((a,b)=>ssERA(a)-ssERA(b)).slice(0,5);
+  const byK9=[...(qualPitchers.length>0?qualPitchers:allPitchers)].sort((a,b)=>ssK9(b)-ssK9(a)).slice(0,5);
   const byW=[...allPitchers].sort((a,b)=>(b.ss.w)-(a.ss.w)).slice(0,5);
   $('dashPitcherStats').innerHTML=
     leaderSection('방어율 (ERA)',byERA.map((p,i)=>leaderRow(p,i,ssERA(p).toFixed(2))).join(''))+

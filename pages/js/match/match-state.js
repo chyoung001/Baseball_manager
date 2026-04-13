@@ -11,5 +11,6 @@ const TTO_BASE_BB    = 0.090;   // 기본 볼넷율 9%
 const TTO_BASE_BABIP = 0.315;   // 기본 BABIP
 const REG_PA_THRESH  = 30;      // 타자 회귀 시작 타석 수
 const REG_IP_THRESH  = 45;      // 투수 회귀 시작 아웃 수
-const FATIGUE_NP1    = 70;      // 피로도 1단계 투구수
-const FATIGUE_NP2    = 90;      // 피로도 2단계 투구수
+// 피로도는 50구부터 점진적 커브로 변경됨 (match-engine.js _fatigueDebuff 참조)
+// const FATIGUE_NP1 = 70;  // (legacy)
+// const FATIGUE_NP2 = 90;  // (legacy)

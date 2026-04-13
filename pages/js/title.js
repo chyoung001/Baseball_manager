@@ -14,14 +14,14 @@ function initTitleScreen(){
 }
 
 function selectTeam(idx){
-  G.teamIdx=idx;initTeams(idx);G.season=1;G.gameNum=0;G.trainedBatter=false;G.trainedPitcher=false;
-  G.phase='stove_league';G.hallOfFame=[];G.previousSeasonStandings=[];
+  G.teamIdx=idx;initTeams(idx);G.season=1;G.gameNum=0;G.trainingCooldown=0;
+  G.phase='preseason';G.previousSeasonStandings=[];
   G.faPool=[];G.faBiddingLog=[];
   generateMarket();
   $('titleScreen').classList.remove('active');
   $('gameHeader').style.display='block';
   updateHeader();
-  advancePhase(); // → stove_league 모달 표시
+  advancePhase(); // → preseason 모달 표시 (시즌 1부터 시작)
 }
 
 // ===================== INIT =====================
