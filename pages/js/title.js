@@ -2,7 +2,7 @@
 function initTitleScreen(){
   $('teamSelect').innerHTML='';
   TEAMS_DATA.forEach((t,i)=>{
-    $('teamSelect').innerHTML+=`<div class="team-option" onclick="selectTeam(${i})">
+    $('teamSelect').innerHTML+=`<div class="team-option" role="button" tabindex="0" onclick="selectTeam(${i})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();selectTeam(${i})}">
       <div class="emoji">${t.emoji}</div>
       <div class="name">${t.name}</div>
       <div class="desc">${t.desc}</div>

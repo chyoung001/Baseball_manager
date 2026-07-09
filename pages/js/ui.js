@@ -1,7 +1,7 @@
 // ===================== UI NAVIGATION =====================
 let _currentRosterTab='batters';
 function switchTab(tab){
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
+  document.querySelectorAll('.nav-tab').forEach(t=>{const on=t.dataset.tab===tab;t.classList.toggle('active',on);t.setAttribute('aria-selected',on);});
   ['dashboard','roster','match','training','market','standings','analysis','invest','draft'].forEach(s=>$(s+'Screen').classList.toggle('active',s===tab));
   if(tab==='roster'){renderRoster();_restoreRosterTab();}
   if(tab==='standings')renderStandings();
@@ -85,10 +85,23 @@ function _restoreRosterTab(){
   if(_currentRosterTab==='il')renderILPage();
 }
 
-// Bind nav-tab click events after DOM is ready
+// Bind nav-tab click + keyboard events after DOM is ready (탭 role/포커스/방향키 접근성)
 document.addEventListener('DOMContentLoaded',()=>{
-  document.querySelectorAll('.nav-tab').forEach(t=>t.addEventListener('click',()=>{
-    if(G.matchInProgress){showToast('⚾ 경기 진행 중에는 탭을 전환할 수 없습니다.');return;}
-    switchTab(t.dataset.tab);
-  }));
+  const navWrap=document.querySelector('.nav-tabs');
+  if(navWrap)navWrap.setAttribute('role','tablist');
+  const tabs=[...document.querySelectorAll('.nav-tab')];
+  tabs.forEach((t,i)=>{
+    t.setAttribute('role','tab');
+    t.setAttribute('tabindex','0');
+    t.setAttribute('aria-selected',t.classList.contains('active'));
+    const activate=()=>{
+      if(G.matchInProgress){showToast('⚾ 경기 진행 중에는 탭을 전환할 수 없습니다.');return;}
+      switchTab(t.dataset.tab);
+    };
+    t.addEventListener('click',activate);
+    t.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){e.preventDefault();activate();}
+      else if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();tabs[(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length].focus();}
+    });
+  });
 });
