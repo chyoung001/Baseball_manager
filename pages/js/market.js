@@ -126,6 +126,8 @@ function buyPlayer(idx){
   showNegotiationModal(p,'fa',
     function onAccept(salary,years){
       if(!canSpend(G.myTeam,p.price)){showToast('🚫 자금 부족!');renderMarket();return;}
+      // 협상된 연봉 기준 하드캡 재검증 (사전 검사는 호가 기준이라 협상 인상분을 놓칠 수 있음)
+      if(getPayroll(G.myTeam)+(salary||0)>getHardCap()){showToast(`🚫 하드 캡(${won(getHardCap())}) 초과!`);renderMarket();return;}
       G.myTeam.budget-=p.price;
       p.salary=salary;p._contractYears=years;
       if(!p.status)p.status='futures';

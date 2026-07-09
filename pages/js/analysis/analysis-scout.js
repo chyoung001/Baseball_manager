@@ -8,6 +8,7 @@ function renderAnalysisScout() {
   const t = G.myTeam;
   const all = t.roster.filter(p => (p.status || 'active') === 'active' && p.role !== 'overseas');
   const tm = G.testMode;
+  const aLv = t.analyticsLevel || 0;  // 분석팀 레벨 — 내구성/꾸준함/클러치 열람 게이팅
 
   // 포지션 그룹 필터
   let filtered;
@@ -23,8 +24,12 @@ function renderAnalysisScout() {
     filtered=filtered.concat(dhOrphans);
   }
 
-  function hiddenBar(val, max) {
+  function hiddenBar(val, revealed, max) {
     max = max || 20;
+    // 테스트 모드가 아니고 분석팀 레벨이 부족하면 잠금 (데이터분석팀 투자 가치 부여)
+    if (!tm && revealed === false) {
+      return `<span style="color:var(--text-dim);font-size:0.7rem;" title="데이터분석팀 투자로 열람">🔒</span>`;
+    }
     const pct = Math.round((val / max) * 100);
     const color = val >= 17 ? '#a855f7' : val >= 13 ? '#10b981' : val >= 9 ? '#f59e0b' : val >= 5 ? '#f97316' : '#ef4444';
     return tm
@@ -53,7 +58,7 @@ function renderAnalysisScout() {
         ${filterBtn('sp','🔥 선발')}
         ${filterBtn('bp','🛡️ 불펜')}
       </div>
-      <div style="font-size:0.68rem;color:var(--text-dim);margin-bottom:10px;">분석팀 Lv.${t.analyticsLevel || 0} · ${filtered.length}명 표시</div>
+      <div style="font-size:0.68rem;color:var(--text-dim);margin-bottom:10px;">분석팀 Lv.${t.analyticsLevel || 0} · ${filtered.length}명 표시${tm ? '' : ` · 🔓 열람: 내구성 Lv.60 / 꾸준함 Lv.80 / 클러치 Lv.90`}</div>
       ${filtered.length===0?'<div style="color:var(--text-dim);text-align:center;padding:20px;">해당 포지션 선수가 없습니다.</div>':`
       <div style="overflow-x:auto;">
         <table class="data-table" style="font-size:0.72rem;">
@@ -64,6 +69,7 @@ function renderAnalysisScout() {
           </tr></thead>
           <tbody>${filtered.map(p => {
             const o = ovr(p);
+            const av = getAnalyticsHiddenInfo(p, aLv);  // 분석팀 레벨별 열람 가능 히든스탯
             const st = p._serviceTime || 0;
             const phase = st <= PRE_ARB_MAX_SERVICE ? '프리아브' : st <= ARB_MAX_SERVICE ? '연봉조정' : 'FA자격';
             const phColor = st <= PRE_ARB_MAX_SERVICE ? '#67e8f9' : st <= ARB_MAX_SERVICE ? '#f59e0b' : '#10b981';
@@ -75,9 +81,9 @@ function renderAnalysisScout() {
               <td style="font-family:'JetBrains Mono',monospace;">${won(p.salary || 0)}</td>
               <td><span style="color:${phColor};font-size:0.65rem;font-weight:600;">${phase}</span> <span style="color:var(--text-dim);font-size:0.6rem;">${st}yr</span></td>
               <td>${hiddenBar(p._potential || 10)}</td>
-              <td>${hiddenBar(p._durability || 10)}</td>
-              <td>${hiddenBar(p._consistency || 10)}</td>
-              <td>${hiddenBar(p._clutchHidden || 10)}</td>
+              <td>${hiddenBar(p._durability || 10, av.durability !== undefined)}</td>
+              <td>${hiddenBar(p._consistency || 10, av.consistency !== undefined)}</td>
+              <td>${hiddenBar(p._clutchHidden || 10, av.clutchHidden !== undefined)}</td>
               <td>${hiddenBar(p._workEthic || 10)}</td>
               <td style="color:${(p.condition || 100) < 40 ? '#ef4444' : 'var(--text)'};">${p.condition || 100}%${(p._slumpGames||0)>0?'<span style="color:#ef4444;font-size:0.6rem;"> 📉</span>':''}</td>
             </tr>`;
