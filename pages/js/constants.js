@@ -16,7 +16,7 @@ const ALL_POS_NAMES={...BAT_POS_NAMES,...PITCH_ROLE_NAMES};
 
 const TEAMS_DATA=[
   {name:'바이킹스',emoji:'🪓',desc:'파이어볼러 에이스의 선발 왕국',concept:'power_hit',conceptLabel:'투수 왕국',conceptColor:'#f59e0b',basePop:65,baseBudget:100,baseFacility:60,baseDevLevel:65},
-  {name:'세이버스',emoji:'⚔️',desc:'거대 자본의 악의 제국',concept:'pitching',conceptLabel:'악의 제국',conceptColor:'#8b5cf6',basePop:80,baseBudget:9000,baseFacility:75,baseDevLevel:55}, // TODO: 테스트 후 160으로 복원
+  {name:'세이버스',emoji:'⚔️',desc:'거대 자본의 악의 제국',concept:'pitching',conceptLabel:'악의 제국',conceptColor:'#8b5cf6',basePop:80,baseBudget:160,baseFacility:75,baseDevLevel:55},
   {name:'드림즈',emoji:'🌟',desc:'무한한 잠재력의 유망주 리빌딩',concept:'prospect',conceptLabel:'육성 명가',conceptColor:'#06b6d4',basePop:45,baseBudget:75,baseFacility:50,baseDevLevel:90},
   {name:'이글스',emoji:'🦅',desc:'6회부터 잠가버리는 철벽 불펜',concept:'bullpen',conceptLabel:'불펜 야구',conceptColor:'#ec4899',basePop:60,baseBudget:95,baseFacility:60,baseDevLevel:55},
   {name:'트윈스',emoji:'👯',desc:'도루·번트·히트앤런 스몰볼의 달인',concept:'speed',conceptLabel:'발야구',conceptColor:'#10b981',basePop:55,baseBudget:85,baseFacility:50,baseDevLevel:60},

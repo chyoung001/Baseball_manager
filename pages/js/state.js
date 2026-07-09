@@ -1,5 +1,5 @@
 // ===================== GAME STATE =====================
-let G={season:1,gameNum:0,totalGames:TOTAL_REGULAR,teamIdx:0,myTeam:null,teams:[],marketPlayers:[],trainedBatter:false,trainedPitcher:false,matchInProgress:false,matchSpeed:500,currentMarketTab:'bat',fanEventUsedThisGame:false,testMode:true,
+let G={season:1,gameNum:0,totalGames:TOTAL_REGULAR,teamIdx:0,myTeam:null,teams:[],marketPlayers:[],trainedBatter:false,trainedPitcher:false,matchInProgress:false,matchSpeed:500,currentMarketTab:'bat',fanEventUsedThisGame:false,testMode:false,
   // Season phase system (7-phase)
   phase:'preseason',            // current phase id
   draftPool:[],                // 신인 드래프트 풀
@@ -60,6 +60,7 @@ function saveGame(){
       currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
       testMode:G.testMode,
       phase:G.phase,
+      _stoveSettledSeason:G._stoveSettledSeason||0,
       hallOfFame:G.hallOfFame,
       previousSeasonStandings:G.previousSeasonStandings,
       draftPool:(G.draftPool||[]).map(_compressPlayer),
@@ -97,10 +98,11 @@ function _restoreFromData(d){
   G.season=d.season||1; G.gameNum=d.gameNum||0; G.totalGames=d.totalGames||TOTAL_REGULAR;
   G.teamIdx=d.teamIdx||0; G.trainedBatter=d.trainedBatter||false;G.trainedPitcher=d.trainedPitcher||false;
   G.matchSpeed=d.matchSpeed||500; G.currentMarketTab=d.currentMarketTab||'bat';
-  G.fanEventUsedThisGame=d.fanEventUsedThisGame||false; G.testMode=d.testMode!=null?d.testMode:true;
+  G.fanEventUsedThisGame=d.fanEventUsedThisGame||false; G.testMode=d.testMode!=null?d.testMode:false;
   G.matchInProgress=false;
   // Phase & new fields 복원
   G.phase=d.phase||'preseason';
+  G._stoveSettledSeason=d._stoveSettledSeason||0;
   G.hallOfFame=d.hallOfFame||[];
   G.previousSeasonStandings=d.previousSeasonStandings||[];
   G.postseasonBracket=d.postseasonBracket||null;
@@ -171,6 +173,7 @@ function exportGame(){
       currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
       testMode:G.testMode,
       phase:G.phase,
+      _stoveSettledSeason:G._stoveSettledSeason||0,
       hallOfFame:G.hallOfFame,
       previousSeasonStandings:G.previousSeasonStandings,
       draftPool:(G.draftPool||[]).map(_compressPlayer),
@@ -247,21 +250,6 @@ function initTeams(myIdx){
     };
   });
   G.myTeam=G.teams[myIdx];
-
-  // ── 테스트용 고정 선수 삽입 ──
-  const vikings=G.teams[0]; // 바이킹스
-  const testP=genPitcher('SP','S','power_hit');
-  testP.name='강두기';
-  testP.age=27;testP._seasonsPlayed=9;testP._serviceTime=9;testP._teamTenure=5;
-  // OVR 78 목표로 스탯 강제 조정
-  const _ts=['stuff','control','velocity','movement','stamina','clutch'];
-  _ts.forEach(s=>{testP[s]=78;});
-  let _tOvr=ovr(testP),_tAtt=0;
-  while(Math.abs(_tOvr-78)>1&&_tAtt<30){const d=78-_tOvr;const s=pick(_ts);testP[s]=clamp(testP[s]+Math.round(d*0.5),20,80);_tOvr=ovr(testP);_tAtt++;}
-  testP._potential=18;testP._contractYears=3;testP.salary=20;testP.condition=95;
-  testP.role='rotation';testP.status='active';
-  initSeasonStats(testP);
-  vikings.roster.push(testP);
 
   // Init season stats & new fields for all players
   G.teams.forEach(t=>t.roster.forEach(p=>{
