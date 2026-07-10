@@ -30,9 +30,9 @@ function showPreseason(){
     // 대규모 스탯 업데이트 (에이징 + 프로의식 기반, 잠재력은 천장 역할만)
     G.teams.forEach(team=>{
       team.roster.forEach(p=>{
-        const pot=p._potential||10;
-        const we=p._workEthic||10;
-        const ethicMod=0.5+(we/20); // 0.85~1.5
+        const pot=p._potential||50;
+        const we=p._workEthic||50;
+        const ethicMod=0.5+(we/100); // 0.85~1.5 (히든 1~100)
         const seasonsPlayed=p._seasonsPlayed||0;
 
         // 에이징 면역 체크 (의료 센터 대성공)
@@ -52,8 +52,8 @@ function showPreseason(){
 
         // 프로의식 기반 에이징 커브 시작 시점 조정
         // 기본: 8시즌부터 하락, 12시즌부터 급하락
-        // workEthic 15+: 2~3시즌 지연 / workEthic 7-: 1~2시즌 조기
-        const ethicShift=we>=15?-rand(2,3):we<=7?rand(1,2):0;
+        // workEthic 75+: 2~3시즌 지연 / workEthic 35-: 1~2시즌 조기
+        const ethicShift=we>=75?-rand(2,3):we<=35?rand(1,2):0;
         const agingStart=8+ethicShift;
         const agingSevere=12+ethicShift;
 
@@ -140,8 +140,8 @@ function _confirmPreseason(){
 function _getTopChanges(team){
   const changes=[];
   team.roster.filter(p=>(p.status||'active')==='active').slice(0,20).forEach(p=>{
-    const pot=p._potential||10;const sp=p._seasonsPlayed||0;
-    if(pot>=14){changes.push({name:p.name,stat:'성장↑',delta:rand(1,3)});}
+    const pot=p._potential||50;const sp=p._seasonsPlayed||0;
+    if(pot>=70){changes.push({name:p.name,stat:'성장↑',delta:rand(1,3)});}
     else if(sp>=10){changes.push({name:p.name,stat:'노화↓',delta:-rand(1,3)});}
   });
   return changes.slice(0,5);
@@ -242,7 +242,7 @@ function _processDraftPick(){
         if(!p.isPitcher&&needBat)score+=rand(5,10);
         if(p.isPitcher&&needPit)score+=rand(5,10);
         // POT 가중치
-        if((p._potential||10)>=15)score+=rand(3,8);
+        if((p._potential||50)>=75)score+=rand(3,8);
         return {p,score};
       }).sort((a,b)=>b.score-a.score);
 

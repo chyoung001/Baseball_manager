@@ -117,10 +117,12 @@ function awardXP(p, amount) {
     p.xp -= reqXP;
     const stats = p.isPitcher ? ['stuff','control','velocity','movement','stamina','clutch'] : ['contact','power','eye','speed','fielding','arm'];
     const s = pick(stats);
-    const pot = p._potential || 10;
+    const pot = p._potential || 50;
     if(ovrRaw(p) >= maxOvrFromPot(pot)) return; // POT 천장 도달 → 성장 차단 (절대 raw 기준)
-    // 프로의식(workEthic) 기반 성장 배율 — 잠재력은 천장에만 사용
-    const ethicMod = 0.5 + ((p._workEthic||10) / 20); // 0.85~1.5
+    // 프로의식(workEthic) 기반 성장 배율 — 잠재력은 천장에만 사용 (히든 1~100)
+    let ethicMod = 0.5 + ((p._workEthic||50) / 100); // 0.85~1.5
+    // 엘리트 성장 곡선 (상황 E): 프로의식+야망 모두 75+ 시너지 → 성장 +20%
+    if((p._workEthic||50)>=75 && (p._ambition||50)>=75) ethicMod *= 1.2;
     const baseGain = rand(1,3);
     const gain = Math.max(0, Math.round(baseGain * ethicMod));
     if(gain > 0) {

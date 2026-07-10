@@ -67,27 +67,27 @@ function calcTradeValue(p){
   const ca=ovr(p);
   const baseValue=ca*posW;
 
-  // 2단계: 나이/잠재력 반영 미래 가치
+  // 2단계: 나이/잠재력 반영 미래 가치 (히든 1~100 스케일)
   const sp=p._seasonsPlayed||0;
-  const paScaled=(p._potential||10)*4; // 1-20 → 4-80
+  const paScaled=(p._potential||50)*0.8; // 1-100 → 0.8-80
   let skillValue;
   if(sp<=3)      skillValue=ca*0.3+paScaled*0.7;       // 유망주
   else if(sp<=8) skillValue=ca*0.8+paScaled*0.2;       // 전성기
   else           skillValue=ca*Math.max(0.2,1-(sp-8)/12); // 에이징
 
   // 3단계: 리스크 페널티 (부상 빈도)
-  const injProne=20-(p._durability||10);
+  const injProne=(100-(p._durability||50))/5;
   const riskMod=Math.max(0.5,1.0-injProne/40);
 
   // 4단계: 프로의식 가치 반영 (성장 기대치 + 에이징 리스크)
-  const we=p._workEthic||10;
-  const weBase=1.0+((we-10)*0.03); // 0.91~1.30
-  const ethicTradeMod=sp<=3?1.0+((we-10)*0.03*1.5):weBase; // 유망주 1.5배 증폭
+  const we=p._workEthic||50;
+  const weBase=1.0+((we-50)*0.006); // 0.91~1.30
+  const ethicTradeMod=sp<=3?1.0+((we-50)*0.009):weBase; // 유망주 1.5배 증폭
 
   // 5단계: 꾸준함 가치 반영 (신뢰도 리스크)
-  const cs=p._consistency||10;
-  const csBase=1.0+((cs-10)*0.015); // 0.955~1.15
-  const consTradeMod=sp>=4?1.0+((cs-10)*0.015*1.5):csBase; // 전성기/베테랑 1.5배 증폭
+  const cs=p._consistency||50;
+  const csBase=1.0+((cs-50)*0.003); // 0.955~1.15
+  const consTradeMod=sp>=4?1.0+((cs-50)*0.0045):csBase; // 전성기/베테랑 1.5배 증폭
 
   // PlayerValue = BaseValue × SkillValue/CA × RiskMod × EthicMod × ConsMod
   const playerValue=baseValue*(skillValue/Math.max(1,ca))*riskMod*ethicTradeMod*consTradeMod;
@@ -106,7 +106,7 @@ function calcTradeValueForAI(p,aiTeam){
   const sorted=[...G.teams].sort((a,b)=>(b.wins/(b.wins+b.losses||1))-(a.wins/(a.wins+a.losses||1)));
   const rank=sorted.indexOf(aiTeam)+1;
   const sp=p._seasonsPlayed||0;
-  const pa=p._potential||10;
+  const pa=p._potential||50;
   const pOvr=ovr(p);
   const st=p._serviceTime||0;
 
@@ -114,7 +114,7 @@ function calcTradeValueForAI(p,aiTeam){
   if(rank<=3){
     if(pOvr>=59) tv=Math.round(tv*TRADE_CONTENDER_BONUS);
   }else if(rank>=6){
-    if(sp<=3&&pa>=14) tv=Math.round(tv*TRADE_REBUILD_BONUS);
+    if(sp<=3&&pa>=70) tv=Math.round(tv*TRADE_REBUILD_BONUS);
   }
 
   // ── 2단계: 포지션 뎁스 중복도 평가 ──

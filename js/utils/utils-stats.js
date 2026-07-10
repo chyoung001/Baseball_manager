@@ -73,8 +73,8 @@ function ovr(p){
 function ovrBatter(p){return ovr(p);}
 function ovrPitcher(p){return ovr(p);}
 
-// ---- POT → 최대 도달 가능 OVR 천장 ----
-function maxOvrFromPot(pot){return Math.floor(18+(pot||10)*4.125);}
+// ---- POT → 최대 도달 가능 OVR 천장 (POT 1~100 스케일: 50→59, 100→100) ----
+function maxOvrFromPot(pot){return Math.floor(18+(pot||50)*0.825);}
 
 // ---- Season Stats (per-player real game stats) ----
 function initSeasonStats(p){

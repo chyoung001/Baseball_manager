@@ -426,6 +426,69 @@ check(`전 그룹 1군 평균 OVR ≈50 (46~54): ${zProbe.means}`, zProbe.allOk)
 check('ovrRaw/ovr 분리 (유한 + 상이 선수 존재)', zProbe.splitOk);
 check(`다재다능 세금 (서브1 −1 / 서브2 −2): ${zProbe.tax1}/${zProbe.tax2}`, zProbe.tax1 === 1 && zProbe.tax2 === 2);
 
+// ── T10. P2-2 히든 스탯 10종 — 1~100 스케일 + 마이그레이션 + 협상 연동 ──
+section('T10. P2-2 히든 스탯 — 10종 · 1~100 스케일 · v4→v5 마이그레이션 · 협상 연동');
+const hidProbe = g(`(function(){
+  const all=G.teams.flatMap(t=>t.roster);
+  const OLD5=['_potential','_durability','_consistency','_clutchHidden','_workEthic'];
+  const NEW4=['_versatility','_ambition','_loyalty','_temperament'];
+  // ① 전 선수 히든 1~100 범위
+  let rangeOk=true;
+  all.forEach(p=>{
+    OLD5.concat(NEW4).forEach(k=>{const v=p[k];if(typeof v!=='number'||v<1||v>100)rangeOk=false;});
+    const ext=p.isPitcher?p._recovery:p._pullTendency;
+    if(typeof ext!=='number'||ext<1||ext>100)rangeOk=false;
+  });
+  // ② 리그 프로의식 평균 ≈52.5 (45~60)
+  const weMean=all.reduce((s,p)=>s+p._workEthic,0)/all.length;
+  // ③ POT 천장: 50→59, 100→100
+  const capOk=maxOvrFromPot(50)===59&&maxOvrFromPot(100)===100;
+  return {rangeOk,weMean:Math.round(weMean*10)/10,weOk:weMean>=45&&weMean<=60,capOk};
+})()`);
+check('전 선수 히든 10종 존재 + 1~100 범위', hidProbe.rangeOk);
+check(`리그 프로의식 평균 ≈52.5 (45~60): ${hidProbe.weMean}`, hidProbe.weOk);
+check('maxOvrFromPot 재보정 (50→59, 100→100)', hidProbe.capOk);
+
+// v4 세이브(히든 7~20) → v5 마이그레이션 (×5 변환 + 신규 6종 백필)
+vm.runInContext('saveGame()', ctx);
+const hidMig = vm.runInContext(`
+  (function(){
+    const d=JSON.parse(localStorage.getItem(SAVE_KEY));
+    d._v=4;                                    // v4 세이브로 위장
+    const c=d.teams[0].roster[0];
+    c._potential=10; c._durability=20; c._workEthic=7; // 구 7~20 히든 주입
+    delete c._versatility; delete c._ambition; delete c._loyalty;
+    delete c._temperament; delete c._recovery; delete c._pullTendency;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+    G.teams=[]; G.myTeam=null;
+    const ok=loadGame();
+    const p=G.teams[0].roster[0];
+    const ext=p.isPitcher?p._recovery:p._pullTendency;
+    return {ok, pot:p._potential, dur:p._durability, we:p._workEthic,
+      backfillOk:[p._versatility,p._ambition,p._loyalty,p._temperament,ext].every(v=>typeof v==='number'&&v>=1&&v<=100)};
+  })()
+`, ctx);
+check('v4 세이브 로드 성공', hidMig.ok === true);
+check(`히든 ×5 변환 (10→50, 20→100, 7→35): ${hidMig.pot}/${hidMig.dur}/${hidMig.we}`, hidMig.pot === 50 && hidMig.dur === 100 && hidMig.we === 35);
+check('신규 히든 6종 백필 (1~100)', hidMig.backfillOk);
+
+// 협상 연동: 야망 프리미엄 / 충성심 재계약 디스카운트 (결정적 헬퍼 검증)
+const negoProbe = g(`(function(){
+  const mk=(amb,loy,tenure)=>({_ambition:amb,_loyalty:loy,_teamTenure:tenure});
+  const m=(p,ctx)=>_contractHiddenMod(p,ctx);
+  return {
+    ambUp:   m(mk(100,50,0),'fa'),        // 야망 만점 → >1
+    ambDown: m(mk(35,50,0),'fa'),         // 야망 최저 → <1
+    loyDisc: m(mk(50,90,5),'renewal'),    // 충성심 90 재계약 → 할인 (<1)
+    loyNoTenure: m(mk(50,90,1),'renewal'),// 재적 3년 미만 → 할인 없음 (=1)
+    ambOffset: m(mk(100,90,5),'renewal'), // 야망>충성심 → 할인 축소 (loyDisc보다 큼)
+  };
+})()`);
+check(`야망 협상 공격성 (만점 ×${negoProbe.ambUp.toFixed(2)} / 최저 ×${negoProbe.ambDown.toFixed(2)})`, negoProbe.ambUp > 1 && negoProbe.ambDown < 1);
+check(`충성심 재계약 디스카운트 (충90·재적5 ×${negoProbe.loyDisc.toFixed(3)})`, negoProbe.loyDisc < 1);
+check('재적 3년 미만 → 디스카운트 없음', negoProbe.loyNoTenure === 1);
+check('야망>충성심 → 할인 상쇄', negoProbe.ambOffset > negoProbe.loyDisc);
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');

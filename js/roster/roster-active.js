@@ -7,14 +7,14 @@ function showScoutReport(idx){
   const rdLv=G.myTeam.analyticsLevel||0;
   const accuracy=rdLv>=60?'높음':rdLv>=30?'보통':'낮음';
   const tm=G.testMode;
-  function debugNum(key){return tm?`<span style="font-family:'JetBrains Mono',monospace;color:#a855f7;font-size:0.75rem;margin-left:6px;">[${p[key]||0}/20]</span>`:''}
+  function debugNum(key){return tm?`<span style="font-family:'JetBrains Mono',monospace;color:#a855f7;font-size:0.75rem;margin-left:6px;">[${p[key]||0}/100]</span>`:''}
 
   // ── 계약 정보 ──
   const st=p._serviceTime||0;
   const phase=st<=PRE_ARB_MAX_SERVICE?'프리아브':st<=ARB_MAX_SERVICE?'연봉조정':'FA자격';
   const phColor=st<=PRE_ARB_MAX_SERVICE?'#67e8f9':st<=ARB_MAX_SERVICE?'#f59e0b':'#10b981';
   const contractLeft=p._contractYears||1;
-  const potCap=maxOvrFromPot(p._potential||10);
+  const potCap=maxOvrFromPot(p._potential||50);
   const growthRoom=Math.max(0,potCap-ovrRaw(p)); // 절대 raw 기준 성장 여지
   const foreignBadge=p.isForeign?'<span style="background:#3b82f622;color:#3b82f6;font-size:0.6rem;padding:1px 5px;border-radius:3px;margin-left:4px;">외국인</span>':'';
 
@@ -143,10 +143,35 @@ function showScoutReport(idx){
           <div class="scout-grade ${r.clt.cls}">${r.clt.text}</div>
           <div class="scout-desc">${r.cltText}</div>
         </div>
-        <div class="scout-item" style="grid-column:span 2;">
+        <div class="scout-item">
           <div class="scout-label">🏋️ 프로의식 ${debugNum('_workEthic')}</div>
           <div class="scout-grade ${r.we.cls}">${r.we.text}</div>
           <div class="scout-desc">${r.weText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">🧩 다재다능 ${debugNum('_versatility')}</div>
+          <div class="scout-grade ${r.ver.cls}">${r.ver.text}</div>
+          <div class="scout-desc">${r.verText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">🚀 야망 ${debugNum('_ambition')}</div>
+          <div class="scout-grade ${r.amb.cls}">${r.amb.text}</div>
+          <div class="scout-desc">${r.ambText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">💙 충성심 ${debugNum('_loyalty')}</div>
+          <div class="scout-grade ${r.loy.cls}">${r.loy.text}</div>
+          <div class="scout-desc">${r.loyText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">🧘 참을성 ${debugNum('_temperament')}</div>
+          <div class="scout-grade ${r.tem.cls}">${r.tem.text}</div>
+          <div class="scout-desc">${r.temText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">${p.isPitcher?'🔄 연투회복':'↩️ 당김성향'} ${debugNum(p.isPitcher?'_recovery':'_pullTendency')}</div>
+          <div class="scout-grade ${r.ext.cls}">${r.ext.text}</div>
+          <div class="scout-desc">${r.extText}</div>
         </div>
       </div>
 

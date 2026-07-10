@@ -91,15 +91,15 @@ function investSendOverseas(rosterIdx) {
   t.overseasUsedThisSeason = (t.overseasUsedThisSeason||0) + 1;
   p._overseasCount = (p._overseasCount||0) + 1;
 
-  // 즉시 복귀: POT 확장 + 스탯 부스트 (비시즌이므로 대기 없음)
-  p._potential = Math.min(20, (p._potential||10) + rand(1,2));
+  // 즉시 복귀: POT 확장 + 스탯 부스트 (비시즌이므로 대기 없음, POT 1~100)
+  p._potential = Math.min(100, (p._potential||50) + rand(5,10));
   const boost = rand(OVERSEAS_BOOST_MIN, OVERSEAS_BOOST_MAX);
   if(p.isPitcher){const s=pick(['stuff','control','velocity','movement']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
   else{const s=pick(['contact','power','eye','speed']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
 
-  // 프로의식 연동: _workEthic 높으면 추가 보너스 스탯
-  const we=p._workEthic||10;
-  if(we>=12 && Math.random()<(we/25)){ // ethic 12~20 → 48~80% 확률
+  // 프로의식 연동: _workEthic 높으면 추가 보너스 스탯 (1~100)
+  const we=p._workEthic||50;
+  if(we>=60 && Math.random()<(we/125)){ // ethic 60~100 → 48~80% 확률
     const extraBoost=rand(1,2);
     const extraStats=p.isPitcher?['stuff','control','movement']:['contact','power','eye'];
     const es=pick(extraStats);
@@ -205,13 +205,13 @@ function executeMedicalCenter(rosterIdx) {
   } else if (roll <= 85) {
     // 부분 성공 (35%): +2 영구 + POT +1
     result = '부분 성공'; resultColor = '#f59e0b'; resultEmoji = '💪';
-    p._potential = Math.min(20, (p._potential||10) + 1);
+    p._potential = Math.min(100, (p._potential||50) + 5);
     stats.forEach(s => { p[s] = clamp((p[s] || 18) + 3, STAT_MIN, STAT_MAX); });
     resultDesc = `전체 스탯 +2 영구 상승! 잠재력 확장 (최대 ${maxOvrFromPot(p._potential)} OVR)`;
   } else if (roll <= 90) {
     // 대성공 (5%): +5 영구 + POT +3 + 에이징 면역 2년
     result = '대성공'; resultColor = '#10b981'; resultEmoji = '🌟';
-    p._potential = Math.min(20, (p._potential||10) + 3);
+    p._potential = Math.min(100, (p._potential||50) + 15);
     stats.forEach(s => { p[s] = clamp((p[s] || 18) + 8, STAT_MIN, STAT_MAX); });
     p.agingImmunityYears = 2;
     resultDesc = `전체 스탯 +5 영구 상승! 잠재력 대폭 확장 (최대 ${maxOvrFromPot(p._potential)} OVR)! 2년간 에이징 면역!`;

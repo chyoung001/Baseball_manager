@@ -39,20 +39,25 @@ function _ageToServiceTime(age){
 }
 
 // ═══════════════════════════════════════════════════════
-// 3단계: 히든 스탯 생성 (평균 10.5, 표준편차 3.5)
+// 3단계: 히든 스탯 생성 — P2-2: 1~100 스케일 (50=평균, 구 7~20의 ×5)
+// 생성 하한 35 = 구 스케일 하한 7 유지 (밸런스 보존, 특성 시스템이 이하로 내릴 수 있음)
 // ═══════════════════════════════════════════════════════
 
 function _genHidden(){
-  return clamp(Math.round(randomGaussian(10.5, 3.5)), 7, 20);
+  return clamp(Math.round(randomGaussian(52.5, 17.5)), 35, 100);
+}
+// 당김 성향 전용 (타자): Statcast 관측 분포 근사 — 50=전방향 균등 평균
+function _genPullTendency(){
+  return randGauss(50, 15, 1, 100);
 }
 
 // 등급별 잠재력 기반값 — 등급이 높을수록 최소 잠재력 보장
 function _gradePotBase(grade){
-  if(grade==='S') return randGauss(17,1,15,20);   // S급: 최소 15 보장
-  if(grade==='A') return randGauss(14,2,12,18);   // A급: 최소 12 보장
-  if(grade==='B') return randGauss(11,2,7,15);
-  if(grade==='C') return randGauss(9,2,7,13);
-  return randGauss(13,3,8,20); // D급: 원석이므로 잠재력 높을 수 있음
+  if(grade==='S') return randGauss(85,5,75,100);  // S급: 최소 75 보장
+  if(grade==='A') return randGauss(70,10,60,90);  // A급: 최소 60 보장
+  if(grade==='B') return randGauss(55,10,35,75);
+  if(grade==='C') return randGauss(45,10,35,65);
+  return randGauss(65,15,40,100); // D급: 원석이므로 잠재력 높을 수 있음
 }
 
 // ═══════════════════════════════════════════════════════
