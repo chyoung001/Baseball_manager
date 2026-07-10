@@ -118,7 +118,7 @@ function awardXP(p, amount) {
     const stats = p.isPitcher ? ['stuff','control','velocity','movement','stamina','clutch'] : ['contact','power','eye','speed','fielding','arm'];
     const s = pick(stats);
     const pot = p._potential || 10;
-    if(ovr(p) >= maxOvrFromPot(pot)) return; // POT 천장 도달 → 성장 차단
+    if(ovrRaw(p) >= maxOvrFromPot(pot)) return; // POT 천장 도달 → 성장 차단 (절대 raw 기준)
     // 프로의식(workEthic) 기반 성장 배율 — 잠재력은 천장에만 사용
     const ethicMod = 0.5 + ((p._workEthic||10) / 20); // 0.85~1.5
     const baseGain = rand(1,3);

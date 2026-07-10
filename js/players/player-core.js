@@ -145,7 +145,7 @@ function applyInitialContract(p, grade, team){
   p._teamTenure=rand(0, Math.min(p._serviceTime, 5));
 
   // 에이징에 따른 잠재력 보정
-  p._potential=_agingPotential(p.age, p._potential, ovr(p));
+  p._potential=_agingPotential(p.age, p._potential, ovrRaw(p));
 
   // 에이징에 따른 피지컬 패널티 (speed/velocity)
   const agePen=_agingStatPenalty(p.age);

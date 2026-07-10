@@ -61,7 +61,7 @@ function doTraining(idx){
     }
     if(type==='batter'&&p.isPitcher)return;
     if(type==='pitcher'&&!p.isPitcher)return;
-    if(p[t.stat]!==undefined&&ovr(p)<maxOvrFromPot(p._potential||10)){
+    if(p[t.stat]!==undefined&&ovrRaw(p)<maxOvrFromPot(p._potential||10)){
       const base=rand(1,3)+devBonus;
       const ethicMod=0.5+((p._workEthic||10)/20);
       const gain=Math.max(0,Math.round(base*mult*ethicMod));

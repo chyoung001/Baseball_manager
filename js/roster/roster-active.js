@@ -15,7 +15,7 @@ function showScoutReport(idx){
   const phColor=st<=PRE_ARB_MAX_SERVICE?'#67e8f9':st<=ARB_MAX_SERVICE?'#f59e0b':'#10b981';
   const contractLeft=p._contractYears||1;
   const potCap=maxOvrFromPot(p._potential||10);
-  const growthRoom=Math.max(0,potCap-o);
+  const growthRoom=Math.max(0,potCap-ovrRaw(p)); // 절대 raw 기준 성장 여지
   const foreignBadge=p.isForeign?'<span style="background:#3b82f622;color:#3b82f6;font-size:0.6rem;padding:1px 5px;border-radius:3px;margin-left:4px;">외국인</span>':'';
 
   // ── 능력치 바 생성 ──

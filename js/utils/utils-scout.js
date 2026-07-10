@@ -109,7 +109,7 @@ function getDraftScoutInfo(p,scLv){
   // 스카우트팀 Lv.90+: 스틸픽 특성 (실제 OVR과 스카우팅 OVR 괴리 감지)
   if(scLv>=90){
     const potCap=18+(pot*4.125);
-    if(potCap-real>=25) info.sleeper=true;
+    if(potCap-ovrRaw(p)>=25) info.sleeper=true; // 절대 raw 기준 (상대 OVR 혼용 금지)
   }
 
   return info;

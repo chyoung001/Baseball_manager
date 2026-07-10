@@ -26,7 +26,7 @@ function _agingPotential(age, basePot, currentOvr){
   else if(age<=29) pot=clamp(basePot-rand(0,1), 7, 20);
   else if(age<=35) pot=clamp(basePot-rand(1,3), 7, 15);
   else {
-    const ovrLevel=Math.round((currentOvr-20)/6);
+    const ovrLevel=Math.round((currentOvr-1)/9.9);
     pot=clamp(Math.min(basePot, ovrLevel+rand(0,2)), 7, 10);
   }
 
@@ -79,8 +79,8 @@ function _forceDraftOvr(p, targetOvr){
   stats.forEach(s=>{p[s]=clamp(rand(1,14),STAT_MIN,STAT_MAX);});
   // 타겟 OVR까지 조정
   let att=0;
-  while(Math.abs(ovr(p)-targetOvr)>2 && att<30){
-    const diff=targetOvr-ovr(p);
+  while(Math.abs(ovrRaw(p)-targetOvr)>2 && att<30){
+    const diff=targetOvr-ovrRaw(p);
     const s=pick(stats);
     p[s]=clamp(p[s]+Math.round(diff*0.5),STAT_MIN,STAT_MAX);
     att++;

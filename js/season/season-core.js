@@ -40,7 +40,7 @@ function showPreseason(){
           p.agingImmunityYears--;
           const immuneGrowth=Math.round((rand(0,2)+Math.floor(team.devLevel/30))*ethicMod);
           const stats=p.isPitcher?['stuff','control','velocity','movement','stamina','clutch']:['contact','power','eye','speed','fielding','arm'];
-          if(ovr(p)<maxOvrFromPot(pot)){
+          if(ovrRaw(p)<maxOvrFromPot(pot)){
             stats.forEach(s=>{p[s]=clamp((p[s]||0)+immuneGrowth,STAT_MIN,STAT_MAX);});
           }
           p.condition=rand(75,100);
@@ -76,7 +76,7 @@ function showPreseason(){
         const growth=Math.round(baseGrowth*ethicMod);
 
         const potCap=maxOvrFromPot(pot);
-        const canGrow=ovr(p)<potCap;
+        const canGrow=ovrRaw(p)<potCap;
         if(p.isPitcher){
           if(canGrow)['stuff','movement'].forEach(s=>{p[s]=clamp((p[s]||0)+growth,STAT_MIN,STAT_MAX);});
           p.velocity=clamp((p.velocity||0)+(canGrow?growth:0)-velPen,STAT_MIN,STAT_MAX);
