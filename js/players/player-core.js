@@ -7,15 +7,15 @@
 // 등급 뽑기: S(2%), A(13%), B(35%), C(35%), D(15%)
 function _rollGrade(){
   const r=rand(1,100);
-  if(r<=2)  return 'S';   // 2%
-  if(r<=15) return 'A';   // 13%
-  if(r<=50) return 'B';   // 35%
-  if(r<=85) return 'C';   // 35%
-  return 'D';              // 15%
+  if(r<=3)  return 'S';   // 3%
+  if(r<=18) return 'A';   // 15%
+  if(r<=60) return 'B';   // 42%
+  if(r<=90) return 'C';   // 30%
+  return 'D';              // 10%
 }
 
 // 등급별 OVR 범위
-const GRADE_OVR={S:[70,80],A:[60,69],B:[50,59],C:[40,49],D:[25,39]};
+const GRADE_OVR={S:[84,100],A:[67,82],B:[51,65],C:[34,49],D:[9,32]};
 
 // 등급별 나이 생성
 function _gradeAge(grade){
@@ -65,35 +65,35 @@ function _calcSalary(pOvr, serviceTime){
 
   // 프리FA (0~3년): OVR 무관 1억 미만 억제
   if(serviceTime <= PRE_ARB_MAX_SERVICE){
-    if(pOvr>=70) return +(rand(3,8)/10).toFixed(1);   // 0.3~0.8억
-    if(pOvr>=65) return +(rand(3,6)/10).toFixed(1);   // 0.3~0.6억
-    if(pOvr>=60) return +(rand(3,4)/10).toFixed(1);   // 0.3~0.4억
+    if(pOvr>=84) return +(rand(3,8)/10).toFixed(1);   // 0.3~0.8억
+    if(pOvr>=75) return +(rand(3,6)/10).toFixed(1);   // 0.3~0.6억
+    if(pOvr>=67) return +(rand(3,4)/10).toFixed(1);   // 0.3~0.4억
     return SALARY_MIN;                                  // 0.3억
   }
 
   // 연봉조정 (4~6년): 사치세 라인의 0.3% ~ 6%
   if(serviceTime <= ARB_MAX_SERVICE){
-    if(pOvr>=70) return +((taxLine * rand(40,60)/1000).toFixed(1));  // 4%~6% → 5.6~8.4억
-    if(pOvr>=65) return +((taxLine * rand(20,40)/1000).toFixed(1));  // 2%~4% → 2.8~5.6억
-    if(pOvr>=60) return +((taxLine * rand(10,20)/1000).toFixed(1));  // 1%~2% → 1.4~2.8억
-    if(pOvr>=50) return +((taxLine * rand(5,10)/1000).toFixed(1));   // 0.5%~1% → 0.7~1.4억
+    if(pOvr>=84) return +((taxLine * rand(40,60)/1000).toFixed(1));  // 4%~6% → 5.6~8.4억
+    if(pOvr>=75) return +((taxLine * rand(20,40)/1000).toFixed(1));  // 2%~4% → 2.8~5.6억
+    if(pOvr>=67) return +((taxLine * rand(10,20)/1000).toFixed(1));  // 1%~2% → 1.4~2.8억
+    if(pOvr>=51) return +((taxLine * rand(5,10)/1000).toFixed(1));   // 0.5%~1% → 0.7~1.4억
     return +((taxLine * rand(3,5)/1000).toFixed(1));                 // 0.3%~0.5% → 0.42~0.7억
   }
 
   // FA 계약 (7년+): 사치세 라인의 % 시장가치
-  if(pOvr>=70) return +((taxLine * rand(100,180)/1000).toFixed(1));  // 10%~18% → 14~25.2억
-  if(pOvr>=65) return +((taxLine * rand(60,100)/1000).toFixed(1));   // 6%~10% → 8.4~14억
-  if(pOvr>=60) return +((taxLine * rand(30,50)/1000).toFixed(1));    // 3%~5% → 4.2~7억
-  if(pOvr>=50) return +((taxLine * rand(10,20)/1000).toFixed(1));    // 1%~2% → 1.4~2.8억
+  if(pOvr>=84) return +((taxLine * rand(100,180)/1000).toFixed(1));  // 10%~18% → 14~25.2억
+  if(pOvr>=75) return +((taxLine * rand(60,100)/1000).toFixed(1));   // 6%~10% → 8.4~14억
+  if(pOvr>=67) return +((taxLine * rand(30,50)/1000).toFixed(1));    // 3%~5% → 4.2~7억
+  if(pOvr>=51) return +((taxLine * rand(10,20)/1000).toFixed(1));    // 1%~2% → 1.4~2.8억
   return SALARY_MIN;
 }
 
 // FA 계약 기간
 function _calcContractYears(pOvr){
-  if(pOvr>=70) return rand(3,5);
-  if(pOvr>=65) return rand(2,4);
-  if(pOvr>=60) return rand(1,3);
-  if(pOvr>=50) return rand(1,2);
+  if(pOvr>=84) return rand(3,5);
+  if(pOvr>=75) return rand(2,4);
+  if(pOvr>=67) return rand(1,3);
+  if(pOvr>=51) return rand(1,2);
   return 1;
 }
 
@@ -112,15 +112,15 @@ function _applySpecialContract(p, pOvr, team){
 
   // 1. 프랜차이즈 스타: FA + OVR 65+ → 기본 15% + 포지션 보정
   const franchiseProb=clamp(15+mod.franchiseMod, 0, 30);
-  if(pOvr>=65 && rand(1,100)<=franchiseProb){
+  if(pOvr>=75 && rand(1,100)<=franchiseProb){
     p._contractYears=rand(4,6);
     p.salary=+(p.salary*1.2).toFixed(1);  // 1.2배 + 초장기
     p._contractEvent='franchise';
     return;
   }
 
-  // 2. 악성 먹튀: FA + OVR 45~50 → 시스템 레벨 비례
-  if(pOvr>=45 && pOvr<=50){
+  // 2. 악성 먹튀: FA + OVR 42~51 → 시스템 레벨 비례
+  if(pOvr>=42 && pOvr<=51){
     let baseProb;
     if(team==='my' && typeof G!=='undefined' && G.myTeam){
       const sysLv=Math.round(((G.myTeam.devLevel||50)+(G.myTeam.facilityLevel||50))/2);
@@ -150,8 +150,8 @@ function applyInitialContract(p, grade, team){
   // 에이징에 따른 피지컬 패널티 (speed/velocity)
   const agePen=_agingStatPenalty(p.age);
   if(agePen>0){
-    if(p.isPitcher) p.velocity=clamp(p.velocity-agePen, 20, 80);
-    else p.speed=clamp(p.speed-agePen, 20, 80);
+    if(p.isPitcher) p.velocity=clamp(p.velocity-agePen, STAT_MIN, STAT_MAX);
+    else p.speed=clamp(p.speed-agePen, STAT_MIN, STAT_MAX);
   }
 
   // 계약 단계 + 연봉

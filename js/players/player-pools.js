@@ -40,7 +40,7 @@ function genTeamRoster(_tier, concept, isMyTeam){
   // 벤치 5명: C~D 급 위주
   const benchPos=['C','SS','CF','1B','RF'];
   benchPos.forEach(pos=>{
-    const benchGrade=Math.random()<0.6 ? 'C' : 'D';
+    const benchGrade=Math.random()<0.6 ? 'B' : 'C';
     const p=genBatter(pos, benchGrade, concept, _t);
     p.role='bench';
     roster.push(p);
@@ -76,7 +76,7 @@ function genTeamRoster(_tier, concept, isMyTeam){
     const ss=p.isPitcher
       ? ['stuff','control','velocity','movement','stamina','clutch']
       : ['contact','power','eye','speed','fielding','arm'];
-    ss.forEach(s=>{ p[s]=clamp((p[s]||25)-rand(8,12), 20, 50); });
+    ss.forEach(s=>{ p[s]=clamp((p[s]||9)-rand(13,20), STAT_MIN, 51); });
     roster.push(p);
   }
 

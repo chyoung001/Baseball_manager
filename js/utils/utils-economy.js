@@ -112,7 +112,7 @@ function calcTradeValueForAI(p,aiTeam){
 
   // ── 1단계: 윈나우/리빌딩 기본 컨텍스트 ──
   if(rank<=3){
-    if(pOvr>=55) tv=Math.round(tv*TRADE_CONTENDER_BONUS);
+    if(pOvr>=59) tv=Math.round(tv*TRADE_CONTENDER_BONUS);
   }else if(rank>=6){
     if(sp<=3&&pa>=14) tv=Math.round(tv*TRADE_REBUILD_BONUS);
   }
@@ -134,20 +134,20 @@ function calcTradeValueForAI(p,aiTeam){
     if(rank>=6) tv=Math.round(tv*0.4);
   }
   // 장기 염가 계약: 서비스 1~PRE_ARB년, 최저연봉, OVR 55+
-  if(st>=1&&st<=PRE_ARB_MAX_SERVICE&&(p.salary||0)<=SALARY_MIN&&pOvr>=55){
+  if(st>=1&&st<=PRE_ARB_MAX_SERVICE&&(p.salary||0)<=SALARY_MIN&&pOvr>=59){
     tv=Math.round(tv*1.5);
   }
 
   // ── 4단계: 샐러리 덤프 ──
   const aiBudget=getAvailableBudget(aiTeam);
-  if(aiBudget<100&&(p.salary||0)>=30&&pOvr<50){
+  if(aiBudget<100&&(p.salary||0)>=30&&pOvr<51){
     // 예산 부족 + 고연봉 저성과 → 마이너스 가치 (먹튀)
     tv=Math.round(-Math.abs(p.salary||0)*2);
   }
 
   // ── 5단계: 최근 성적 프리미엄 (Recency Bias) ──
   const war=approxWAR(p);
-  const expectedWar=pOvr>=65?3:pOvr>=55?1.5:pOvr>=45?0.5:0;
+  const expectedWar=pOvr>=75?3:pOvr>=59?1.5:pOvr>=42?0.5:0;
   if(war>expectedWar+1.5){
     // OVR 대비 시즌 성적이 뛰어남 → 15~20% 프리미엄
     tv=Math.round(tv*(1.15+Math.random()*0.05));
@@ -156,7 +156,7 @@ function calcTradeValueForAI(p,aiTeam){
   // ── 6단계: 프랜차이즈 스타 언터처블 프리미엄 ──
   // AI 소속 선수가 프랜차이즈 스타면 팬 반발 의식하여 2배 프리미엄
   const isOnAiTeam=aiTeam.roster.includes(p);
-  if(isOnAiTeam&&(p._teamTenure||0)>=8&&pOvr>=65){
+  if(isOnAiTeam&&(p._teamTenure||0)>=8&&pOvr>=75){
     tv=Math.round(tv*2.0);
   }
 

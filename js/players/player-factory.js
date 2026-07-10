@@ -27,8 +27,8 @@ function genBatter(pos, gradeOrTier, concept, team){
     power:    _genStatFromOvr(targetOvr+posPen),
     eye:      _genStatFromOvr(targetOvr-2+posPen),
     speed:    _genStatFromOvr(targetOvr-2),
-    fielding: isDH ? randGauss(30,5,20,45) : _genStatFromOvr(targetOvr),
-    arm:      isDH ? randGauss(30,5,20,45) : _genStatFromOvr(targetOvr-2),
+    fielding: isDH ? randGauss(18,8,STAT_MIN,42) : _genStatFromOvr(targetOvr),
+    arm:      isDH ? randGauss(18,8,STAT_MIN,42) : _genStatFromOvr(targetOvr-2),
     condition:rand(70,100),
     popularity:rand(10, grade==='S'?80 : grade==='A'?60 : 40),
     salary:SALARY_MIN,
@@ -47,12 +47,12 @@ function genBatter(pos, gradeOrTier, concept, team){
   // 4단계: 컨셉 보정
   _applyConceptBatter(p, concept);
 
-  // OVR 80 상한 보장
+  // 스탯 스케일 상한(STAT_MAX) 보장
   const stats=['contact','power','eye','speed','fielding','arm'];
-  stats.forEach(s=>{ p[s]=clamp(p[s], 20, 80); });
+  stats.forEach(s=>{ p[s]=clamp(p[s], STAT_MIN, STAT_MAX); });
 
   // POT-OVR 정합성: targetOvr에 도달 가능하도록 POT 최소값 보장
-  const minPotForOvr=Math.ceil((targetOvr-30)/2.5);
+  const minPotForOvr=Math.ceil((targetOvr-18)/4.125);
   p._potential=Math.max(p._potential, clamp(minPotForOvr, 7, 20));
 
   // 5단계: 계약 산정
@@ -102,19 +102,19 @@ function genPitcher(role, gradeOrTier, concept, team){
   };
 
   // 역할별 보정
-  if(role==='CP'){p.clutch=clamp(p.clutch+rand(6,12),STAT_MIN,STAT_MAX); p.stuff=clamp(p.stuff+rand(4,8),25,80);}
-  if(role==='SU'){p.stuff=clamp(p.stuff+rand(4,8),25,80); p.control=clamp(p.control+rand(3,6),STAT_MIN,STAT_MAX);}
-  if(role==='LR'){p.stamina=clamp(p.stamina+rand(8,14),STAT_MIN,STAT_MAX); p.stuff=clamp(p.stuff-rand(2,6),25,80);}
+  if(role==='CP'){p.clutch=clamp(p.clutch+rand(6,12),STAT_MIN,STAT_MAX); p.stuff=clamp(p.stuff+rand(4,8),9,100);}
+  if(role==='SU'){p.stuff=clamp(p.stuff+rand(4,8),9,100); p.control=clamp(p.control+rand(3,6),STAT_MIN,STAT_MAX);}
+  if(role==='LR'){p.stamina=clamp(p.stamina+rand(8,14),STAT_MIN,STAT_MAX); p.stuff=clamp(p.stuff-rand(2,6),9,100);}
 
   // 4단계: 컨셉 보정
   _applyConceptPitcher(p, concept, role);
 
-  // OVR 80 상한 보장
+  // 스탯 스케일 상한(STAT_MAX) 보장
   const stats=['stuff','control','velocity','movement','stamina','clutch'];
-  stats.forEach(s=>{ p[s]=clamp(p[s], 20, 80); });
+  stats.forEach(s=>{ p[s]=clamp(p[s], STAT_MIN, STAT_MAX); });
 
   // POT-OVR 정합성: targetOvr에 도달 가능하도록 POT 최소값 보장
-  const minPotForOvr=Math.ceil((targetOvr-30)/2.5);
+  const minPotForOvr=Math.ceil((targetOvr-18)/4.125);
   p._potential=Math.max(p._potential, clamp(minPotForOvr, 7, 20));
 
   // 5단계: 계약 산정
@@ -134,25 +134,25 @@ function genDraftProspect(isBatter, draftGrade){
   if(grade==='S'){
     p._potential=rand(17,20);
     p.age=rand(18,19);
-    _forceDraftOvr(p,rand(20,30));
+    _forceDraftOvr(p,rand(1,18));
   }else if(grade==='A'){
     p._potential=rand(14,16);
     p.age=rand(18,21);
-    _forceDraftOvr(p,rand(22,32));
+    _forceDraftOvr(p,rand(4,21));
   }else if(grade==='B'){
     p._potential=rand(12,13);
     p.age=rand(20,23);
-    _forceDraftOvr(p,rand(25,35));
+    _forceDraftOvr(p,rand(9,26));
   }else if(grade==='D'){
     // D급: 낮은 잠재력, 로또 원석
     p._potential=rand(8,10);
     p.age=rand(22,25);
-    _forceDraftOvr(p,rand(22,30));
+    _forceDraftOvr(p,rand(4,18));
   }else{
     // C급 (기본)
     p._potential=rand(10,11);
     p.age=rand(21,24);
-    _forceDraftOvr(p,rand(28,38));
+    _forceDraftOvr(p,rand(14,31));
   }
 
   p.status='futures';

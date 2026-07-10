@@ -44,7 +44,7 @@ function _expandTeam(c,idx){
 function saveGame(){
   try{
     const snap={
-      _v:3, season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
+      _v:4, season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
       teamIdx:G.teamIdx, trainingCooldown:G.trainingCooldown||0, matchSpeed:G.matchSpeed,
       currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
       testMode:G.testMode,
@@ -112,6 +112,15 @@ function _restoreFromData(d){
   G.myTeam=G.teams[G.teamIdx];
   // RP→MR 마이그레이션 (구버전 세이브 호환)
   G.teams.forEach(t=>t.roster.forEach(p=>{if(p.pos==='RP')p.pos='MR';}));
+  // v4 스케일 마이그레이션: 일반 능력치 20-80 → 1~100 (선형 매핑, 구세이브 1회 변환)
+  if(!d._v||d._v<4){
+    const _SCALE_KEYS=['contact','power','eye','speed','fielding','arm','stuff','control','velocity','movement','stamina','clutch'];
+    const _to100=x=>clamp(Math.round(1.65*x-32),STAT_MIN,STAT_MAX); // 20→1, 50→51, 80→100
+    const _scale=p=>_SCALE_KEYS.forEach(k=>{if(typeof p[k]==='number')p[k]=_to100(p[k]);});
+    G.teams.forEach(t=>t.roster.forEach(_scale));
+    (G.marketPlayers||[]).forEach(_scale);
+    (G.draftPool||[]).forEach(_scale);
+  }
   // v2→v3 마이그레이션: phase명 매핑, 신규 선수 필드 초기화
   if(!d._v||d._v<3){
     if(G.phase==='spring_camp')G.phase='preseason';
@@ -122,7 +131,7 @@ function _restoreFromData(d){
       if(p._careerStats===undefined)p._careerStats=null;
     }));
   }
-  // v3→v4 마이그레이션: 트레이드/옵션 필드 초기화
+  // 필드 보강 마이그레이션 (전 버전 공통 — undefined 필드 기본값 채움)
   G.teams.forEach(t=>t.roster.forEach(p=>{
     if(p._teamTenure===undefined)p._teamTenure=p._serviceTime||0;
     if(p._optionYearsUsed===undefined)p._optionYearsUsed=0;
@@ -156,7 +165,7 @@ function clearSave(){localStorage.removeItem(SAVE_KEY);sessionStorage.removeItem
 function exportGame(){
   try{
     const snap={
-      _v:3, _exportDate:new Date().toISOString(),
+      _v:4, _exportDate:new Date().toISOString(),
       season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
       teamIdx:G.teamIdx, trainingCooldown:G.trainingCooldown||0, matchSpeed:G.matchSpeed,
       currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,

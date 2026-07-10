@@ -199,7 +199,7 @@ function simulatePlay(){
   const fatigue=_fatigueDebuff((pitcher.today&&pitcher.today.np)||0);
   const stamFactor=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
   const condFactor=Math.min(1.0,(pitcher.condition||100)/100);
-  const adjVelocity=Math.max(20,(pitcher.velocity||50)+fatigue.vel);
+  const adjVelocity=Math.max(1,(pitcher.velocity||50)+fatigue.vel);
   const velMult=1+adjVelocity/400;
 
   // ── [3] 실시간 부상 확률 (투구수 가중 + 돌발 부상 포함) ──
@@ -271,23 +271,23 @@ function simulatePlay(){
   const regression=_calcRegression(batter,pitcher);
 
   // ── [9] TTO 확률 계산 (HR → K → BB → InPlay) — 극단값 상한 축소 ──
-  const pHR=clamp(TTO_BASE_HR+(adjPower-effMovement)/100*0.16, 0.005, 0.08);
-  const pK =clamp(TTO_BASE_K +(effStuff-adjContact)/100*0.15, 0.04, 0.30);
-  const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/100*0.12, 0.02, 0.15);
+  const pHR=clamp(TTO_BASE_HR+(adjPower-effMovement)/165*0.16, 0.005, 0.08);
+  const pK =clamp(TTO_BASE_K +(effStuff-adjContact)/165*0.15, 0.04, 0.30);
+  const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/165*0.12, 0.02, 0.15);
 
   // ── [10] BABIP (인플레이 안타 확률) ──
-  const contactMod=1+(adjContact-50)/200;
-  const defMod=1-(avgFielding-50)/250;
+  const contactMod=1+(adjContact-50)/330;
+  const defMod=1-(avgFielding-50)/412;
   const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*regression.hitMod, 0.200, 0.380);
 
   // ── [11] 인플레이 세부 확률 ──
-  const pError=clamp(0.02-(avgFielding-50)/2000, 0.005, 0.04);
+  const pError=clamp(0.02-(avgFielding-50)/3300, 0.005, 0.04);
   let gbAdj=0;
   if(fldTeam.concept==='defense') gbAdj+=0.05;
   if(batTeam.concept==='power_hit') gbAdj-=0.05;
-  const gbRate=clamp(0.45+(effMovement-adjPower)/200+gbAdj, 0.30, 0.65);
-  const xbhRate=clamp(0.20+(adjPower-50)/200, 0.10, 0.40);
-  const tripleRate=batSpeed>65?0.025:batSpeed>50?0.012:0.004;
+  const gbRate=clamp(0.45+(effMovement-adjPower)/330+gbAdj, 0.30, 0.65);
+  const xbhRate=clamp(0.20+(adjPower-50)/330, 0.10, 0.40);
+  const tripleRate=batSpeed>75?0.025:batSpeed>51?0.012:0.004;
   const doubleRate=xbhRate-tripleRate;
 
   // ── Stats references ──
@@ -421,7 +421,7 @@ function simulatePlay(){
         if(matchState.bases[1]){r++;if(!matchState.bases[1]._errorRunner)_er2++;matchState.bases[1]=null;}
         if(matchState.bases[0]){
           const _r0=matchState.bases[0];
-          if((_r0.speed||50)>55&&Math.random()*100<(_r0.speed||50)*armPenalty*0.55){r++;if(!_r0._errorRunner)_er2++;matchState.bases[0]=null;}
+          if((_r0.speed||50)>59&&Math.random()*100<(_r0.speed||50)*armPenalty*0.55){r++;if(!_r0._errorRunner)_er2++;matchState.bases[0]=null;}
           else{matchState.bases[2]=matchState.bases[0];matchState.bases[0]=null;}
         }
         matchState.bases[1]=batter;matchState.score[scoreKey][ii]+=r;bs.rbi+=r;if(r){ps.er+=_er2;bt.rbi+=r;pt.er+=_er2;}
@@ -439,7 +439,7 @@ function simulatePlay(){
         }
         if(matchState.bases[0]){
           const _r0=matchState.bases[0];
-          if((_r0.speed||50)>65&&Math.random()*100<(_r0.speed||50)*armPenalty*0.35&&!matchState.bases[2]){
+          if((_r0.speed||50)>75&&Math.random()*100<(_r0.speed||50)*armPenalty*0.35&&!matchState.bases[2]){
             matchState.bases[2]=_r0;
           }else if(!matchState.bases[1]){
             matchState.bases[1]=_r0;
@@ -458,7 +458,7 @@ function simulatePlay(){
       if(outRoll<gbRate){
         // ── 땅볼 → 병살타 체크 (타자 Speed ≤45이면 DP 확률 1.4배) ──
         const baseDpChance=fldTeam.concept==='defense'?0.14:0.09;
-        const speedDpMod=batSpeed<=45?1.4:batSpeed>=65?0.6:1.0;
+        const speedDpMod=batSpeed<=42?1.4:batSpeed>=75?0.6:1.0;
         if(matchState.outs<2&&matchState.bases[0]&&Math.random()<baseDpChance*speedDpMod){
           let dpRuns=0,dpER=0;
           if(matchState.outs===0&&matchState.bases[2]){dpRuns++;if(!matchState.bases[2]._errorRunner)dpER++;matchState.bases[2]=null;}
@@ -483,7 +483,7 @@ function simulatePlay(){
         if(fbType==='플라이'&&matchState.bases[2]&&matchState.outs<3){
           const _sfRunner=matchState.bases[2];
           const _sfSpd=_sfRunner.speed||50;
-          const _sfChance=clamp(0.50+(_sfSpd-50)/200, 0.30, 0.70);
+          const _sfChance=clamp(0.50+(_sfSpd-50)/330, 0.30, 0.70);
           if(Math.random()<_sfChance){
             matchState.score[scoreKey][ii]++;
             bs.rbi++;bt.rbi++;
@@ -583,7 +583,7 @@ function endMatch(){
 
   if(isWin)G.myTeam.popularity=clamp(G.myTeam.popularity+rand(1,3),0,100);
   else G.myTeam.popularity=clamp(G.myTeam.popularity-rand(0,2),0,100);
-  G.myTeam.roster.forEach(p=>{if(ovr(p)>=62)p.popularity=clamp(p.popularity+rand(0,2),0,100);});
+  G.myTeam.roster.forEach(p=>{if(ovr(p)>=84)p.popularity=clamp(p.popularity+rand(0,2),0,100);});
   // 의료 시설 레벨에 따라 컨디션 저하 감소
   const medReduction=Math.floor((G.myTeam.medicalLevel||0)/20);
   const dropMin=Math.max(1,2-medReduction),dropMax=Math.max(dropMin,5-medReduction);
@@ -792,9 +792,9 @@ function _simAIGame(teamA,teamB){
       // 슬럼프 보정
       const isSlumping=(b.condition||100)<SLUMP_CONDITION_THRESHOLD;
       const slumpDebuff=isSlumping?SLUMP_DEBUFF:0;
-      const adjCon=clamp((b.contact||50)+batBonus-slumpDebuff,10,90);
-      const adjPow=clamp((b.power||50)+batBonus*0.5-slumpDebuff*0.8,10,90);
-      const adjEye=clamp((b.eye||50)+batBonus*0.3,10,90);
+      const adjCon=clamp((b.contact||50)+batBonus-slumpDebuff,1,100);
+      const adjPow=clamp((b.power||50)+batBonus*0.5-slumpDebuff*0.8,1,100);
+      const adjEye=clamp((b.eye||50)+batBonus*0.3,1,100);
 
       // 투수 유효 스탯 (체력 기반 피로도)
       const stamF=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
@@ -822,8 +822,8 @@ function _simAIGame(teamA,teamB){
       }else if(result==='HIT'||result==='ERROR'){
         bs.ab++;
         if(result==='HIT'){bs.h++;ps.ha++;}
-        const xbhChance=clamp(0.20+(adjPow-50)/200,0.10,0.40);
-        const tripleChance=(b.speed||50)>65?0.025:(b.speed||50)>50?0.012:0.004;
+        const xbhChance=clamp(0.20+(adjPow-50)/330,0.10,0.40);
+        const tripleChance=(b.speed||50)>75?0.025:(b.speed||50)>51?0.012:0.004;
         const hitRoll=Math.random();
         if(hitRoll<tripleChance){
           bs.xbh++;let r=0;bases.forEach((bb,i)=>{if(bb){r++;bases[i]=null;}});
@@ -841,14 +841,14 @@ function _simAIGame(teamA,teamB){
           if(bases[0]){if(!bases[1])bases[1]=bases[0];else bases[1]=bases[0];bases[0]=null;}
           bases[0]=b;bs.rbi+=r;if(r)ps.er+=r;runs+=r;
         }
-        if((b.speed||50)>60&&bases[0]===b&&!bases[1]&&Math.random()<0.12)bs.sb++;
+        if((b.speed||50)>67&&bases[0]===b&&!bases[1]&&Math.random()<0.12)bs.sb++;
       }else{
         // 범타 아웃 — 땅볼/DP 판정
         bs.ab++;
-        const gbRate=clamp(0.45+(effMovement-adjPow)/200,0.30,0.65);
+        const gbRate=clamp(0.45+(effMovement-adjPow)/330,0.30,0.65);
         if(Math.random()<gbRate){
           const baseDpChance=fldTeam.concept==='defense'?0.14:0.09;
-          const speedDpMod=(b.speed||50)<=45?1.4:(b.speed||50)>=65?0.6:1.0;
+          const speedDpMod=(b.speed||50)<=42?1.4:(b.speed||50)>=75?0.6:1.0;
           if(outs<2&&bases[0]&&Math.random()<baseDpChance*speedDpMod){
             let dpRuns=0;
             if(outs===0&&bases[2]){dpRuns++;bases[2]=null;}
@@ -1028,9 +1028,9 @@ function _simMyGame(){
       const slumpDebuff=isSlumping?SLUMP_DEBUFF:0;
       const rehabDebuff=(b.rehabGamesLeft||0)>0?REHAB_DEBUFF:0;
       const totalDebuff=slumpDebuff+rehabDebuff;
-      const adjCon=clamp((b.contact||50)+batBonus-totalDebuff,10,90);
-      const adjPow=clamp((b.power||50)+batBonus*0.5-totalDebuff*0.8,10,90);
-      const adjEye=clamp((b.eye||50)+batBonus*0.3,10,90);
+      const adjCon=clamp((b.contact||50)+batBonus-totalDebuff,1,100);
+      const adjPow=clamp((b.power||50)+batBonus*0.5-totalDebuff*0.8,1,100);
+      const adjEye=clamp((b.eye||50)+batBonus*0.3,1,100);
 
       // 투수 유효 스탯 (불펜 컨셉 보너스 포함)
       const bpBonus=(pitcherTeam.concept==='bullpen'&&pitcher.role==='bullpen')?5:0;
@@ -1059,8 +1059,8 @@ function _simMyGame(){
       }else if(result==='HIT'||result==='ERROR'){
         bs.ab++;
         if(result==='HIT'){bs.h++;ps.ha++;}
-        const xbhChance=clamp(0.20+(adjPow-50)/200,0.10,0.40);
-        const tripleChance=(b.speed||50)>65?0.025:(b.speed||50)>50?0.012:0.004;
+        const xbhChance=clamp(0.20+(adjPow-50)/330,0.10,0.40);
+        const tripleChance=(b.speed||50)>75?0.025:(b.speed||50)>51?0.012:0.004;
         const hitRoll=Math.random();
         if(hitRoll<tripleChance){
           bs.xbh++;let r=0;bases.forEach((bb,i)=>{if(bb){r++;bases[i]=null;}});
@@ -1078,14 +1078,14 @@ function _simMyGame(){
           if(bases[0]){if(!bases[1])bases[1]=bases[0];else bases[1]=bases[0];bases[0]=null;}
           bases[0]=b;bs.rbi+=r;if(r)ps.er+=r;runs+=r;
         }
-        if((b.speed||50)>60&&bases[0]===b&&!bases[1]&&Math.random()<0.12)bs.sb++;
+        if((b.speed||50)>67&&bases[0]===b&&!bases[1]&&Math.random()<0.12)bs.sb++;
       }else{
         // 범타 아웃 — 땅볼/DP 판정
         bs.ab++;
-        const gbRate=clamp(0.45+(effMovement-adjPow)/200,0.30,0.65);
+        const gbRate=clamp(0.45+(effMovement-adjPow)/330,0.30,0.65);
         if(Math.random()<gbRate){
           const baseDpChance=pitcherTeam.concept==='defense'?0.14:0.09;
-          const speedDpMod=(b.speed||50)<=45?1.4:(b.speed||50)>=65?0.6:1.0;
+          const speedDpMod=(b.speed||50)<=42?1.4:(b.speed||50)>=75?0.6:1.0;
           if(outs<2&&bases[0]&&Math.random()<baseDpChance*speedDpMod){
             let dpRuns=0;
             if(outs===0&&bases[2]){dpRuns++;bases[2]=null;}

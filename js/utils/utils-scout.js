@@ -82,14 +82,14 @@ function getDraftScoutInfo(p,scLv){
 
   // OVR
   if(scLv>=30) info.ovr=real;
-  else info.ovrRange=[Math.max(20,real-8),Math.min(80,real+8)];
+  else info.ovrRange=[Math.max(1,real-8),Math.min(100,real+8)];
 
   // 스탯
   const stats=p.isPitcher?['stuff','control','velocity','movement','stamina','clutch']:['contact','power','eye','speed','fielding','arm'];
   if(scLv>=60){
     info.stats={};stats.forEach(s=>{info.stats[s]=p[s];});
   }else if(scLv>=30){
-    info.stats={};stats.forEach(s=>{info.stats[s]=[Math.max(20,p[s]-5),Math.min(80,p[s]+5)];});
+    info.stats={};stats.forEach(s=>{info.stats[s]=[Math.max(1,p[s]-5),Math.min(100,p[s]+5)];});
   }else{
     info.stats=null; // 🔒
   }
@@ -108,8 +108,8 @@ function getDraftScoutInfo(p,scLv){
 
   // 스카우트팀 Lv.90+: 스틸픽 특성 (실제 OVR과 스카우팅 OVR 괴리 감지)
   if(scLv>=90){
-    const potCap=30+(pot*2.5);
-    if(potCap-real>=15) info.sleeper=true;
+    const potCap=18+(pot*4.125);
+    if(potCap-real>=25) info.sleeper=true;
   }
 
   return info;

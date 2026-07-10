@@ -6,7 +6,7 @@
 
 // 등급별 타겟 OVR을 평균으로 스탯 생성 (정규분포)
 function _genStatFromOvr(targetOvr, offset){
-  return randGauss(targetOvr+(offset||0), 6, 20, 80);
+  return randGauss(targetOvr+(offset||0), 10, STAT_MIN, STAT_MAX);
 }
 
 // 포지션 가중치: 포수/유격수는 타격 스탯 -5 페널티 (수비 부담 반영)
@@ -19,7 +19,7 @@ function _posOffensePenalty(pos){
 // OVR 기반 최소 잠재력: 이미 고능력을 증명한 선수는 잠재력 하한 보장
 function _agingPotential(age, basePot, currentOvr){
   // OVR 기반 최소 잠재력 (능력이 증명된 선수)
-  const ovrFloor=currentOvr>=70?14 : currentOvr>=65?12 : currentOvr>=60?10 : 7;
+  const ovrFloor=currentOvr>=84?14 : currentOvr>=75?12 : currentOvr>=67?10 : 7;
 
   let pot;
   if(age<=23)      pot=clamp(basePot+rand(1,3), 7, 20);
@@ -61,11 +61,11 @@ function _applyConceptBatter(p, concept){
 
 function _applyConceptPitcher(p, concept, role){
   if(concept==='power_hit'){
-    if(role==='SP'){ p.stuff=clamp(p.stuff+3,25,80); p.stamina=clamp(p.stamina+4,STAT_MIN,STAT_MAX); }
+    if(role==='SP'){ p.stuff=clamp(p.stuff+3,9,100); p.stamina=clamp(p.stamina+4,STAT_MIN,STAT_MAX); }
   }
   if(concept==='bullpen'){
-    if(role==='SP'){ p.stuff=clamp(p.stuff-2,25,80); p.control=clamp(p.control-2,STAT_MIN,STAT_MAX); }
-    else { p.stuff=clamp(p.stuff+4,25,80); p.clutch=clamp(p.clutch+4,STAT_MIN,STAT_MAX); }
+    if(role==='SP'){ p.stuff=clamp(p.stuff-2,9,100); p.control=clamp(p.control-2,STAT_MIN,STAT_MAX); }
+    else { p.stuff=clamp(p.stuff+4,9,100); p.clutch=clamp(p.clutch+4,STAT_MIN,STAT_MAX); }
   }
   if(concept==='defense'){ p.movement=clamp(p.movement+3,STAT_MIN,STAT_MAX); }
 }
@@ -76,7 +76,7 @@ function _forceDraftOvr(p, targetOvr){
     ? ['stuff','control','velocity','movement','stamina','clutch']
     : ['contact','power','eye','speed','fielding','arm'];
   // 먼저 모든 스탯을 낮은 기본값으로
-  stats.forEach(s=>{p[s]=clamp(rand(20,28),STAT_MIN,STAT_MAX);});
+  stats.forEach(s=>{p[s]=clamp(rand(1,14),STAT_MIN,STAT_MAX);});
   // 타겟 OVR까지 조정
   let att=0;
   while(Math.abs(ovr(p)-targetOvr)>2 && att<30){

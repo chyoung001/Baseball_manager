@@ -77,7 +77,7 @@ function investSendOverseas(rosterIdx) {
   if(!canSpend(t,OVERSEAS_COST)) { showToast('🚫 사용 가능 자금 부족!'); return; }
 
   // 참가 제한: 24세 이하 유망주 또는 OVR 60 미만
-  if((p.age||22) > 24 && ovr(p) >= 60) { showToast('🚫 24세 이하 또는 OVR 60 미만 선수만 파견 가능!'); return; }
+  if((p.age||22) > 24 && ovr(p) >= 67) { showToast('🚫 24세 이하 또는 OVR 67 미만 선수만 파견 가능!'); return; }
 
   // 최소 인원 보호
   if(!p.isPitcher && p.role === 'starting' && getStartingBatters(t).length <= 1) {
@@ -153,7 +153,7 @@ function renderInvestMedicalCenter() {
              ${eligible.map(p => {
                const idx = t.roster.indexOf(p);
                const o = ovr(p);
-               const medCost = o >= 70 ? 30 : o >= 60 ? 22 : MEDICAL_CENTER_COST;
+               const medCost = o >= 84 ? 30 : o >= 67 ? 22 : MEDICAL_CENTER_COST;
                const canAfford = t.budget >= medCost;
                const canTreat = isOffseason && canAfford && medicalUsed < 3;
                return `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-card-hover);border-radius:8px;">
@@ -183,7 +183,7 @@ function executeMedicalCenter(rosterIdx) {
 
   // OVR 기반 비용 스케일링
   const playerOvr = ovr(p);
-  const medCost = playerOvr >= 70 ? 30 : playerOvr >= 60 ? 22 : MEDICAL_CENTER_COST;
+  const medCost = playerOvr >= 84 ? 30 : playerOvr >= 67 ? 22 : MEDICAL_CENTER_COST;
   if (!canSpend(t, medCost)) { showToast(`🚫 사용 가능 자금 부족! (필요: ${won(medCost)})`); return; }
 
   t.budget = Math.floor(t.budget - medCost);
@@ -206,13 +206,13 @@ function executeMedicalCenter(rosterIdx) {
     // 부분 성공 (35%): +2 영구 + POT +1
     result = '부분 성공'; resultColor = '#f59e0b'; resultEmoji = '💪';
     p._potential = Math.min(20, (p._potential||10) + 1);
-    stats.forEach(s => { p[s] = clamp((p[s] || 30) + 2, 20, 80); });
+    stats.forEach(s => { p[s] = clamp((p[s] || 18) + 3, STAT_MIN, STAT_MAX); });
     resultDesc = `전체 스탯 +2 영구 상승! 잠재력 확장 (최대 ${maxOvrFromPot(p._potential)} OVR)`;
   } else if (roll <= 90) {
     // 대성공 (5%): +5 영구 + POT +3 + 에이징 면역 2년
     result = '대성공'; resultColor = '#10b981'; resultEmoji = '🌟';
     p._potential = Math.min(20, (p._potential||10) + 3);
-    stats.forEach(s => { p[s] = clamp((p[s] || 30) + 5, 20, 80); });
+    stats.forEach(s => { p[s] = clamp((p[s] || 18) + 8, STAT_MIN, STAT_MAX); });
     p.agingImmunityYears = 2;
     resultDesc = `전체 스탯 +5 영구 상승! 잠재력 대폭 확장 (최대 ${maxOvrFromPot(p._potential)} OVR)! 2년간 에이징 면역!`;
     if (p.status === 'il') {
@@ -222,7 +222,7 @@ function executeMedicalCenter(rosterIdx) {
   } else {
     // 의료 사고 (10%): -3 영구
     result = '의료 사고'; resultColor = '#ef4444'; resultEmoji = '⚠️';
-    stats.forEach(s => { p[s] = clamp((p[s] || 30) - 3, 20, 80); });
+    stats.forEach(s => { p[s] = clamp((p[s] || 18) - 5, STAT_MIN, STAT_MAX); });
     resultDesc = '의료 사고 발생! 전체 스탯이 -3 영구 하락했습니다...';
   }
 

@@ -40,7 +40,7 @@ function renderLineupField() {
       const lineupNum = starters.indexOf(p) + 1;
       const isSlump = (p.condition||100) < SLUMP_CONDITION_THRESHOLD;
       const condColor = isSlump ? '#ef4444' : p.condition >= 80 ? '#10b981' : p.condition >= 60 ? '#f59e0b' : '#f97316';
-      const borderStyle = isSlump ? 'border-color:#ef4444aa;' : ovrVal >= 80 ? 'border-color:rgba(168,85,247,0.6);box-shadow:0 0 8px rgba(168,85,247,0.15);' : '';
+      const borderStyle = isSlump ? 'border-color:#ef4444aa;' : ovrVal >= 90 ? 'border-color:rgba(168,85,247,0.6);box-shadow:0 0 8px rgba(168,85,247,0.15);' : '';
       return `<div class="field-player" style="left:${x}%;top:${y}%;transform:${tf};">
         <div class="field-player-badge${isDH ? ' dh' : ''}" style="${borderStyle}">
           <div class="field-player-pos">${pos} <span style="color:var(--text-dim);font-weight:400;">#${lineupNum}</span></div>

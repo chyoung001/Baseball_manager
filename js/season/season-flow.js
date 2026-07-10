@@ -76,16 +76,16 @@ function showStoveLeague(){
           const pOvr=ovr(p);
           const taxLine=LUXURY_TAX_THRESHOLD;
           let renewSalary;
-          if(pOvr>=70) renewSalary=Math.floor(taxLine*rand(100,180)/1000);
-          else if(pOvr>=65) renewSalary=Math.floor(taxLine*rand(60,100)/1000);
-          else if(pOvr>=60) renewSalary=Math.floor(taxLine*rand(30,50)/1000);
-          else if(pOvr>=50) renewSalary=Math.floor(taxLine*rand(10,20)/1000);
+          if(pOvr>=84) renewSalary=Math.floor(taxLine*rand(100,180)/1000);
+          else if(pOvr>=75) renewSalary=Math.floor(taxLine*rand(60,100)/1000);
+          else if(pOvr>=67) renewSalary=Math.floor(taxLine*rand(30,50)/1000);
+          else if(pOvr>=51) renewSalary=Math.floor(taxLine*rand(10,20)/1000);
           else renewSalary=Math.max(1,Math.floor(taxLine*rand(5,10)/1000));
           const renewYears=_calcContractYears(pOvr);
           // 재계약 조건: OVR 50+ AND 팀 예산 여유 AND 50~80% 확률 (높은 OVR일수록 높음)
-          const renewProb=pOvr>=70?80:pOvr>=65?70:pOvr>=60?60:pOvr>=50?50:20;
+          const renewProb=pOvr>=84?80:pOvr>=75?70:pOvr>=67?60:pOvr>=51?50:20;
           const canAfford=team.budget>(renewSalary*renewYears);
-          if(canAfford && pOvr>=50 && rand(1,100)<=renewProb){
+          if(canAfford && pOvr>=51 && rand(1,100)<=renewProb){
             // 재계약 성공
             p.salary=renewSalary;
             p._contractYears=renewYears;
@@ -328,19 +328,19 @@ function _calcNewSalary(p){
     newSalary=PRE_ARB_SALARY;
   }else if(st<=ARB_MAX_SERVICE){
     // 연봉조정 (Arbitration): OVR/WAR 기반 자동 인상
-    if(pOvr>=65)newSalary=+(oldSalary*1.4+rand(1,3)*0.1).toFixed(1);
-    else if(pOvr>=55)newSalary=+(oldSalary*1.2+rand(0,2)*0.1).toFixed(1);
-    else if(pOvr>=42)newSalary=+(oldSalary*1.1).toFixed(1);
+    if(pOvr>=75)newSalary=+(oldSalary*1.4+rand(1,3)*0.1).toFixed(1);
+    else if(pOvr>=59)newSalary=+(oldSalary*1.2+rand(0,2)*0.1).toFixed(1);
+    else if(pOvr>=37)newSalary=+(oldSalary*1.1).toFixed(1);
     else newSalary=Math.max(SALARY_MIN,+(oldSalary*0.9).toFixed(1));
     if(war>=3)newSalary=Math.round(newSalary*1.15);
   }else{
     // FA 자격자: 자유 시장 가치 기반
-    if(pOvr>=65)newSalary=+(oldSalary*1.3+rand(5,20)*0.1).toFixed(1);
-    else if(pOvr>=55)newSalary=+(oldSalary*1.1+rand(2,10)*0.1).toFixed(1);
-    else if(pOvr>=42)newSalary=oldSalary;
+    if(pOvr>=75)newSalary=+(oldSalary*1.3+rand(5,20)*0.1).toFixed(1);
+    else if(pOvr>=59)newSalary=+(oldSalary*1.1+rand(2,10)*0.1).toFixed(1);
+    else if(pOvr>=37)newSalary=oldSalary;
     else newSalary=Math.max(SALARY_MIN,+(oldSalary*0.85).toFixed(1));
     if(war>=3)newSalary=+(newSalary*1.15).toFixed(1);
-    else if(war<0.5&&pOvr<48)newSalary=Math.max(SALARY_MIN,+(newSalary-0.5).toFixed(1));
+    else if(war<0.5&&pOvr<47)newSalary=Math.max(SALARY_MIN,+(newSalary-0.5).toFixed(1));
   }
   // 팀 컨셉 연봉 배율
   if(G.myTeam.concept==='pitching')newSalary=+(newSalary*1.05).toFixed(1);
@@ -497,8 +497,8 @@ function _aiPlayerValue(p){
   // 잠재력 가산
   val+=((p._potential||10)-10)*2;
   // 연봉 효율 페널티: 고액+저능력 → 가치 급감
-  if(sal>10&&o<55) val-=sal*2;
-  else if(sal>20&&o<60) val-=sal;
+  if(sal>10&&o<59) val-=sal*2;
+  else if(sal>20&&o<67) val-=sal;
   return val;
 }
 
@@ -591,17 +591,17 @@ function _runAIFreeAgentBidding(){
 
     // 시장 가치 산정 (사치세 비율 기반)
     let marketSalary;
-    if(pOvr>=70) marketSalary=+(taxLine*rand(100,180)/1000).toFixed(1);
-    else if(pOvr>=65) marketSalary=+(taxLine*rand(60,100)/1000).toFixed(1);
-    else if(pOvr>=60) marketSalary=+(taxLine*rand(30,50)/1000).toFixed(1);
-    else if(pOvr>=50) marketSalary=+(taxLine*rand(10,20)/1000).toFixed(1);
+    if(pOvr>=84) marketSalary=+(taxLine*rand(100,180)/1000).toFixed(1);
+    else if(pOvr>=75) marketSalary=+(taxLine*rand(60,100)/1000).toFixed(1);
+    else if(pOvr>=67) marketSalary=+(taxLine*rand(30,50)/1000).toFixed(1);
+    else if(pOvr>=51) marketSalary=+(taxLine*rand(10,20)/1000).toFixed(1);
     else marketSalary=+(taxLine*rand(5,10)/1000).toFixed(1);
 
     const contractYears=_calcContractYears(pOvr);
     const transferFee=+(pOvr*0.3+rand(5,15)).toFixed(1);
 
     // OVR 55 미만: AI 경쟁 없음 → 유저 전용 FA 시장으로
-    if(pOvr<55){
+    if(pOvr<59){
       fa.salary=marketSalary;
       fa._contractYears=contractYears;
       fa.price=transferFee;
@@ -617,7 +617,7 @@ function _runAIFreeAgentBidding(){
       const payroll=getPayroll(t);
       if(payroll+marketSalary>getHardCap()*0.9) return false;
       // 높은 OVR → 더 많은 팀이 관심 (랜덤 경쟁)
-      const interest=pOvr>=70?60:pOvr>=65?45:pOvr>=60?30:20;
+      const interest=pOvr>=84?60:pOvr>=75?45:pOvr>=67?30:20;
       return canAfford&&(posMatch||rand(1,100)<=interest);
     });
 
@@ -744,8 +744,8 @@ function _startNextSeason(){
     // AI 연봉 자동 조정
     team.roster.forEach(p=>{
       const pOvr=ovr(p);
-      if(pOvr>=62)p.salary=Math.round((p.salary||3)*1.2);
-      else if(pOvr<38)p.salary=Math.max(1,Math.round((p.salary||3)*0.8));
+      if(pOvr>=70)p.salary=Math.round((p.salary||3)*1.2);
+      else if(pOvr<31)p.salary=Math.max(1,Math.round((p.salary||3)*0.8));
     });
   });
 

@@ -20,6 +20,7 @@ function _setMarketFilter(f){_marketFilter=f;renderMarket();}
 
 function renderMarket(){
   const rdLv=G.myTeam.analyticsLevel||0;
+  const tier=_displayTier(rdLv); // 표시 정밀도: L0 등급 / L1 5단위 / L2 ±추정 / L3 정확
   const payroll=getPayroll(G.myTeam);
   const overHard=payroll>=getHardCap();
   const tab=G.currentMarketTab||'bat';
@@ -34,11 +35,14 @@ function renderMarket(){
   else if(_marketFilter==='if') players=players.filter(p=>!p.isPitcher&&['C','1B','2B','3B','SS'].includes(p.pos));
   else if(_marketFilter==='of') players=players.filter(p=>!p.isPitcher&&['LF','CF','RF','DH'].includes(p.pos));
 
-  // 배너
-  let rdBanner='';
-  if(rdLv<30)       rdBanner=`<div style="background:rgba(239,68,68,0.08);border:1px solid #ef444466;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.72rem;color:#ef4444;">🔒 분석팀 Lv.0 — 스탯 비공개. 투자 → 데이터 분석팀 업그레이드 시 공개.</div>`;
-  else if(rdLv<60)  rdBanner=`<div style="background:rgba(59,130,246,0.08);border:1px solid #3b82f666;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.72rem;color:#60a5fa;">🔎 분석팀 Lv.${rdLv} — 스탯 범위 공개. Lv.60 시 정확 수치.</div>`;
-  else              rdBanner=`<div style="background:rgba(16,185,129,0.08);border:1px solid #10b98166;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.72rem;color:#10b981;">✅ 분석팀 Lv.${rdLv} — 정확 스탯 공개.</div>`;
+  // 배너 (표시 스케일 4단계: 등급 → 5단위 → ±추정 → 정확)
+  const _bannerInfo=[
+    {c:'#ef4444',bg:'rgba(239,68,68,0.08)',bd:'#ef444466',t:`🔒 분석팀 Lv.${rdLv} — 등급(S~D)만 공개. Lv.20↑ 5단위, Lv.40↑ 추정치, Lv.60↑ 정확 수치.`},
+    {c:'#60a5fa',bg:'rgba(59,130,246,0.08)',bd:'#3b82f666',t:`🔎 분석팀 Lv.${rdLv} — 5단위 대략 공개. Lv.40↑ 추정치, Lv.60↑ 정확 수치.`},
+    {c:'#a855f7',bg:'rgba(168,85,247,0.08)',bd:'#a855f766',t:`📊 분석팀 Lv.${rdLv} — 추정치(±3) 공개. Lv.60↑ 정확 수치.`},
+    {c:'#10b981',bg:'rgba(16,185,129,0.08)',bd:'#10b98166',t:`✅ 분석팀 Lv.${rdLv} — 정확 스탯 공개.`},
+  ][tier];
+  const rdBanner=`<div style="background:${_bannerInfo.bg};border:1px solid ${_bannerInfo.bd};border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.72rem;color:${_bannerInfo.c};">${_bannerInfo.t}</div>`;
 
   const capWarn=overHard
     ?`<div style="background:rgba(239,68,68,0.08);border:1px solid #ef444466;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.72rem;color:#ef4444;">🚫 하드 캡(${won(getHardCap())}) 초과! 영입 불가.</div>`
@@ -57,18 +61,22 @@ function renderMarket(){
     ?`<div style="display:flex;gap:4px;margin-bottom:8px;">${fb('all','전체')}${fb('sp','선발')}${fb('bp','불펜')}</div>`
     :'';
 
-  // 스탯 도트 (트레이드와 동일)
+  // 스탯 도트 (레벨별 표시 정밀도: L0 등급문자 / L1~L2 도트+추정 툴팁 / L3 도트+정확)
   function dots(p){
-    function d(v){return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${statColor(v)};margin:0 1px;" title="${rdLv>=60?v:rdLv>=30?Math.max(20,v-5)+'~'+Math.min(80,v+5):'?'}"></span>`;}
-    if(rdLv<30) return '<span style="color:var(--text-dim);font-size:0.6rem;">🔒</span>';
+    if(tier<=0){ // 등급문자만 (도트 색 노출도 차단)
+      const o=ovr(p);return `<span style="color:${statColor(o)};font-weight:700;font-size:0.72rem;">${_statGrade(o)}급</span>`;
+    }
+    function d(v){return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${statColor(v)};margin:0 1px;" title="${fmtStatFog(v,tier)}"></span>`;}
     if(p.isPitcher) return d(p.stuff)+d(p.control)+d(p.velocity)+d(p.movement)+d(p.stamina)+d(p.clutch);
     return d(p.contact)+d(p.power)+d(p.eye)+d(p.speed)+d(p.fielding)+d(p.arm);
   }
 
-  // OVR 표시
+  // OVR 표시 (L0 등급 / L1 5단위 / L2 ±5추정 / L3 정확)
   function ovrDisp(p){
-    if(rdLv<30){const o=ovr(p);return `<span style="color:var(--text-dim);">${Math.max(20,o-8)}~${Math.min(80,o+8)}</span>`;}
-    const o=ovr(p);return `<span style="color:${statColor(o)};font-weight:700;">${o}</span>`;
+    const o=ovr(p);
+    if(tier>=3) return `<span style="color:${statColor(o)};font-weight:700;">${o}</span>`;
+    if(tier===0) return `<span style="color:${statColor(o)};font-weight:700;">${_statGrade(o)}급</span>`;
+    return `<span style="color:var(--text-dim);">${fmtStatFog(o,tier,5)}</span>`;
   }
 
   // 재정 요약

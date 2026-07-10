@@ -22,7 +22,7 @@ function _calcRegression(batter, pitcher){
     const avg=bss.h/bss.ab;
     if(avg>0.380) hitMod=0.80;        // 타율 .380↑ → 안타 확률 20%↓
     else if(avg>0.350) hitMod=0.90;   // 타율 .350↑ → 안타 확률 10%↓
-    else if(avg<0.230&&ovr(batter)>=65) hitMod=1.15;  // 강타자 부진 → 15%↑
+    else if(avg<0.230&&ovr(batter)>=75) hitMod=1.15;  // 강타자 부진 → 15%↑
   }
   // 투수: REG_IP_THRESH 아웃 이상부터 ERA 회귀
   const pss=pitcher.ss;
@@ -36,13 +36,13 @@ function _calcRegression(batter, pitcher){
 
 // ── TTO 기반 간이 타석 판정 (AI/빠른 시뮬용) ──
 function _ttoSimAB(adjPow, adjCon, adjEye, effStuff, effControl, effMovement, avgFld, babipMod){
-  const pHR=clamp(TTO_BASE_HR+(adjPow-effMovement)/100*0.16, 0.005, 0.08);
-  const pK =clamp(TTO_BASE_K +(effStuff-adjCon)/100*0.15, 0.04, 0.30);
-  const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/100*0.12, 0.02, 0.15);
-  const contactMod=1+(adjCon-50)/200;
-  const defMod=1-(avgFld-50)/250;
+  const pHR=clamp(TTO_BASE_HR+(adjPow-effMovement)/165*0.16, 0.005, 0.08);
+  const pK =clamp(TTO_BASE_K +(effStuff-adjCon)/165*0.15, 0.04, 0.30);
+  const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/165*0.12, 0.02, 0.15);
+  const contactMod=1+(adjCon-50)/330;
+  const defMod=1-(avgFld-50)/412;
   const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*(babipMod||1.0), 0.200, 0.380);
-  const pError=clamp(0.02-(avgFld-50)/2000, 0.005, 0.04);
+  const pError=clamp(0.02-(avgFld-50)/3300, 0.005, 0.04);
   const r=Math.random();
   if(r<pHR) return 'HR';
   if(r<pHR+pK) return 'K';
@@ -102,10 +102,10 @@ function _pickReliever(team, inn, lead){
 // ── OVR 구간별 동적 레벨업 요구 XP (계단식 성장) ──
 function getRequiredXP(p){
   const o=ovr(p);
-  if(o>=70) return 250;
-  if(o>=60) return 150;
-  if(o>=50) return 110;
-  if(o>=40) return 90;
+  if(o>=84) return 250;
+  if(o>=67) return 150;
+  if(o>=51) return 110;
+  if(o>=34) return 90;
   return 70;
 }
 
@@ -124,7 +124,7 @@ function awardXP(p, amount) {
     const baseGain = rand(1,3);
     const gain = Math.max(0, Math.round(baseGain * ethicMod));
     if(gain > 0) {
-      p[s] = clamp((p[s]||0)+gain, 20, 80);
+      p[s] = clamp((p[s]||0)+gain, STAT_MIN, STAT_MAX);
       if(p.status==='futures'||p.status==='developmental') showToast(`⬆️ ${p.name} 성장! ${s} +${gain}`);
     }
   }
