@@ -489,6 +489,62 @@ check(`충성심 재계약 디스카운트 (충90·재적5 ×${negoProbe.loyDisc
 check('재적 3년 미만 → 디스카운트 없음', negoProbe.loyNoTenure === 1);
 check('야망>충성심 → 할인 상쇄', negoProbe.ambOffset > negoProbe.loyDisc);
 
+// ── T11. P2-1 서브 포지션 — 생성 분포 · 전환 페널티 · 유효 수비 · L3 시뮬 ──
+section('T11. P2-1 서브 포지션 — 분포 · 비대칭 전환 페널티 · 유효 수비 · 백필');
+const subProbe = g(`(function(){
+  const bats=G.teams.flatMap(t=>t.roster).filter(p=>!p.isPitcher);
+  let n0=0,n12=0,valid=true;
+  bats.forEach(p=>{
+    if(!Array.isArray(p._subPos)){valid=false;return;}
+    const n=p._subPos.length;
+    if(n===0)n0++;else if(n<=2)n12++;else valid=false;
+    p._subPos.forEach(s=>{if(s==='C'||s==='DH')valid=false;});
+    if((p._naturalPos||p.pos)==='C'&&p._subPos.length>0)valid=false;
+  });
+  const tot=Math.max(1,n0+n12);
+  return {valid,r0:Math.round(n0/tot*100),n:tot};
+})()`);
+check('서브 포지션 구조 유효 (배열·최대2·C/DH 제외·포수 서브 없음)', subProbe.valid);
+check(`서브 0개 비율 ≈60~68% (관측 ${subProbe.r0}%, 허용 45~85, n=${subProbe.n})`, subProbe.r0 >= 45 && subProbe.r0 <= 85);
+const penProbe = g(`(function(){
+  const mk=(nat,vers,subs)=>({_naturalPos:nat,pos:nat,_versatility:vers,_subPos:subs||[],isPitcher:false,fielding:80,arm:60});
+  const base5=getPosSwitchPenalty(mk('2B',50),'SS');
+  const base12=getPosSwitchPenalty(mk('SS',50),'3B');
+  const base22=getPosSwitchPenalty(mk('LF',50),'SS');
+  const toC=getPosSwitchPenalty(mk('1B',50),'C');
+  const toDH=getPosSwitchPenalty(mk('SS',50),'DH');
+  const subHalf=getPosSwitchPenalty(mk('2B',50,['SS']),'SS');
+  const versCut=getPosSwitchPenalty(mk('2B',100),'SS');
+  const pe=mk('2B',50); pe.pos='SS';
+  const eff=effFielding(pe); // 80×0.95=76
+  const pSim=mk('2B',50);
+  const simC=simulatePosOvr(pSim,'C');
+  const simSS=simulatePosOvr(pSim,'SS');
+  const pure=pSim.pos==='2B'&&pSim.fielding===80&&pSim.arm===60;
+  return {base5,base12,base22,toC,toDH,subHalf,versCut,eff,simC,simSSOk:Number.isFinite(simSS),pure};
+})()`);
+check(`전환 페널티 테이블 (쉬움5/보통12/어려움22): ${penProbe.base5}/${penProbe.base12}/${penProbe.base22}`, penProbe.base5 === 5 && penProbe.base12 === 12 && penProbe.base22 === 22);
+check('→C 전환 불가(null) · →DH 무페널티(0)', penProbe.toC === null && penProbe.toDH === 0);
+check(`서브 경험 → 절반(${penProbe.subHalf}) · 다재다능 100 → 절반(${penProbe.versCut})`, penProbe.subHalf === 2.5 && penProbe.versCut === 2.5);
+check(`유효 수비 반영: 2B→SS 수비80 → ${penProbe.eff} (기대 76)`, penProbe.eff === 76);
+check('L3 전환 시뮬: C는 null · 타 포지션 유한 · 원본 무변이', penProbe.simC === null && penProbe.simSSOk && penProbe.pure);
+// 구세이브 백필: _subPos/_naturalPos 없는 타자 → 로드 시 자동 생성
+vm.runInContext('saveGame()', ctx);
+const subMig = vm.runInContext(`
+  (function(){
+    const d=JSON.parse(localStorage.getItem(SAVE_KEY));
+    const idx=d.teams[0].roster.findIndex(p=>!p.isPitcher&&p.pos&&p.pos!=='C'&&p.pos!=='DH');
+    const c=d.teams[0].roster[idx];
+    delete c._subPos; delete c._naturalPos;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+    G.teams=[]; G.myTeam=null;
+    const ok=loadGame();
+    const p=G.teams[0].roster[idx];
+    return {ok, natOk:p._naturalPos===p.pos, subOk:Array.isArray(p._subPos)&&p._subPos.length<=2};
+  })()
+`, ctx);
+check('구세이브 백필: _naturalPos=현 포지션 + _subPos 롤', subMig.ok === true && subMig.natOk && subMig.subOk);
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');

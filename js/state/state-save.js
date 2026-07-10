@@ -160,6 +160,11 @@ function _restoreFromData(d){
     if(p._temperament===undefined)p._temperament=_genHidden();
     if(p.isPitcher&&p._recovery===undefined)p._recovery=_genHidden();
     if(!p.isPitcher&&p._pullTendency===undefined)p._pullTendency=_genPullTendency();
+    // P2-1 서브 포지션 백필 (타자): 본 포지션 기록 + 생성 분포 롤
+    if(!p.isPitcher){
+      if(p._naturalPos==null&&p.pos!=='DH')p._naturalPos=p.pos;
+      if(p._subPos===undefined)p._subPos=_rollSubPos(p._naturalPos||p.pos);
+    }
   }));
   // 팀 필드 마이그레이션
   G.teams.forEach(t=>{

@@ -264,8 +264,8 @@ function simulatePlay(){
 
   // ── [7] 수비력 ──
   const fldStarters=getStartingBatters(fldTeam);
-  const avgFielding=fldStarters.length>0?fldStarters.reduce((s,p)=>s+(p.fielding||50),0)/fldStarters.length:50;
-  const avgArm=fldStarters.length>0?fldStarters.reduce((s,p)=>s+(p.arm||50),0)/fldStarters.length:50;
+  const avgFielding=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effFielding(p),0)/fldStarters.length:50; // 전환 페널티 반영
+  const avgArm=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effArm(p),0)/fldStarters.length:50;
   const armPenalty=Math.max(0.4,1-avgArm/200);
 
   // ── [8] 동적 회귀 보정 ──
@@ -783,9 +783,9 @@ function _simAIGame(teamA,teamB){
     if(fldTeam.concept==='pitching')pitBonus+=4;
     if(fldTeam.concept==='bullpen'&&pitcher.role==='bullpen')pitBonus+=5;
 
-    // 수비력 평균
+    // 수비력 평균 (전환 페널티 반영)
     const fldStarters=fldTeam?getStartingBatters(fldTeam):[];
-    const avgFld=fldStarters.length>0?fldStarters.reduce((s,p)=>s+(p.fielding||50),0)/fldStarters.length:50;
+    const avgFld=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effFielding(p),0)/fldStarters.length:50;
 
     // 주루 상태 간이 추적
     let bases=[null,null,null];
@@ -1017,7 +1017,7 @@ function _simMyGame(){
     let pitcher=curPitcher;
     if(!pitcher||batters.length===0)return rand(0,4);
     const fldStarters=getStartingBatters(pitcherTeam);
-    const avgFld=fldStarters.length>0?fldStarters.reduce((s,p)=>s+(p.fielding||50),0)/fldStarters.length:50;
+    const avgFld=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effFielding(p),0)/fldStarters.length:50;
 
     // 주루 상태 간이 추적
     let bases=[null,null,null];
