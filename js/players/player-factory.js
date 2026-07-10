@@ -102,9 +102,9 @@ function genPitcher(role, gradeOrTier, concept, team){
   };
 
   // 역할별 보정
-  if(role==='CP'){p.clutch=clamp(p.clutch+rand(6,12),20,80); p.stuff=clamp(p.stuff+rand(4,8),25,80);}
-  if(role==='SU'){p.stuff=clamp(p.stuff+rand(4,8),25,80); p.control=clamp(p.control+rand(3,6),20,80);}
-  if(role==='LR'){p.stamina=clamp(p.stamina+rand(8,14),20,80); p.stuff=clamp(p.stuff-rand(2,6),25,80);}
+  if(role==='CP'){p.clutch=clamp(p.clutch+rand(6,12),STAT_MIN,STAT_MAX); p.stuff=clamp(p.stuff+rand(4,8),25,80);}
+  if(role==='SU'){p.stuff=clamp(p.stuff+rand(4,8),25,80); p.control=clamp(p.control+rand(3,6),STAT_MIN,STAT_MAX);}
+  if(role==='LR'){p.stamina=clamp(p.stamina+rand(8,14),STAT_MIN,STAT_MAX); p.stuff=clamp(p.stuff-rand(2,6),25,80);}
 
   // 4단계: 컨셉 보정
   _applyConceptPitcher(p, concept, role);

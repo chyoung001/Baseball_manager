@@ -18,6 +18,7 @@ function updateHeader(){
   $('hdrTeam').innerHTML=`${G.myTeam.emoji} <span>${G.myTeam.name}</span>`;
   $('hdrSeason').textContent=G.season;$('hdrBudget').textContent=G.myTeam.budget;
   $('hdrPop').innerHTML=starsHTML(G.myTeam.popularity);$('hdrGame').textContent=G.gameNum;
+  const tg=$('hdrTotalGames');if(tg)tg.textContent=G.totalGames||TOTAL_REGULAR;
   const ph=getPhaseInfo();
   const phEl=$('hdrPhase');if(phEl)phEl.textContent=`${ph.icon} ${ph.name}`;
   updateNavAdvance();

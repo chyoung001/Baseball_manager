@@ -551,12 +551,12 @@ function endMatch(){
     // W/L 기록
     if(didWin){
       // 승리 투수: 선발 5이닝+ → SP에게 W, 아니면 마지막 불펜에게 W
-      if(spP&&spP.ss&&spGameOuts>=15)spP.ss.w++;
+      if(spP&&spP.ss&&spGameOuts>=SP_WIN_MIN_OUTS)spP.ss.w++;
       else if(lastP&&lastP!==spP&&lastP.ss)lastP.ss.w++;
       else if(spP&&spP.ss)spP.ss.w++;
     }else{
       // 패배 투수: 선발 5이닝 미만 → SP에게 L, 5이닝+ → 마지막 릴리버에게 L
-      if(spGameOuts<15){
+      if(spGameOuts<SP_WIN_MIN_OUTS){
         if(spP&&spP.ss)spP.ss.l++;
       }else{
         if(lastRelief&&lastRelief.ss)lastRelief.ss.l++;
@@ -660,8 +660,8 @@ function endMatch(){
   G.myTeam.roster.forEach(p=>{
     if(p.role==='overseas'&&p.overseasUntil!==null&&G.gameNum>=p.overseasUntil){
       const boost=rand(OVERSEAS_BOOST_MIN,OVERSEAS_BOOST_MAX);
-      if(p.isPitcher){const s=pick(['stuff','control','velocity','movement']);p[s]=clamp((p[s]||0)+boost,20,80);}
-      else{const s=pick(['contact','power','eye','speed']);p[s]=clamp((p[s]||0)+boost,20,80);}
+      if(p.isPitcher){const s=pick(['stuff','control','velocity','movement']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
+      else{const s=pick(['contact','power','eye','speed']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
       p.role=p.prevRole||(p.isPitcher?'bullpen':'bench');
       p.overseasUntil=null;p.prevRole=null;
       addLog(`✈️ ${p.name} 해외 연수 복귀! 능력치 +${boost}`,'hit');
@@ -920,11 +920,11 @@ function _simAIGame(teamA,teamB){
   const spBOuts=pitB&&pitB.ss?(pitB.ss.outs||0)-spBOutsBefore:0;
   if(aWin){
     // 승리 투수 (A팀)
-    if(pitA&&pitA.ss&&spAOuts>=15)pitA.ss.w++;
+    if(pitA&&pitA.ss&&spAOuts>=SP_WIN_MIN_OUTS)pitA.ss.w++;
     else if(lastPitA&&lastPitA!==pitA&&lastPitA.ss)lastPitA.ss.w++;
     else if(pitA&&pitA.ss)pitA.ss.w++;
     // 패배 투수 (B팀): 선발 5이닝 미만 → SP, 5이닝+ → 마지막 릴리버
-    if(spBOuts<15){
+    if(spBOuts<SP_WIN_MIN_OUTS){
       if(pitB&&pitB.ss)pitB.ss.l++;
     }else{
       if(lastPitB&&lastPitB!==pitB&&lastPitB.ss)lastPitB.ss.l++;
@@ -932,11 +932,11 @@ function _simAIGame(teamA,teamB){
     }
   }else{
     // 승리 투수 (B팀)
-    if(pitB&&pitB.ss&&spBOuts>=15)pitB.ss.w++;
+    if(pitB&&pitB.ss&&spBOuts>=SP_WIN_MIN_OUTS)pitB.ss.w++;
     else if(lastPitB&&lastPitB!==pitB&&lastPitB.ss)lastPitB.ss.w++;
     else if(pitB&&pitB.ss)pitB.ss.w++;
     // 패배 투수 (A팀): 선발 5이닝 미만 → SP, 5이닝+ → 마지막 릴리버
-    if(spAOuts<15){
+    if(spAOuts<SP_WIN_MIN_OUTS){
       if(pitA&&pitA.ss)pitA.ss.l++;
     }else{
       if(lastPitA&&lastPitA!==pitA&&lastPitA.ss)lastPitA.ss.l++;
@@ -1159,22 +1159,22 @@ function _simMyGame(){
   if(lastPitHome&&lastPitHome!==homeSP&&lastPitHome.ss)lastPitHome.ss.gp++;
   if(lastPitAway&&lastPitAway!==awaySP&&lastPitAway.ss)lastPitAway.ss.gp++;
   if(homeWin){
-    if(homeSP&&homeSP.ss&&homeGameOuts>=15)homeSP.ss.w++;
+    if(homeSP&&homeSP.ss&&homeGameOuts>=SP_WIN_MIN_OUTS)homeSP.ss.w++;
     else if(lastPitHome&&lastPitHome!==homeSP&&lastPitHome.ss)lastPitHome.ss.w++;
     else if(homeSP&&homeSP.ss)homeSP.ss.w++;
     // 패배 투수: SP가 5이닝 미만이면 SP에게 L, 아니면 마지막 구원투수에게 L
-    if(awayGameOuts<15){
+    if(awayGameOuts<SP_WIN_MIN_OUTS){
       if(awaySP&&awaySP.ss)awaySP.ss.l++;
     }else{
       if(lastPitAway&&lastPitAway!==awaySP&&lastPitAway.ss)lastPitAway.ss.l++;
       else if(awaySP&&awaySP.ss)awaySP.ss.l++;
     }
   }else{
-    if(awaySP&&awaySP.ss&&awayGameOuts>=15)awaySP.ss.w++;
+    if(awaySP&&awaySP.ss&&awayGameOuts>=SP_WIN_MIN_OUTS)awaySP.ss.w++;
     else if(lastPitAway&&lastPitAway!==awaySP&&lastPitAway.ss)lastPitAway.ss.w++;
     else if(awaySP&&awaySP.ss)awaySP.ss.w++;
     // 패배 투수: SP가 5이닝 미만이면 SP에게 L, 아니면 마지막 구원투수에게 L
-    if(homeGameOuts<15){
+    if(homeGameOuts<SP_WIN_MIN_OUTS){
       if(homeSP&&homeSP.ss)homeSP.ss.l++;
     }else{
       if(lastPitHome&&lastPitHome!==homeSP&&lastPitHome.ss)lastPitHome.ss.l++;
@@ -1233,8 +1233,8 @@ function _simMyGame(){
   G.myTeam.roster.forEach(p=>{
     if(p.role==='overseas'&&p.overseasUntil!==null&&G.gameNum>=p.overseasUntil){
       const boost=rand(OVERSEAS_BOOST_MIN,OVERSEAS_BOOST_MAX);
-      if(p.isPitcher){const s=pick(['stuff','control','velocity','movement']);p[s]=clamp((p[s]||0)+boost,20,80);}
-      else{const s=pick(['contact','power','eye','speed']);p[s]=clamp((p[s]||0)+boost,20,80);}
+      if(p.isPitcher){const s=pick(['stuff','control','velocity','movement']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
+      else{const s=pick(['contact','power','eye','speed']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
       p.role=p.prevRole||(p.isPitcher?'bullpen':'bench');
       p.overseasUntil=null;p.prevRole=null;
     }

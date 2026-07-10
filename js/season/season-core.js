@@ -40,7 +40,7 @@ function showPreseason(){
           const immuneGrowth=Math.round((rand(0,2)+Math.floor(team.devLevel/30))*ethicMod);
           const stats=p.isPitcher?['stuff','control','velocity','movement','stamina','clutch']:['contact','power','eye','speed','fielding','arm'];
           if(ovr(p)<maxOvrFromPot(pot)){
-            stats.forEach(s=>{p[s]=clamp((p[s]||0)+immuneGrowth,20,80);});
+            stats.forEach(s=>{p[s]=clamp((p[s]||0)+immuneGrowth,STAT_MIN,STAT_MAX);});
           }
           p.condition=rand(75,100);
           if(p.isPitcher)p.currentStamina=100;
@@ -77,19 +77,19 @@ function showPreseason(){
         const potCap=maxOvrFromPot(pot);
         const canGrow=ovr(p)<potCap;
         if(p.isPitcher){
-          if(canGrow)['stuff','movement'].forEach(s=>{p[s]=clamp((p[s]||0)+growth,20,80);});
-          p.velocity=clamp((p.velocity||0)+(canGrow?growth:0)-velPen,20,80);
-          p.stamina=clamp((p.stamina||0)+(canGrow?growth:0)-stamPen,20,80);
+          if(canGrow)['stuff','movement'].forEach(s=>{p[s]=clamp((p[s]||0)+growth,STAT_MIN,STAT_MAX);});
+          p.velocity=clamp((p.velocity||0)+(canGrow?growth:0)-velPen,STAT_MIN,STAT_MAX);
+          p.stamina=clamp((p.stamina||0)+(canGrow?growth:0)-stamPen,STAT_MIN,STAT_MAX);
           // 베테랑 관록: 제구 + 위기관리 상승
-          p.control=clamp((p.control||0)+(canGrow?growth:0)+vetCtrlBuff,20,80);
-          p.clutch=clamp((p.clutch||0)+(canGrow?growth:0)+vetClutchBuff,20,80);
+          p.control=clamp((p.control||0)+(canGrow?growth:0)+vetCtrlBuff,STAT_MIN,STAT_MAX);
+          p.clutch=clamp((p.clutch||0)+(canGrow?growth:0)+vetClutchBuff,STAT_MIN,STAT_MAX);
         }else{
-          if(canGrow)['power','arm'].forEach(s=>{p[s]=clamp((p[s]||0)+growth,20,80);});
-          p.speed=clamp((p.speed||0)+(canGrow?growth:0)-speedPen,20,80);
-          p.contact=clamp((p.contact||0)+(canGrow?growth:0)-conPen,20,80);
-          p.fielding=clamp((p.fielding||0)+(canGrow?growth:0)-fldPen,20,80);
+          if(canGrow)['power','arm'].forEach(s=>{p[s]=clamp((p[s]||0)+growth,STAT_MIN,STAT_MAX);});
+          p.speed=clamp((p.speed||0)+(canGrow?growth:0)-speedPen,STAT_MIN,STAT_MAX);
+          p.contact=clamp((p.contact||0)+(canGrow?growth:0)-conPen,STAT_MIN,STAT_MAX);
+          p.fielding=clamp((p.fielding||0)+(canGrow?growth:0)-fldPen,STAT_MIN,STAT_MAX);
           // 베테랑 관록: 선구안 상승
-          p.eye=clamp((p.eye||0)+(canGrow?growth:0)+vetEyeBuff,20,80);
+          p.eye=clamp((p.eye||0)+(canGrow?growth:0)+vetEyeBuff,STAT_MIN,STAT_MAX);
         }
         p.condition=rand(75,100);
         if(p.isPitcher)p.currentStamina=100;

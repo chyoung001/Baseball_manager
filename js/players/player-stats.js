@@ -47,27 +47,27 @@ function _agingStatPenalty(age){
 // ═══════════════════════════════════════════════════════
 
 function _applyConceptBatter(p, concept){
-  if(concept==='power_hit')    { p.contact=clamp(p.contact-2,20,80); p.eye=clamp(p.eye-2,20,80); }
-  if(concept==='speed')        { p.speed=clamp(p.speed+4,20,80); p.contact=clamp(p.contact+4,20,80);
-                                  p.power=clamp(p.power-2,20,80); p.eye=clamp(p.eye-2,20,80);
-                                  p.fielding=clamp(p.fielding+4,20,80); }
-  if(concept==='sabermetrics') { p.eye=clamp(p.eye+4,20,80); p.power=clamp(p.power+2,20,80);
-                                  p.contact=clamp(p.contact-2,20,80); p.speed=clamp(p.speed-2,20,80); }
-  if(concept==='contact_hit')  { p.contact=clamp(p.contact+4,20,80); p.eye=clamp(p.eye+2,20,80);
-                                  p.power=clamp(p.power-2,20,80); }
-  if(concept==='defense')      { p.power=clamp(p.power-2,20,80); p.contact=clamp(p.contact-2,20,80);
-                                  p.fielding=clamp(p.fielding+4,20,80); p.arm=clamp(p.arm+4,20,80); }
+  if(concept==='power_hit')    { p.contact=clamp(p.contact-2,STAT_MIN,STAT_MAX); p.eye=clamp(p.eye-2,STAT_MIN,STAT_MAX); }
+  if(concept==='speed')        { p.speed=clamp(p.speed+4,STAT_MIN,STAT_MAX); p.contact=clamp(p.contact+4,STAT_MIN,STAT_MAX);
+                                  p.power=clamp(p.power-2,STAT_MIN,STAT_MAX); p.eye=clamp(p.eye-2,STAT_MIN,STAT_MAX);
+                                  p.fielding=clamp(p.fielding+4,STAT_MIN,STAT_MAX); }
+  if(concept==='sabermetrics') { p.eye=clamp(p.eye+4,STAT_MIN,STAT_MAX); p.power=clamp(p.power+2,STAT_MIN,STAT_MAX);
+                                  p.contact=clamp(p.contact-2,STAT_MIN,STAT_MAX); p.speed=clamp(p.speed-2,STAT_MIN,STAT_MAX); }
+  if(concept==='contact_hit')  { p.contact=clamp(p.contact+4,STAT_MIN,STAT_MAX); p.eye=clamp(p.eye+2,STAT_MIN,STAT_MAX);
+                                  p.power=clamp(p.power-2,STAT_MIN,STAT_MAX); }
+  if(concept==='defense')      { p.power=clamp(p.power-2,STAT_MIN,STAT_MAX); p.contact=clamp(p.contact-2,STAT_MIN,STAT_MAX);
+                                  p.fielding=clamp(p.fielding+4,STAT_MIN,STAT_MAX); p.arm=clamp(p.arm+4,STAT_MIN,STAT_MAX); }
 }
 
 function _applyConceptPitcher(p, concept, role){
   if(concept==='power_hit'){
-    if(role==='SP'){ p.stuff=clamp(p.stuff+3,25,80); p.stamina=clamp(p.stamina+4,20,80); }
+    if(role==='SP'){ p.stuff=clamp(p.stuff+3,25,80); p.stamina=clamp(p.stamina+4,STAT_MIN,STAT_MAX); }
   }
   if(concept==='bullpen'){
-    if(role==='SP'){ p.stuff=clamp(p.stuff-2,25,80); p.control=clamp(p.control-2,20,80); }
-    else { p.stuff=clamp(p.stuff+4,25,80); p.clutch=clamp(p.clutch+4,20,80); }
+    if(role==='SP'){ p.stuff=clamp(p.stuff-2,25,80); p.control=clamp(p.control-2,STAT_MIN,STAT_MAX); }
+    else { p.stuff=clamp(p.stuff+4,25,80); p.clutch=clamp(p.clutch+4,STAT_MIN,STAT_MAX); }
   }
-  if(concept==='defense'){ p.movement=clamp(p.movement+3,20,80); }
+  if(concept==='defense'){ p.movement=clamp(p.movement+3,STAT_MIN,STAT_MAX); }
 }
 
 // ── 드래프트 OVR 강제 조정 (스탯을 타겟 OVR에 맞춤) ──
@@ -76,13 +76,13 @@ function _forceDraftOvr(p, targetOvr){
     ? ['stuff','control','velocity','movement','stamina','clutch']
     : ['contact','power','eye','speed','fielding','arm'];
   // 먼저 모든 스탯을 낮은 기본값으로
-  stats.forEach(s=>{p[s]=clamp(rand(20,28),20,80);});
+  stats.forEach(s=>{p[s]=clamp(rand(20,28),STAT_MIN,STAT_MAX);});
   // 타겟 OVR까지 조정
   let att=0;
   while(Math.abs(ovr(p)-targetOvr)>2 && att<30){
     const diff=targetOvr-ovr(p);
     const s=pick(stats);
-    p[s]=clamp(p[s]+Math.round(diff*0.5),20,80);
+    p[s]=clamp(p[s]+Math.round(diff*0.5),STAT_MIN,STAT_MAX);
     att++;
   }
 }

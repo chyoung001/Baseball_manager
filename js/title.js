@@ -55,7 +55,7 @@ function _renderTitleContinue(){
       <div style="background:linear-gradient(135deg,rgba(245,158,11,0.08),rgba(245,158,11,0.02));border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:16px 24px;margin-bottom:20px;max-width:400px;text-align:center;">
         <div style="font-family:'Orbitron',sans-serif;font-size:0.75rem;color:var(--accent);margin-bottom:8px;">저장된 게임</div>
         <div style="font-size:1.1rem;margin-bottom:4px;">${t.emoji||''} <b>${t.name||'알 수 없음'}</b></div>
-        <div style="font-size:0.75rem;color:var(--text-dim);">시즌 ${d.season||1} · ${d.gameNum||0}/${d.totalGames||84} 경기</div>
+        <div style="font-size:0.75rem;color:var(--text-dim);">시즌 ${d.season||1} · ${d.gameNum||0}/${d.totalGames||TOTAL_REGULAR} 경기</div>
         <button class="btn btn-primary" onclick="_continueGame()" style="margin-top:12px;width:100%;">▶ 이어하기</button>
       </div>`;
   }catch(e){el.innerHTML='';}

@@ -21,7 +21,7 @@ function renderInvestFinance() {
         <div class="finance-item">
           <div class="finance-label">시즌 사치세</div>
           <div class="finance-value" style="color:${luxTax>0?'#ef4444':'var(--accent2)'};">${luxTax > 0 ? '-'+won(luxTax) : '없음'}</div>
-          <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">초과분 × 50%</div>
+          <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">초과분 × ${LUXURY_TAX_RATE*100}%</div>
         </div>
         <div class="finance-item">
           <div class="finance-label">경기장 수익 배율</div>
@@ -34,7 +34,7 @@ function renderInvestFinance() {
         </div>
       </div>
       ${overHard ? `<div class="invest-warning">🚫 하드 캡(${won(getHardCap())}) 초과! 신규 선수 영입이 불가합니다.</div>` : ''}
-      ${overSoft && !overHard ? `<div class="invest-warning" style="border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.08);">⚠️ 사치세 구간! 초과분 ${won(payroll - getLuxuryTaxLine())} × 50% = <strong>${won(luxTax)}</strong>이 시즌 수익에서 차감됩니다.</div>` : ''}
+      ${overSoft && !overHard ? `<div class="invest-warning" style="border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.08);">⚠️ 사치세 구간! 초과분 ${won(payroll - getLuxuryTaxLine())} × ${LUXURY_TAX_RATE*100}% = <strong>${won(luxTax)}</strong>이 시즌 수익에서 차감됩니다.</div>` : ''}
 
       <div class="card-title" style="margin-top:14px;">▸ 선수 연봉 내역</div>
       <div style="overflow-x:auto;">

@@ -72,7 +72,7 @@ function getScoutReport(p){
 function getScoutedOvr(p,scLv){
   const real=ovr(p);
   const fuzz=scLv>=90?0:scLv>=60?1:scLv>=30?4:8;
-  return clamp(real+rand(-fuzz,fuzz),20,80);
+  return clamp(real+rand(-fuzz,fuzz),STAT_MIN,STAT_MAX);
 }
 
 // 스카우트팀 레벨 기반 드래프트 선수 정보 반환

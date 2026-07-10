@@ -121,7 +121,7 @@ function calcTradeValueForAI(p,aiTeam){
   const activeRoster=aiTeam.roster.filter(r=>(r.status||'active')==='active');
   const samePos=activeRoster.filter(r=>r.pos===p.pos&&r!==p);
   const hasBetterStarter=samePos.some(r=>ovr(r)>pOvr);
-  const isProspect=st<=3;
+  const isProspect=st<=PRE_ARB_MAX_SERVICE;
   if(hasBetterStarter&&!isProspect){
     // 이미 더 좋은 주전이 있으면 30~50% 삭감
     tv=Math.round(tv*(0.5+Math.random()*0.2));
@@ -133,8 +133,8 @@ function calcTradeValueForAI(p,aiTeam){
     // FA 1년 남은 렌탈: 리빌딩은 0.4배, 윈나우는 유지
     if(rank>=6) tv=Math.round(tv*0.4);
   }
-  // 장기 염가 계약: 서비스 1~3년, 최저연봉, OVR 55+
-  if(st>=1&&st<=3&&(p.salary||0)<=SALARY_MIN&&pOvr>=55){
+  // 장기 염가 계약: 서비스 1~PRE_ARB년, 최저연봉, OVR 55+
+  if(st>=1&&st<=PRE_ARB_MAX_SERVICE&&(p.salary||0)<=SALARY_MIN&&pOvr>=55){
     tv=Math.round(tv*1.5);
   }
 
