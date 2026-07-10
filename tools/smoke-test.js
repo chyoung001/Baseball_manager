@@ -243,11 +243,13 @@ const realism = g(`(function(){
   const qual=all.filter(p=>!p.isPitcher&&p.ss&&(p.ss.ab||0)>=100);
   const avg=p=>(p.ss.h||0)/(p.ss.ab||1);
   const maxAVG=qual.length?Math.max(...qual.map(avg)):0;
-  const maxHR=Math.max(0,...all.map(p=>(p.ss&&p.ss.hr)||0));
-  return {maxAVG,maxHR,nQual:qual.length};
+  let hrLeader=null;
+  all.forEach(p=>{if(p.ss&&(!hrLeader||(p.ss.hr||0)>(hrLeader.ss.hr||0)))hrLeader=p;});
+  const maxHR=hrLeader?(hrLeader.ss.hr||0):0;
+  return {maxAVG,maxHR,nQual:qual.length,hrAB:hrLeader?(hrLeader.ss.ab||0):0,hrPow:hrLeader?(hrLeader.power||0):0};
 })()`);
 check(`① 개인 최고타율 현실성(<0.430): ${realism.maxAVG.toFixed(3)} (100타수+ ${realism.nQual}명)`, realism.maxAVG < 0.430);
-check(`① 개인 최다홈런 현실성(${g('TOTAL_REGULAR')}경기 <38): ${realism.maxHR}`, realism.maxHR < 38);
+check(`① 개인 최다홈런 현실성(${g('TOTAL_REGULAR')}경기 <38): ${realism.maxHR} (ab=${realism.hrAB}, pow=${realism.hrPow})`, realism.maxHR < 38);
 
 // ── T3b. 시리즈 구조 (3연전 상대 고정) ──────────────────────
 section('T3b. 시리즈 구조 — 21시리즈 × 3연전');
@@ -394,6 +396,35 @@ const marketRender = g(`(function(){
   return {ok, err};
 })()`);
 check('market 전 티어 렌더 무예외', marketRender.skip || marketRender.ok, marketRender.err);
+
+// ── T9. P2-1 OVR Z-score 상대평가 엔진 ───────────────────────
+section('T9. P2-1 OVR — Z-score 상대평가 + 역할 가중치 + 다재다능 세금');
+const zProbe = g(`(function(){
+  const acc={};
+  G.teams.forEach(t=>t.roster.forEach(p=>{
+    if((p.status||'active')!=='active')return;
+    const gr=_ovrCalibGroup(p);(acc[gr]=acc[gr]||[]).push(ovr(p));
+  }));
+  const means={};let allOk=true;
+  for(const gr in acc){
+    const a=acc[gr];const m=a.reduce((s,x)=>s+x,0)/a.length;
+    means[gr]=Math.round(m*10)/10;
+    if(m<46||m>54)allOk=false;
+  }
+  // raw vs 상대 분리: 두 값이 다른 선수 존재 + 양쪽 다 유한
+  const all=G.teams.flatMap(t=>t.roster);
+  const splitOk=all.every(p=>Number.isFinite(ovrRaw(p))&&Number.isFinite(ovr(p)))&&all.some(p=>ovrRaw(p)!==ovr(p));
+  // 다재다능 세금: _subPos 1개 → −1, 2개 → −2
+  const t0=all.find(p=>ovr(p)>=30&&ovr(p)<=70);
+  const base=ovr(t0);
+  t0._subPos=['2B'];const tax1=base-ovr(t0);
+  t0._subPos=['2B','3B'];const tax2=base-ovr(t0);
+  delete t0._subPos;
+  return {means:JSON.stringify(means),allOk,splitOk,tax1,tax2};
+})()`);
+check(`전 그룹 1군 평균 OVR ≈50 (46~54): ${zProbe.means}`, zProbe.allOk);
+check('ovrRaw/ovr 분리 (유한 + 상이 선수 존재)', zProbe.splitOk);
+check(`다재다능 세금 (서브1 −1 / 서브2 −2): ${zProbe.tax1}/${zProbe.tax2}`, zProbe.tax1 === 1 && zProbe.tax2 === 2);
 
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
