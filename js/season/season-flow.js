@@ -34,7 +34,8 @@ function showStoveLeague(){
   // 전년도 순위 저장 (다음 시즌 드래프트용)
   G.previousSeasonStandings=sorted.map(team=>G.teams.indexOf(team));
 
-  if(!isFirstYear){
+  // 정산은 시즌당 1회만 (재진입/돌아가기 시 중복 정산으로 인한 예산·서비스타임·FA 붕괴 방지)
+  if(!isFirstYear && G._stoveSettledSeason!==G.season){
     // 수익 정산 (모든 팀) — 시즌 1 첫 시작 시 건너뜀
     G.teams.forEach(team=>{
       const tr=sorted.indexOf(team)+1;
@@ -112,7 +113,9 @@ function showStoveLeague(){
 
     // AI 경쟁 입찰
     _runAIFreeAgentBidding();
-  } else {
+
+    G._stoveSettledSeason=G.season;  // 정산 완료 표시 → 재진입 시 위 블록 스킵
+  } else if(isFirstYear){
     G.faPool=G.faPool||[];
     G.faBiddingLog=[];
   }
@@ -360,14 +363,19 @@ function _showSalaryNegotiation(){
   const faPlayers=[];
 
   t.roster.forEach(p=>{
-    const oldSalary=p.salary||0;
-    const newSalary=_calcNewSalary(p);
     const phase=_getSalaryPhase(p);
     if(phase==='FA자격'){
       faPlayers.push(p);
-    } else if(newSalary!==oldSalary){
+      return;
+    }
+    // 프리아브/연봉조정 자동 조정은 시즌당 1회만 — 재진입 시 복리 인상 방지
+    if(p._salaryAdjSeason===G.season)return;
+    const oldSalary=p.salary||0;
+    const newSalary=_calcNewSalary(p);
+    if(newSalary!==oldSalary){
       autoAdjust.push({p,oldSalary,newSalary,phase});
     }
+    p._salaryAdjSeason=G.season;
   });
 
   // 프리아브/연봉조정 자동 적용
