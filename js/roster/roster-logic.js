@@ -130,3 +130,41 @@ function emergencyILReturn(idx) {
   showToast(`🏥 ${p.name} IL 조기 복귀! 2군 재활 5경기`);
   renderFutures();
 }
+
+// ═══════════════════════════════════════════════════════
+// AI 라인업 자동 유지 (부상으로 빠진 주전을 벤치/2군에서 보충)
+// 미유지 시 라인업이 시즌 내내 감소 → 잔존 타자에게 타석이 몰려 개인 기록 왜곡
+// ═══════════════════════════════════════════════════════
+function _aiMaintainLineup(t){
+  if(t===G.myTeam) return; // 내 팀은 유저가 직접 관리
+  const activeBat=()=>t.roster.filter(p=>!p.isPitcher&&(p.status||'active')==='active'&&p.role!=='overseas');
+  const activePit=()=>t.roster.filter(p=>p.isPitcher&&(p.status||'active')==='active'&&p.role!=='overseas');
+  // 2군/육성 → 1군 콜업 (재활 미완·데뷔 불가 제외, OVR 내림차순)
+  const callUp=(pred)=>{
+    if(!canCallUp(t)) return null;
+    const pool=t.roster.filter(p=>(p.status==='futures'||p.status==='developmental')
+      &&pred(p)&&(p.rehabGamesLeft||0)<=0&&canPlayerDebut(p)).sort((a,b)=>ovr(b)-ovr(a));
+    const c=pool[0];
+    if(c){c.status='active';c.role=c.isPitcher?'bullpen':'bench';}
+    return c||null;
+  };
+  // 1) 타자 주전 9명 유지: 벤치 승격 → 부족 시 콜업
+  let guard=0;
+  while(activeBat().filter(p=>p.role==='starting').length<9&&guard++<20){
+    const bench=activeBat().filter(p=>p.role==='bench').sort((a,b)=>ovr(b)-ovr(a))[0];
+    if(bench){bench.role='starting';continue;}
+    if(!callUp(p=>!p.isPitcher)) break;
+  }
+  // 2) 로테이션 5 유지: 불펜 승격 → 부족 시 콜업
+  guard=0;
+  while(activePit().filter(p=>p.role==='rotation').length<5&&guard++<12){
+    const bp=activePit().filter(p=>p.role==='bullpen');
+    if(bp.length>4){bp.sort((a,b)=>ovr(b)-ovr(a))[0].role='rotation';continue;}
+    if(!callUp(p=>p.isPitcher)) break;
+  }
+  // 3) 불펜 최소 4명: 콜업으로 보충
+  guard=0;
+  while(activePit().filter(p=>p.role==='bullpen').length<4&&guard++<8){
+    if(!callUp(p=>p.isPitcher)) break;
+  }
+}

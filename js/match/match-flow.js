@@ -735,6 +735,8 @@ function processPostGame() {
 }
 
 function simulateOtherGames(){
+  // AI 라인업 유지 (부상 이탈 보충) — 내 팀 제외 전 구단, 오늘 상대 포함(다음 경기 대비)
+  G.teams.forEach(t=>{if(t!==G.myTeam)_aiMaintainLineup(t);});
   const teams=G.teams.filter(t=>t!==G.myTeam&&t!==getOpponent());
   for(let i=0;i<teams.length;i+=2){
     if(i+1<teams.length) _simAIGame(teams[i],teams[i+1]);
@@ -749,6 +751,7 @@ function _simAIGame(teamA,teamB){
   const pitB=spB.length>0?spB[teamB.rotationIdx%spB.length]:null;
   let lastPitA=pitA, lastPitB=pitB;
   let runsA=0,runsB=0;
+  const _boA={i:0},_boB={i:0}; // 게임 단위 타순 연속
   const spAOutsBefore=pitA&&pitA.ss?(pitA.ss.outs||0):0;
   const spBOutsBefore=pitB&&pitB.ss?(pitB.ss.outs||0):0;
 
@@ -762,8 +765,9 @@ function _simAIGame(teamA,teamB){
 
   // 한 하프이닝 TTO+BABIP 간이 시뮬 (공격팀 vs 수비팀) — simulatePlay 공식 통일
   // walkoffTarget>0: 끝내기 상황, runs>=walkoffTarget이면 즉시 종료
-  function simHalf(batTeam,batters,pitcher,fldTeam,walkoffTarget){
-    let outs=0,runs=0,idx=0;
+  function simHalf(batTeam,batters,pitcher,fldTeam,walkoffTarget,ord){
+    ord=ord||{i:0}; // 타순 연속 (게임 단위 유지 — 이닝마다 1번부터 리셋 금지)
+    let outs=0,runs=0,pa=0;
     if(!pitcher||batters.length===0)return rand(0,3);
 
     // 팀 컨셉 보너스
@@ -784,8 +788,8 @@ function _simAIGame(teamA,teamB){
     // 주루 상태 간이 추적
     let bases=[null,null,null];
 
-    while(outs<3&&idx<50){
-      const b=batters[idx%batters.length];idx++;
+    while(outs<3&&pa<50){
+      const b=batters[ord.i%batters.length];ord.i++;pa++;
       const bs=b.ss||(b.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
       const ps=pitcher.ss||(pitcher.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
 
@@ -877,10 +881,10 @@ function _simAIGame(teamA,teamB){
       const pickB=_pickReliever(teamB,inn,runsB-runsA);
       if(pickB){curPitB=pickB;lastPitB=pickB;}
     }
-    runsB+=simHalf(teamB,batB,curPitA,teamA,0);
+    runsB+=simHalf(teamB,batB,curPitA,teamA,0,_boB);
     if(inn===9&&runsA>runsB) break;
     const wotA=inn>=9?(runsB-runsA+1):0;
-    runsA+=simHalf(teamA,batA,curPitB,teamB,wotA);
+    runsA+=simHalf(teamA,batA,curPitB,teamB,wotA,_boA);
     if(inn>=9&&runsA>runsB) break;
   }
 
@@ -896,10 +900,10 @@ function _simAIGame(teamA,teamB){
         const pickB=_pickReliever(teamB,inn,runsB-runsA);
         if(pickB){curPitB=pickB;lastPitB=pickB;}
       }
-      runsB+=simHalf(teamB,batB,curPitA,teamA,0);
+      runsB+=simHalf(teamB,batB,curPitA,teamA,0,_boB);
       if(runsA>runsB) break;
       const wotA=runsB-runsA+1;
-      runsA+=simHalf(teamA,batA,curPitB,teamB,wotA);
+      runsA+=simHalf(teamA,batA,curPitB,teamB,wotA,_boA);
       if(runsA!==runsB) break;
     }
   }
@@ -1002,8 +1006,11 @@ function _simMyGame(){
   if(awayTeam.concept==='defense')pitBonusAway+=4;
   if(awayTeam.concept==='pitching')pitBonusAway+=4;
 
+  const _boHome={i:0},_boAway={i:0}; // 게임 단위 타순 연속
+
   // 각 팀 TTO+BABIP 간이 시뮬 — simulatePlay 공식 통일 + 체력 소모 + 끝내기
-  function simHalfFull(batTeam,pitcherTeam,batBonus,pitBonus,curPitcher,walkoffTarget){
+  function simHalfFull(batTeam,pitcherTeam,batBonus,pitBonus,curPitcher,walkoffTarget,ord){
+    ord=ord||{i:0}; // 타순 연속 (게임 단위 유지)
     const batters=getStartingBatters(batTeam);
     let pitcher=curPitcher;
     if(!pitcher||batters.length===0)return rand(0,4);
@@ -1012,14 +1019,14 @@ function _simMyGame(){
 
     // 주루 상태 간이 추적
     let bases=[null,null,null];
-    let outs=0,runs=0,idx=0;
-    while(outs<3&&idx<50){
+    let outs=0,runs=0,pa=0;
+    while(outs<3&&pa<50){
       // NP 기반 불펜 교체 (shouldHookPitcher 통합)
       if(shouldHookPitcher(pitcher,7,0,pitcherTeam.concept)){
         const emgPick=_pickReliever(pitcherTeam,7,0);
         if(emgPick){pitcher=emgPick;pitcher._simNP=0;}
       }
-      const b=batters[idx%batters.length];idx++;
+      const b=batters[ord.i%batters.length];ord.i++;pa++;
       const bs=b.ss||(b.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
       const ps=pitcher.ss||(pitcher.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
 
@@ -1118,10 +1125,10 @@ function _simMyGame(){
       const pickA=_pickReliever(awayTeam,inn,runsAway-runsHome);
       if(pickA){curPitAway=pickA;lastPitAway=pickA;}
     }
-    runsAway+=simHalfFull(awayTeam,homeTeam,batBonusAway,pitBonusHome,curPitHome,0);
+    runsAway+=simHalfFull(awayTeam,homeTeam,batBonusAway,pitBonusHome,curPitHome,0,_boAway);
     if(inn===9&&runsHome>runsAway) break;
     const wot=inn>=9?(runsAway-runsHome+1):0;
-    runsHome+=simHalfFull(homeTeam,awayTeam,batBonusHome,pitBonusAway,curPitAway,wot);
+    runsHome+=simHalfFull(homeTeam,awayTeam,batBonusHome,pitBonusAway,curPitAway,wot,_boHome);
     if(inn>=9&&runsHome>runsAway) break;
   }
 
@@ -1136,10 +1143,10 @@ function _simMyGame(){
         const pickA=_pickReliever(awayTeam,inn,runsAway-runsHome);
         if(pickA){curPitAway=pickA;lastPitAway=pickA;}
       }
-      runsAway+=simHalfFull(awayTeam,homeTeam,batBonusAway,pitBonusHome,curPitHome,0);
+      runsAway+=simHalfFull(awayTeam,homeTeam,batBonusAway,pitBonusHome,curPitHome,0,_boAway);
       if(runsHome>runsAway) break;
       const wot=runsAway-runsHome+1;
-      runsHome+=simHalfFull(homeTeam,awayTeam,batBonusHome,pitBonusAway,curPitAway,wot);
+      runsHome+=simHalfFull(homeTeam,awayTeam,batBonusHome,pitBonusAway,curPitAway,wot,_boHome);
       if(runsHome!==runsAway) break;
     }
   }
