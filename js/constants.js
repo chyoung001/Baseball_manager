@@ -48,9 +48,17 @@ const FACILITIES=[
 ];
 
 // ===================== INVESTMENT CONSTANTS (단위: 억원) =====================
-const LUXURY_TAX_THRESHOLD = 140; // 사치세 라인 (고정)
-const HARD_CAP = 210;             // 하드캡 (고정)
-const LUXURY_TAX_RATE = 0.30;     // 초과분의 30% 사치세
+// ── P2-4 사치세 3단계 (설계: 계약/연봉 로직 — 소프트캡 200억 CBT) ──
+const LUXURY_SOFT_CAP = 200;          // 소프트캡 (GM 회의로 유동)
+const LUXURY_TIERS = [                // 초과분 구간별 세율: 200~220 20% / 220~250 40% / 250+ 60%
+  {upTo:20, rate:0.20},
+  {upTo:50, rate:0.40},
+  {upTo:Infinity, rate:0.60},
+];
+const LUXURY_REPEAT_SURCHARGE = 0.10; // 연속 초과 시즌당 +10%p 체증
+const LUXURY_REPEAT_CAP = 0.20;       // 체증 상한 +20%p (3시즌+ 고정)
+const SALARY_FLOOR = 50;              // 샐러리 플로어 (탱킹 방지) — 설계 목표 80억은 P2-3 연봉 현실화(신인 슬롯·Arb 인상률) 후 상향 (현행 리그 평균 페이롤 ~60억 기준 과도기 값)
+const HARD_CAP = 280;                 // AI 영입 가드 상한 (설계상 하드캡은 폐지 — 내부 안전장치)
 
 const STADIUM_REVENUE_BONUS = 0.12; // 레벨당 +12% 시즌 수익
 const STADIUM_MAX_LEVEL = 5;
@@ -155,6 +163,8 @@ const GM_PROPOSALS=[
   {id:'salary_relax',  icon:'💰', name:'샐러리캡 완화',       desc:'사치세 라인 +20억 (부자 구단 유리)',    aiSupport:0.45, effect:{key:'luxuryLineBonus', value:20}},
   {id:'salary_tight',  icon:'📉', name:'샐러리캡 강화',       desc:'사치세 라인 -20억 (전력 평준화)',       aiSupport:0.50, effect:{key:'luxuryLineBonus', value:-20}},
   {id:'hardcap_up',    icon:'🏦', name:'하드캡 인상',         desc:'하드캡 +30억 (초고액 계약 허용)',       aiSupport:0.40, effect:{key:'hardCapBonus',   value:30}},
+  {id:'floor_up',      icon:'🧱', name:'샐러리 플로어 인상',   desc:'플로어 +10억 (최소 지출 강제 강화)',    aiSupport:0.45, effect:{key:'salaryFloorBonus', value:10}},
+  {id:'floor_down',    icon:'🪶', name:'샐러리 플로어 완화',   desc:'플로어 -10억 (리빌딩 구단 숨통)',       aiSupport:0.50, effect:{key:'salaryFloorBonus', value:-10}},
   {id:'expanded_early',icon:'📋', name:'확대 엔트리 조기 시행', desc:'9월 확대 엔트리를 5경기 앞당김',        aiSupport:0.60, effect:{key:'expandedEarly',  value:5}},
   {id:'champ_bonus',   icon:'🏆', name:'우승 상금 인상',       desc:'챔피언 상금 +30억',                    aiSupport:0.70, effect:{key:'champBonusExtra',value:30}},
   {id:'draft_bumper',  icon:'🌱', name:'드래프트 풍년',       desc:'다음 신인 풀 품질 소폭 상승',           aiSupport:0.65, effect:{key:'draftQualityBonus', value:3}},

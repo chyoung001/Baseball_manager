@@ -36,11 +36,51 @@ function showStoveLeague(){
 
   // 정산은 시즌당 1회만 (재진입/돌아가기 시 중복 정산으로 인한 예산·서비스타임·FA 붕괴 방지)
   if(!isFirstYear && G._stoveSettledSeason!==G.season){
-    // 수익 정산 (모든 팀) — 시즌 1 첫 시작 시 건너뜀
+    // 수익 정산 (모든 팀) — P2-4: 사치세 3단계 + 연대 기금 7% 풀 적립
+    let _solidarityPool=0,_luxuryPool=0;
     G.teams.forEach(team=>{
       const tr=sorted.indexOf(team)+1;
       const rev=calcSeasonRevenue(team,tr);
+      _solidarityPool+=rev.solidarity;
+      _luxuryPool+=rev.luxTax;
       team.budget+=rev.net;
+      if(team===G.myTeam)G._lastSeasonRev=rev; // 결산 화면 표시용 스냅샷
+    });
+
+    // P2-4 사치세 연속 초과 카운터 (과세 후 갱신 — 다음 시즌 체증 기준)
+    // 리셋: 2시즌 연속 온전히 소프트캡 아래 체류 시에만 (설계 엄격 규칙)
+    G.teams.forEach(team=>{
+      if(getPayroll(team)>getLuxuryTaxLine()){
+        team._luxOverStreak=(team._luxOverStreak||0)+1;
+        team._luxUnderStreak=0;
+      }else{
+        team._luxUnderStreak=(team._luxUnderStreak||0)+1;
+        if(team._luxUnderStreak>=2)team._luxOverStreak=0;
+      }
+    });
+
+    // P2-4 샐러리 플로어 (탱킹 방지): 미달액 50% 선수 분배 + 50% 소각 → 전액 벌과금 지출
+    const _floorLine=getSalaryFloor();
+    const _floorFail=new Set();
+    G.teams.forEach(team=>{
+      const shortfall=+(_floorLine-getPayroll(team)).toFixed(1);
+      if(shortfall>0){
+        _floorFail.add(team);
+        team.budget=+(team.budget-shortfall).toFixed(1);
+        if(team===G.myTeam)showToast(`🚨 샐러리 플로어(${won(_floorLine)}) 미달! 벌과금 ${won(shortfall)} + 분배금 수령 박탈`);
+      }
+    });
+
+    // P2-4 분배금: 연대 기금 + 사치세 → 하위 4팀 역순위 (8위 35% / 7위 30% / 6위 20% / 5위 15%)
+    // 수령 자격: 샐러리 플로어 달성 팀만 (탱킹 먹튀 방지)
+    const _distPool=+(_solidarityPool+_luxuryPool).toFixed(1);
+    const _shares=[0.35,0.30,0.20,0.15];
+    const _bottom4=sorted.slice(-4).reverse(); // [8위,7위,6위,5위]
+    _bottom4.forEach((team,i)=>{
+      if(_floorFail.has(team))return;
+      const share=+(_distPool*_shares[i]).toFixed(1);
+      team.budget=+(team.budget+share).toFixed(1);
+      if(team===G.myTeam&&share>0)showToast(`🤝 리그 분배금 +${won(share)} (연대 기금+사치세)`);
     });
 
     // 연간 고정 지출 차감 (모든 팀)
@@ -72,15 +112,9 @@ function showStoveLeague(){
           if(!G._renewalCandidates) G._renewalCandidates=[];
           G._renewalCandidates.push(p);
         } else {
-          // AI 팀: 소속 구단 우선 재계약 시도
+          // AI 팀: 소속 구단 우선 재계약 시도 (P2-4: 절대 연봉 스케일)
           const pOvr=ovr(p);
-          const taxLine=LUXURY_TAX_THRESHOLD;
-          let renewSalary;
-          if(pOvr>=84) renewSalary=Math.floor(taxLine*rand(100,180)/1000);
-          else if(pOvr>=75) renewSalary=Math.floor(taxLine*rand(60,100)/1000);
-          else if(pOvr>=67) renewSalary=Math.floor(taxLine*rand(30,50)/1000);
-          else if(pOvr>=51) renewSalary=Math.floor(taxLine*rand(10,20)/1000);
-          else renewSalary=Math.max(1,Math.floor(taxLine*rand(5,10)/1000));
+          const renewSalary=Math.max(1,Math.floor(_calcSalary(pOvr,p._serviceTime||FA_SERVICE_TIME_THRESHOLD)));
           const renewYears=_calcContractYears(pOvr);
           // 재계약 조건: OVR 50+ AND 팀 예산 여유 AND 50~80% 확률 (높은 OVR일수록 높음)
           const renewProb=pOvr>=84?80:pOvr>=75?70:pOvr>=67?60:pOvr>=51?50:20;
@@ -163,8 +197,8 @@ function showStoveLeague(){
       </div>
     </div>`:'';
 
-  // 수익 정보 (시즌 1 첫 시작 시에는 수익 정산 없음)
-  const r=isFirstYear?null:calcSeasonRevenue(t,rank);
+  // 수익 정보 (시즌 1 첫 시작 시에는 수익 정산 없음) — 정산 시점 스냅샷 우선 (재계산 오차 방지)
+  const r=isFirstYear?null:(G._lastSeasonRev||calcSeasonRevenue(t,rank));
   const revenueHTML=isFirstYear?`
     <div class="card" style="background:var(--bg-card-hover);padding:12px;margin-bottom:12px;">
       <div style="font-size:0.72rem;color:var(--accent);margin-bottom:6px;">📋 팀 현황</div>
@@ -179,7 +213,8 @@ function showStoveLeague(){
       <div style="font-size:0.78rem;color:var(--text-dim);line-height:1.8;">
         인기도 +${won(r.popRev)} | 승리 +${won(r.winB)} | 시설 +${won(r.facB)} | 스타 +${won(r.starB)} | 순위 +${won(r.rankB)}
         ${r.stadBonus>0?' | 구장 +'+won(r.stadBonus):''}
-        ${r.luxTax>0?'<br><span style="color:#ef4444;">사치세 -'+won(r.luxTax)+'</span>':''}
+        ${r.luxTax>0?'<br><span style="color:#ef4444;">사치세 -'+won(r.luxTax)+' (3단계 누진)</span>':''}
+        ${r.solidarity>0?'<br><span style="color:#f59e0b;">연대 기금 -'+won(r.solidarity)+' (수입 7%, 하위 4팀 분배)</span>':''}
         <hr style="border-color:#333;margin:6px 0;">
         <span style="font-weight:700;color:var(--accent);">최종 수익: +${won(r.net)} → 보유 자금: ${won(t.budget)}</span>
       </div>
@@ -587,15 +622,9 @@ function _runAIFreeAgentBidding(){
 
   pool.forEach(fa=>{
     const pOvr=ovr(fa);
-    const taxLine=LUXURY_TAX_THRESHOLD;
 
-    // 시장 가치 산정 (사치세 비율 기반)
-    let marketSalary;
-    if(pOvr>=84) marketSalary=+(taxLine*rand(100,180)/1000).toFixed(1);
-    else if(pOvr>=75) marketSalary=+(taxLine*rand(60,100)/1000).toFixed(1);
-    else if(pOvr>=67) marketSalary=+(taxLine*rand(30,50)/1000).toFixed(1);
-    else if(pOvr>=51) marketSalary=+(taxLine*rand(10,20)/1000).toFixed(1);
-    else marketSalary=+(taxLine*rand(5,10)/1000).toFixed(1);
+    // 시장 가치 산정 (P2-4: 절대 연봉 스케일)
+    const marketSalary=Math.max(SALARY_MIN,+_calcSalary(pOvr,fa._serviceTime||FA_SERVICE_TIME_THRESHOLD).toFixed(1));
 
     const contractYears=_calcContractYears(pOvr);
     const transferFee=+(pOvr*0.3+rand(5,15)).toFixed(1);
@@ -664,12 +693,11 @@ function _runAIFreeAgentBidding(){
 function _showFAMarket(){
   G.marketPlayers=[];
   const faMult=G.myTeam.concept==='pitching'?1.05:G.myTeam.concept==='prospect'?1.10:1.0;
-  const taxLine=LUXURY_TAX_THRESHOLD;
 
   // 1. 계약 만료로 FA 풀에 남은 선수 (AI가 안 가져간 것)
   (G.faPool||[]).forEach(fa=>{
     fa.price=+(fa.price||((ovr(fa)*0.3+rand(5,15))*faMult)).toFixed(1);
-    if(!fa.salary) fa.salary=+(taxLine*rand(10,30)/1000).toFixed(1);
+    if(!fa.salary) fa.salary=Math.max(SALARY_MIN,+_calcSalary(ovr(fa),fa._serviceTime||FA_SERVICE_TIME_THRESHOLD).toFixed(1));
     if(!fa._contractYears) fa._contractYears=_calcContractYears(ovr(fa));
     fa.status='futures';
     if(!fa.ss)initSeasonStats(fa);

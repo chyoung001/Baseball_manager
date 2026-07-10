@@ -82,11 +82,10 @@ function _gradePotBase(grade){
 // 5단계: 인플레이션 방어형 KBO 계약 산정
 // ═══════════════════════════════════════════════════════
 
-// 사치세 라인 비율(%) 기반 연봉 계산
+// P2-4: 연봉 계산 — 설계 절대 레인지 (사치세 라인과 분리, KBO 기준)
+// 신인 0.3~1.5 / Arb 2~12 / FA 10~30 스케일. 소프트캡 200억과 균형.
 function _calcSalary(pOvr, serviceTime){
-  const taxLine = LUXURY_TAX_THRESHOLD;  // 현재 140억
-
-  // 프리FA (0~3년): OVR 무관 1억 미만 억제
+  // 프리FA (0~3년): OVR 무관 1억 미만 억제 (P2-3에서 드래프트 슬롯제로 대체 예정)
   if(serviceTime <= PRE_ARB_MAX_SERVICE){
     if(pOvr>=84) return +(rand(3,8)/10).toFixed(1);   // 0.3~0.8억
     if(pOvr>=75) return +(rand(3,6)/10).toFixed(1);   // 0.3~0.6억
@@ -94,20 +93,20 @@ function _calcSalary(pOvr, serviceTime){
     return SALARY_MIN;                                  // 0.3억
   }
 
-  // 연봉조정 (4~6년): 사치세 라인의 0.3% ~ 6%
+  // 연봉조정 (Arb): 성적 기반 베이스라인 (설계: 초기 2~5억, 후기 5~12억)
   if(serviceTime <= ARB_MAX_SERVICE){
-    if(pOvr>=84) return +((taxLine * rand(40,60)/1000).toFixed(1));  // 4%~6% → 5.6~8.4억
-    if(pOvr>=75) return +((taxLine * rand(20,40)/1000).toFixed(1));  // 2%~4% → 2.8~5.6억
-    if(pOvr>=67) return +((taxLine * rand(10,20)/1000).toFixed(1));  // 1%~2% → 1.4~2.8억
-    if(pOvr>=51) return +((taxLine * rand(5,10)/1000).toFixed(1));   // 0.5%~1% → 0.7~1.4억
-    return +((taxLine * rand(3,5)/1000).toFixed(1));                 // 0.3%~0.5% → 0.42~0.7억
+    if(pOvr>=84) return +((rand(50,80)/10).toFixed(1));  // 5~8억
+    if(pOvr>=75) return +((rand(30,50)/10).toFixed(1));  // 3~5억
+    if(pOvr>=67) return +((rand(20,30)/10).toFixed(1));  // 2~3억
+    if(pOvr>=51) return +((rand(10,20)/10).toFixed(1));  // 1~2억
+    return +((rand(5,10)/10).toFixed(1));                // 0.5~1억
   }
 
-  // FA 계약 (7년+): 사치세 라인의 % 시장가치
-  if(pOvr>=84) return +((taxLine * rand(100,180)/1000).toFixed(1));  // 10%~18% → 14~25.2억
-  if(pOvr>=75) return +((taxLine * rand(60,100)/1000).toFixed(1));   // 6%~10% → 8.4~14억
-  if(pOvr>=67) return +((taxLine * rand(30,50)/1000).toFixed(1));    // 3%~5% → 4.2~7억
-  if(pOvr>=51) return +((taxLine * rand(10,20)/1000).toFixed(1));    // 1%~2% → 1.4~2.8억
+  // FA 계약: 시장가치 (설계: 일반 10~20억, 대형 20~30억)
+  if(pOvr>=84) return +((rand(200,300)/10).toFixed(1)); // 20~30억
+  if(pOvr>=75) return +((rand(120,200)/10).toFixed(1)); // 12~20억
+  if(pOvr>=67) return +((rand(80,120)/10).toFixed(1));  // 8~12억
+  if(pOvr>=51) return +((rand(30,60)/10).toFixed(1));   // 3~6억
   return SALARY_MIN;
 }
 

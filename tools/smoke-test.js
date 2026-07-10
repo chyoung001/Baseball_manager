@@ -545,6 +545,52 @@ const subMig = vm.runInContext(`
 `, ctx);
 check('구세이브 백필: _naturalPos=현 포지션 + _subPos 롤', subMig.ok === true && subMig.natOk && subMig.subOk);
 
+// ── T12. P2-4 사치세 3단계 — 누진 · 연속 초과 체증 · 플로어 · 연봉 절대화 ──
+section('T12. P2-4 재정 — 3단계 사치세 · 체증 · 샐러리 플로어 · 연봉 스케일');
+const taxProbe = g(`(function(){
+  const mods=G.seasonModifiers; G.seasonModifiers={}; // 라인 200 고정
+  const mk=(pay,streak)=>({roster:[{salary:pay}],_luxOverStreak:streak||0});
+  const r={
+    line:getLuxuryTaxLine(), floor:getSalaryFloor(),
+    t210:getLuxuryTax(mk(210)),        // 10×20% = 2
+    t230:getLuxuryTax(mk(230)),        // 20×20%+10×40% = 8
+    t260:getLuxuryTax(mk(260)),        // 20×20%+30×40%+10×60% = 22
+    tUnder:getLuxuryTax(mk(190)),      // 0
+    tRepeat1:getLuxuryTax(mk(230,1)),  // +10%p → 20×30%+10×50% = 11
+    tRepeatCap:getLuxuryTax(mk(230,5)),// 상한 +20%p → 20×40%+10×60% = 14
+  };
+  G.seasonModifiers=mods;
+  return r;
+})()`);
+check(`소프트캡 200 / 플로어 50 (과도기, 설계 목표 80)`, taxProbe.line === 200 && taxProbe.floor === 50);
+check(`누진 과세 (210→${taxProbe.t210} / 230→${taxProbe.t230} / 260→${taxProbe.t260} / 190→${taxProbe.tUnder})`,
+  taxProbe.t210 === 2 && taxProbe.t230 === 8 && taxProbe.t260 === 22 && taxProbe.tUnder === 0);
+check(`연속 초과 체증 (+10%p→${taxProbe.tRepeat1} / 상한 +20%p→${taxProbe.tRepeatCap})`,
+  taxProbe.tRepeat1 === 11 && taxProbe.tRepeatCap === 14);
+const streakProbe = g(`(function(){
+  return G.teams.every(t=>typeof t._luxOverStreak==='number'||typeof t._luxUnderStreak==='number');
+})()`);
+check('정산 시 전 팀 연속 초과/미만 카운터 기록', streakProbe === true);
+const salProbe = g(`(function(){
+  let faOk=true,arbOk=true,preOk=true;
+  for(let i=0;i<40;i++){
+    const fa=_calcSalary(90,7); if(fa<20||fa>30)faOk=false;
+    const arb=_calcSalary(70,5); if(arb<2||arb>3)arbOk=false;
+    const pre=_calcSalary(90,2); if(pre>0.8)preOk=false;
+  }
+  return {faOk,arbOk,preOk};
+})()`);
+check('연봉 절대화: FA 90 OVR 20~30억 / Arb 70 OVR 2~3억 / 프리Arb ≤0.8억', salProbe.faOk && salProbe.arbOk && salProbe.preOk);
+const payProbe = g(`(function(){
+  const pays=G.teams.map(t=>getPayroll(t)).sort((a,b)=>a-b);
+  const avg=pays.reduce((s,x)=>s+x,0)/pays.length;
+  const underFloor=pays.filter(x=>x<getSalaryFloor()).length;
+  return {min:Math.round(pays[0]),max:Math.round(pays[pays.length-1]),avg:Math.round(avg),underFloor,finite:pays.every(Number.isFinite)};
+})()`);
+check(`리그 페이롤 유한값 (min ${payProbe.min} / avg ${payProbe.avg} / max ${payProbe.max} / 플로어 미달 ${payProbe.underFloor}팀)`, payProbe.finite);
+check(`페이롤 평균 온건 범위 (40~220억): ${payProbe.avg}`, payProbe.avg >= 40 && payProbe.avg <= 220);
+check(`플로어 미달 팀 소수 (≤5팀): ${payProbe.underFloor}`, payProbe.underFloor <= 5);
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
