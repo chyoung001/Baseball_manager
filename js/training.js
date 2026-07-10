@@ -65,7 +65,7 @@ function doTraining(idx){
       const base=rand(1,3)+devBonus;
       const ethicMod=0.5+((p._workEthic||10)/20);
       const gain=Math.max(0,Math.round(base*mult*ethicMod));
-      p[t.stat]=clamp(p[t.stat]+gain,20,80);
+      p[t.stat]=clamp(p[t.stat]+gain,STAT_MIN,STAT_MAX);
       affected++;
     }
   });

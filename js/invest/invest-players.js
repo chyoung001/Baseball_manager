@@ -94,8 +94,8 @@ function investSendOverseas(rosterIdx) {
   // 즉시 복귀: POT 확장 + 스탯 부스트 (비시즌이므로 대기 없음)
   p._potential = Math.min(20, (p._potential||10) + rand(1,2));
   const boost = rand(OVERSEAS_BOOST_MIN, OVERSEAS_BOOST_MAX);
-  if(p.isPitcher){const s=pick(['stuff','control','velocity','movement']);p[s]=clamp((p[s]||0)+boost,20,80);}
-  else{const s=pick(['contact','power','eye','speed']);p[s]=clamp((p[s]||0)+boost,20,80);}
+  if(p.isPitcher){const s=pick(['stuff','control','velocity','movement']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
+  else{const s=pick(['contact','power','eye','speed']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
 
   // 프로의식 연동: _workEthic 높으면 추가 보너스 스탯
   const we=p._workEthic||10;
@@ -103,7 +103,7 @@ function investSendOverseas(rosterIdx) {
     const extraBoost=rand(1,2);
     const extraStats=p.isPitcher?['stuff','control','movement']:['contact','power','eye'];
     const es=pick(extraStats);
-    p[es]=clamp((p[es]||0)+extraBoost,20,80);
+    p[es]=clamp((p[es]||0)+extraBoost,STAT_MIN,STAT_MAX);
     showToast(`✈️ ${p.name} 해외 연수 완료! 능력치 +${boost}, 프로의식 보너스 ${es} +${extraBoost}!`);
   }else{
     showToast(`✈️ ${p.name} 해외 연수 완료! 능력치 +${boost}, 잠재력↑`);

@@ -758,8 +758,8 @@ function _startNextSeason(){
     t.roster.forEach(p=>{
       if(p.role==='overseas'){
         const boost=rand(OVERSEAS_BOOST_MIN,OVERSEAS_BOOST_MAX);
-        if(p.isPitcher){const s=pick(['stuff','control','velocity','movement']);p[s]=clamp((p[s]||0)+boost,20,80);}
-        else{const s=pick(['contact','power','eye','speed']);p[s]=clamp((p[s]||0)+boost,20,80);}
+        if(p.isPitcher){const s=pick(['stuff','control','velocity','movement']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
+        else{const s=pick(['contact','power','eye','speed']);p[s]=clamp((p[s]||0)+boost,STAT_MIN,STAT_MAX);}
         p.role=p.prevRole||(p.isPitcher?'bullpen':'bench');p.overseasUntil=null;p.prevRole=null;
       }
     });

@@ -152,7 +152,7 @@ function _renderNegotiationUI(hintSalary,hintYears){
         <div style="background:#111827;border:1px solid #3b82f633;border-radius:10px;padding:12px;text-align:center;">
           <div style="font-size:0.62rem;color:#3b82f6;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.5px;">나의 제안</div>
           <div style="display:flex;gap:6px;justify-content:center;align-items:center;">
-            <input type="number" id="negoSalary" value="${hintSalary}" min="0.3" max="50" step="0.5"
+            <input type="number" id="negoSalary" value="${hintSalary}" min="${SALARY_MIN}" max="50" step="0.5"
               style="width:70px;padding:4px 6px;background:#0a0e1a;border:1px solid #3b82f644;border-radius:6px;color:#3b82f6;font-size:1.1rem;font-weight:800;font-family:'JetBrains Mono',monospace;text-align:center;"
               oninput="_updateNegoTotal()">
             <span style="color:var(--text-dim);font-size:0.72rem;">억</span>
@@ -217,7 +217,7 @@ function _submitNegotiation(){
   const sal=parseFloat($('negoSalary').value)||0;
   const yrs=parseInt($('negoYears').value)||1;
 
-  if(sal<0.3){$('negoResult').innerHTML='<div style="color:#ef4444;font-size:0.72rem;padding:8px;background:#ef444411;border-radius:6px;">최소 연봉은 0.3억입니다.</div>';return;}
+  if(sal<SALARY_MIN){$('negoResult').innerHTML=`<div style="color:#ef4444;font-size:0.72rem;padding:8px;background:#ef444411;border-radius:6px;">최소 연봉은 ${SALARY_MIN}억입니다.</div>`;return;}
 
   const result=evaluateOffer(s.p,sal,yrs);
   s.attemptsLeft--;
