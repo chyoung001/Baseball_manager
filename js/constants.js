@@ -182,11 +182,14 @@ const DRAFT_ROUNDS=6;             // 드래프트 라운드 수 (6라운드 × 8
 const DRAFT_POOL_SIZE=32;         // 드래프트 풀 크기 (4라운드 × 8팀)
 
 // ===================== FA & SALARY CONSTANTS (KBO-style, 단위: 억원) =====================
-const FA_SERVICE_TIME_THRESHOLD=6;   // FA 자격 서비스 타임 (KBO 기준)
-const PRE_ARB_MAX_SERVICE=3;         // 프리FA: 0~3시즌 (최저 연봉 고정)
-const ARB_MIN_SERVICE=4;             // 연봉조정 시작: 4시즌
-const ARB_MAX_SERVICE=6;             // 연봉조정 종료: 6시즌
-const PRE_ARB_SALARY=0.3;           // 프리FA 최저 연봉 (0.3억 = 3000만원)
+// P2-3 설계 정렬: 신인 계약 3년(서비스 0~2) → Arb 서비스 3~5 → FA 서비스 6+
+const FA_SERVICE_TIME_THRESHOLD=6;   // FA 자격 서비스 타임
+const PRE_ARB_MAX_SERVICE=2;         // 프리Arb: 서비스 0~2 (신인 계약 기간)
+const ARB_MIN_SERVICE=3;             // 연봉조정 시작: 3시즌 (슈퍼2는 2시즌+상위 22%)
+const ARB_MAX_SERVICE=5;             // 연봉조정 종료: 5시즌
+const SUPER2_TOP_RATIO=0.22;         // 슈퍼2: 2년차 서비스 상위 22%에 Arb 조기 자격
+const SERVICE_FULL_SERIES=15;        // 1풀 시즌 인정 최소 1군 등록 시리즈 (21시리즈 중)
+const PRE_ARB_SALARY=0.3;           // 프리Arb 최저 연봉 (0.3억 = 3000만원)
 const SALARY_MIN=0.3;               // 리그 최저 연봉 (3000만원)
 const SALARY_ADJUSTMENT_FACTOR=0.3;  // WAR 기반 연봉 조정 계수
 

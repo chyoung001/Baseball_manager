@@ -71,8 +71,8 @@ function _renderNegotiationUI(hintSalary,hintYears){
   const s=_negoState;if(!s)return;
   const p=s.p,o=ovr(p);
   const st=p._serviceTime||0;
-  const phase=st<=PRE_ARB_MAX_SERVICE?'프리아브':st<=ARB_MAX_SERVICE?'연봉조정':'FA자격';
-  const phColor=st<=PRE_ARB_MAX_SERVICE?'#67e8f9':st<=ARB_MAX_SERVICE?'#f59e0b':'#10b981';
+  const phase=getPhaseLabel(p);
+  const phColor=getPhaseColor(p);
   const contextLabel=s.context==='renewal'?'재계약':s.context==='fa'?'FA 영입':s.context==='salary'?'연봉 협상':'계약';
   const war=approxWAR(p);
 

@@ -103,8 +103,9 @@ function renderMarket(){
           const newPR=payroll+(p.salary||0);
           const blocked=overHard||newPR>getHardCap();
           const st=p._serviceTime||0;
-          const phase=st<=PRE_ARB_MAX_SERVICE?'Pre':st<=ARB_MAX_SERVICE?'Arb':'FA';
-          const phColor=phase==='Pre'?'#67e8f9':phase==='Arb'?'#f59e0b':'#10b981';
+          const ph=getContractPhase(p);
+          const phase=ph==='pre'?'Pre':ph==='arb'?'Arb':'FA';
+          const phColor=getPhaseColor(p);
           return `<tr>
             <td><span class="pos-badge${p.isPitcher?' pitcher':''}" style="font-size:0.5rem;padding:1px 3px;">${p.pos}</span></td>
             <td style="text-align:left;font-size:0.7rem;">${p.name}</td>

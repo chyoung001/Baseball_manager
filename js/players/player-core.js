@@ -84,17 +84,19 @@ function _gradePotBase(grade){
 
 // P2-4: 연봉 계산 — 설계 절대 레인지 (사치세 라인과 분리, KBO 기준)
 // 신인 0.3~1.5 / Arb 2~12 / FA 10~30 스케일. 소프트캡 200억과 균형.
-function _calcSalary(pOvr, serviceTime){
-  // 프리FA (0~3년): OVR 무관 1억 미만 억제 (P2-3에서 드래프트 슬롯제로 대체 예정)
-  if(serviceTime <= PRE_ARB_MAX_SERVICE){
-    if(pOvr>=84) return +(rand(3,8)/10).toFixed(1);   // 0.3~0.8억
-    if(pOvr>=75) return +(rand(3,6)/10).toFixed(1);   // 0.3~0.6억
-    if(pOvr>=67) return +(rand(3,4)/10).toFixed(1);   // 0.3~0.4억
-    return SALARY_MIN;                                  // 0.3억
+// P2-3: super2 → 서비스 2년차부터 Arb 스케일 적용
+function _calcSalary(pOvr, serviceTime, super2){
+  // FA 계약: 시장가치 (설계: 일반 10~20억, 대형 20~30억)
+  if(serviceTime >= FA_SERVICE_TIME_THRESHOLD){
+    if(pOvr>=84) return +((rand(200,300)/10).toFixed(1)); // 20~30억
+    if(pOvr>=75) return +((rand(120,200)/10).toFixed(1)); // 12~20억
+    if(pOvr>=67) return +((rand(80,120)/10).toFixed(1));  // 8~12억
+    if(pOvr>=51) return +((rand(30,60)/10).toFixed(1));   // 3~6억
+    return SALARY_MIN;
   }
 
   // 연봉조정 (Arb): 성적 기반 베이스라인 (설계: 초기 2~5억, 후기 5~12억)
-  if(serviceTime <= ARB_MAX_SERVICE){
+  if(serviceTime >= ARB_MIN_SERVICE || (super2 && serviceTime >= 2)){
     if(pOvr>=84) return +((rand(50,80)/10).toFixed(1));  // 5~8억
     if(pOvr>=75) return +((rand(30,50)/10).toFixed(1));  // 3~5억
     if(pOvr>=67) return +((rand(20,30)/10).toFixed(1));  // 2~3억
@@ -102,12 +104,26 @@ function _calcSalary(pOvr, serviceTime){
     return +((rand(5,10)/10).toFixed(1));                // 0.5~1억
   }
 
-  // FA 계약: 시장가치 (설계: 일반 10~20억, 대형 20~30억)
-  if(pOvr>=84) return +((rand(200,300)/10).toFixed(1)); // 20~30억
-  if(pOvr>=75) return +((rand(120,200)/10).toFixed(1)); // 12~20억
-  if(pOvr>=67) return +((rand(80,120)/10).toFixed(1));  // 8~12억
-  if(pOvr>=51) return +((rand(30,60)/10).toFixed(1));   // 3~6억
-  return SALARY_MIN;
+  // 프리Arb (서비스 0~2): OVR 무관 1억 미만 억제 (드래프트 지명자는 슬롯 연봉)
+  if(pOvr>=84) return +(rand(3,8)/10).toFixed(1);   // 0.3~0.8억
+  if(pOvr>=75) return +(rand(3,6)/10).toFixed(1);   // 0.3~0.6억
+  if(pOvr>=67) return +(rand(3,4)/10).toFixed(1);   // 0.3~0.4억
+  return SALARY_MIN;                                  // 0.3억
+}
+
+// ── P2-3 신인 슬롯 연봉 (드래프트 전체 순번 기준) + 3년 고정 계약 ──
+function _rookieSlotSalary(overallPick){
+  if(overallPick<=1) return 1.5;                                        // 전체 1순위
+  if(overallPick<=8) return +(1.2-(overallPick-2)*(0.4/6)).toFixed(1);  // 1R: 1.2~0.8
+  if(overallPick<=16) return +(0.7-(overallPick-9)*(0.2/7)).toFixed(1); // 2R: 0.7~0.5
+  return Math.max(0.3,+(0.4-(overallPick-17)*0.005).toFixed(1));        // 3R~: 0.4~0.3
+}
+function applyRookieContract(p, round, pickInRound){
+  const overall=(round-1)*8+pickInRound;
+  p.salary=_rookieSlotSalary(overall);
+  p._contractYears=3;      // 신인 계약 3년 고정 (인상 없음, 옵션 없음)
+  p._serviceTime=0;
+  p._svcGames=0;
 }
 
 // FA 계약 기간

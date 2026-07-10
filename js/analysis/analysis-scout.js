@@ -71,8 +71,8 @@ function renderAnalysisScout() {
             const o = ovr(p);
             const av = getAnalyticsHiddenInfo(p, aLv);  // 분석팀 레벨별 열람 가능 히든스탯
             const st = p._serviceTime || 0;
-            const phase = st <= PRE_ARB_MAX_SERVICE ? '프리아브' : st <= ARB_MAX_SERVICE ? '연봉조정' : 'FA자격';
-            const phColor = st <= PRE_ARB_MAX_SERVICE ? '#67e8f9' : st <= ARB_MAX_SERVICE ? '#f59e0b' : '#10b981';
+            const phase = getPhaseLabel(p);
+            const phColor = getPhaseColor(p);
             return `<tr>
               <td style="text-align:left;"><span class="player-name" style="font-size:0.72rem;">${p.name}</span><span class="scout-btn" onclick="showScoutReport(${G.myTeam.roster.indexOf(p)});event.stopPropagation();" title="선수 분석">📋</span></td>
               <td><span class="pos-badge${p.isPitcher ? ' pitcher' : ''}" style="font-size:0.55rem;padding:1px 4px;">${ALL_POS_NAMES[p.pos] || p.pos}</span></td>

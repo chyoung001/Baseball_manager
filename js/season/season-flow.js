@@ -96,9 +96,17 @@ function showStoveLeague(){
     G._aiRenewalLog=[];
     G.teams.forEach(team=>{
       team.roster.forEach(p=>{
-        if((p.status||'active')==='active'){
-          p._serviceTime=(p._serviceTime||0)+1;
+        // P2-3 서비스타임 시리즈 비례 적립: 1군 등록 15시리즈+ = 1풀 시즌, 미만 비례
+        // 신인왕 수상 시 자동 1풀 시즌 (크리스 브라이언트 룰)
+        let svcGain;
+        if(p._svcGames===undefined){
+          svcGain=(p.status||'active')==='active'?1:0; // 구세이브 과도기: 등록 기록 없으면 기존 규칙
+        }else{
+          svcGain=_serviceGainFromGames(p._svcGames);
         }
+        if(p._rookieFullCredit){svcGain=Math.max(svcGain,1);p._rookieFullCredit=false;}
+        if(svcGain>0)p._serviceTime=+((p._serviceTime||0)+svcGain).toFixed(2);
+        p._svcGames=0;
         p._teamTenure=(p._teamTenure||0)+1;
         p._contractYears=(p._contractYears||1)-1;
       });
@@ -141,6 +149,15 @@ function showStoveLeague(){
       // AI 팀은 FA 방출 선수만 로스터에서 제거, 유저 팀은 재계약 결정 후 제거
       if(team!==G.myTeam) team.roster=team.roster.filter(p=>!released.includes(p) && !(p.isForeign && (p._contractYears||0)<=0));
     });
+
+    // P2-3 슈퍼2 선정: 서비스 2년차(2.0~2.99) 상위 22% → Arb 조기 자격 (Arb 4년, FA 시기 동일)
+    const _s2Pool=[];
+    G.teams.forEach(team=>team.roster.forEach(p=>{
+      const st=p._serviceTime||0;
+      if(st>=2&&st<ARB_MIN_SERVICE&&!p._super2)_s2Pool.push(p);
+    }));
+    _s2Pool.sort((a,b)=>(b._serviceTime||0)-(a._serviceTime||0));
+    _s2Pool.slice(0,Math.ceil(_s2Pool.length*SUPER2_TOP_RATIO)).forEach(p=>{p._super2=true;});
 
     // AI 로스터 최적화 (승격/강등/방출/캡 정리)
     G.teams.filter(t=>t!==G.myTeam).forEach(t=>_aiOptimizeRoster(t));
@@ -356,18 +373,27 @@ function _calcNewSalary(p){
   const war=approxWAR(p);
   const st=p._serviceTime||0;
   const oldSalary=p.salary||0;
+  const phase=getContractPhase(p);
   let newSalary;
 
-  if(st<=PRE_ARB_MAX_SERVICE){
-    // 프리아브: 최저 연봉 고정, 팀 완전 통제
-    newSalary=PRE_ARB_SALARY;
-  }else if(st<=ARB_MAX_SERVICE){
-    // 연봉조정 (Arbitration): OVR/WAR 기반 자동 인상
-    if(pOvr>=75)newSalary=+(oldSalary*1.4+rand(1,3)*0.1).toFixed(1);
-    else if(pOvr>=59)newSalary=+(oldSalary*1.2+rand(0,2)*0.1).toFixed(1);
-    else if(pOvr>=37)newSalary=+(oldSalary*1.1).toFixed(1);
-    else newSalary=Math.max(SALARY_MIN,+(oldSalary*0.9).toFixed(1));
-    if(war>=3)newSalary=Math.round(newSalary*1.15);
+  if(phase==='pre'){
+    // 프리아브: 신인 계약 연봉 유지 (슬롯 연봉 3년 고정, 인상 없음)
+    newSalary=Math.max(PRE_ARB_SALARY,oldSalary);
+  }else if(phase==='arb'){
+    // P2-3 연봉조정 (Arbitration): 연차별 설계 인상률
+    // Arb1 = 성적 기반 베이스라인 / Arb2 = 전년 120~180% / Arb3+ = 전년 110~150%
+    const fy=Math.floor(st);
+    const arbStart=(p._super2&&fy<ARB_MIN_SERVICE)?2:ARB_MIN_SERVICE;
+    const arbYear=Math.max(1,fy-arbStart+1);
+    if(arbYear<=1||oldSalary<=PRE_ARB_SALARY*1.5){
+      newSalary=_calcSalary(pOvr,ARB_MIN_SERVICE,p._super2); // 베이스라인 (전년 연봉 무관)
+    }else if(arbYear===2){
+      newSalary=+(oldSalary*(rand(120,180)/100)).toFixed(1);
+    }else{
+      newSalary=+(oldSalary*(rand(110,150)/100)).toFixed(1);
+    }
+    if(war>=3)newSalary=+(newSalary*1.15).toFixed(1);
+    newSalary=Math.max(SALARY_MIN,+newSalary);
   }else{
     // FA 자격자: 자유 시장 가치 기반
     if(pOvr>=75)newSalary=+(oldSalary*1.3+rand(5,20)*0.1).toFixed(1);
@@ -384,9 +410,9 @@ function _calcNewSalary(p){
 }
 
 function _getSalaryPhase(p){
-  const st=p._serviceTime||0;
-  if(st<=PRE_ARB_MAX_SERVICE)return'프리아브';
-  if(st<=ARB_MAX_SERVICE)return'연봉조정';
+  const ph=getContractPhase(p);
+  if(ph==='pre')return'프리아브';
+  if(ph==='arb')return(p._super2&&(p._serviceTime||0)<ARB_MIN_SERVICE)?'연봉조정(슈퍼2)':'연봉조정';
   return'FA자격';
 }
 

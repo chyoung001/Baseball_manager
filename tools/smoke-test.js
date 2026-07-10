@@ -591,6 +591,35 @@ check(`리그 페이롤 유한값 (min ${payProbe.min} / avg ${payProbe.avg} / m
 check(`페이롤 평균 온건 범위 (40~220억): ${payProbe.avg}`, payProbe.avg >= 40 && payProbe.avg <= 220);
 check(`플로어 미달 팀 소수 (≤5팀): ${payProbe.underFloor}`, payProbe.underFloor <= 5);
 
+// ── T13. P2-3 서비스타임 — 경계 · 슈퍼2 · 시리즈 비례 적립 · Arb 인상률 · 신인 슬롯 ──
+section('T13. P2-3 서비스타임 — 경계·슈퍼2·비례 적립·Arb 인상률·신인 슬롯');
+const svcProbe = g(`(function(){
+  const phase=st=>getContractPhase({_serviceTime:st});
+  return {
+    p2:phase(2),p3:phase(3),p5:phase(5),p6:phase(6),
+    s2:getContractPhase({_serviceTime:2,_super2:true}),
+    g63:_serviceGainFromGames(63), g45:_serviceGainFromGames(45),
+    g30:_serviceGainFromGames(30), g2:_serviceGainFromGames(2),
+    slot1:_rookieSlotSalary(1), slot2:_rookieSlotSalary(2), slot8:_rookieSlotSalary(8),
+    slot9:_rookieSlotSalary(9), slot16:_rookieSlotSalary(16), slot48:_rookieSlotSalary(48),
+  };
+})()`);
+check(`계약 단계 경계 (서비스 2=pre / 3=arb / 5=arb / 6=fa): ${svcProbe.p2}/${svcProbe.p3}/${svcProbe.p5}/${svcProbe.p6}`,
+  svcProbe.p2 === 'pre' && svcProbe.p3 === 'arb' && svcProbe.p5 === 'arb' && svcProbe.p6 === 'fa');
+check('슈퍼2: 서비스 2년차 조기 Arb 자격 (FA 시기 동일)', svcProbe.s2 === 'arb');
+check(`시리즈 비례 적립 (63경기→${svcProbe.g63} / 45→${svcProbe.g45} / 30→${svcProbe.g30} / 2→${svcProbe.g2})`,
+  svcProbe.g63 === 1 && svcProbe.g45 === 1 && svcProbe.g30 === 0.48 && svcProbe.g2 === 0);
+check(`신인 슬롯 연봉 (전체1→${svcProbe.slot1} / 8→${svcProbe.slot8} / 9→${svcProbe.slot9} / 16→${svcProbe.slot16} / 48→${svcProbe.slot48})`,
+  svcProbe.slot1 === 1.5 && svcProbe.slot2 === 1.2 && svcProbe.slot8 === 0.8 && svcProbe.slot9 === 0.7 && svcProbe.slot16 === 0.5 && svcProbe.slot48 === 0.3);
+const arbProbe = g(`(function(){
+  const mk=(st,sal)=>{const p={_serviceTime:st,salary:sal,isPitcher:false,pos:'1B',contact:60,power:60,eye:60,speed:60,fielding:60,arm:60};initSeasonStats(p);return p;};
+  const a2=[],a3=[];
+  for(let i=0;i<30;i++){a2.push(_calcNewSalary(mk(4,3)));a3.push(_calcNewSalary(mk(5,3)));}
+  return {a2min:Math.min(...a2),a2max:Math.max(...a2),a3min:Math.min(...a3),a3max:Math.max(...a3)};
+})()`);
+check(`Arb 2년차 인상률 120~180% (3억 → ${arbProbe.a2min}~${arbProbe.a2max})`, arbProbe.a2min >= 3.5 && arbProbe.a2max <= 5.8);
+check(`Arb 3년차 인상률 110~150% (3억 → ${arbProbe.a3min}~${arbProbe.a3max})`, arbProbe.a3min >= 3.2 && arbProbe.a3max <= 4.8);
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
