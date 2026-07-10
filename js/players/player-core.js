@@ -92,7 +92,7 @@ function _calcSalary(pOvr, serviceTime, super2){
     if(pOvr>=75) return +((rand(120,200)/10).toFixed(1)); // 12~20억
     if(pOvr>=67) return +((rand(80,120)/10).toFixed(1));  // 8~12억
     if(pOvr>=51) return +((rand(30,60)/10).toFixed(1));   // 3~6억
-    return SALARY_MIN;
+    return +((rand(5,15)/10).toFixed(1)); // 0.5~1.5억 — 저OVR 베테랑 (재계약 경로와 하한 정합, 플로어 쿠션)
   }
 
   // 연봉조정 (Arb): 성적 기반 베이스라인 (설계: 초기 2~5억, 후기 5~12억)

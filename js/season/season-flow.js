@@ -122,7 +122,7 @@ function showStoveLeague(){
         } else {
           // AI 팀: 소속 구단 우선 재계약 시도 (P2-4 절대 스케일 + 히든 보정 — 유저 협상과 동일 기준)
           const pOvr=ovr(p);
-          const renewSalary=Math.max(1,+(_calcSalary(pOvr,p._serviceTime||FA_SERVICE_TIME_THRESHOLD)*_contractHiddenMod(p,'renewal')).toFixed(1));
+          const renewSalary=Math.max(SALARY_MIN,+(_calcSalary(pOvr,p._serviceTime||FA_SERVICE_TIME_THRESHOLD)*_contractHiddenMod(p,'renewal')).toFixed(1));
           const renewYears=_calcContractYears(pOvr);
           // 재계약 조건: OVR 50+ AND 팀 예산 여유 AND 50~80% 확률 (높은 OVR일수록 높음)
           const renewProb=pOvr>=84?80:pOvr>=75?70:pOvr>=67?60:pOvr>=51?50:20;
