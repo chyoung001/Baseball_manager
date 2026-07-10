@@ -81,7 +81,7 @@ function showAwards(){
       <div style="margin-top:14px;font-size:0.72rem;color:var(--text-dim);margin-bottom:6px;">👋 은퇴 선수</div>
       ${retirees.map(r=>'<div style="font-size:0.75rem;padding:3px 0;">'+r.emoji+' '+r.name+' (OVR '+r.ovr+', '+r.seasonsPlayed+'시즌)</div>').join('')}
       `:''}
-      <button class="btn btn-primary" onclick="$('seasonModal').classList.remove('active');G.phase='stove_league';advancePhase();" style="width:100%;margin-top:16px;">▶ 스토브리그로</button>
+      <button class="btn btn-primary" onclick="$('seasonModal').classList.remove('active');G.phase='gm_meeting';advancePhase();" style="width:100%;margin-top:16px;">▶ GM 회의로</button>
     </div>`;
   $('seasonModal').classList.add('active');
 }

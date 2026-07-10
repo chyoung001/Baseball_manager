@@ -252,6 +252,49 @@ check('다음 시리즈 상대 변경', seriesProbe.s1 !== seriesProbe.s0[0]);
 check('getCurrentSeries: g0→0, g2→0, g3→1', seriesProbe.cs.g0 === 0 && seriesProbe.cs.g2 === 0 && seriesProbe.cs.g3 === 1, JSON.stringify(seriesProbe.cs));
 check('시리즈 내 홈/원정 고정', seriesProbe.homeConsistent);
 
+// ── T3c. 포스트시즌 4팀 균형 토너먼트 ───────────────────────
+section('T3c. 포스트시즌 4팀 균형 토너먼트');
+const pssProbe = vm.runInContext(`
+  (function(){
+    const sorted=[...G.teams].sort((a,b)=>(b.wins/(b.wins+b.losses||1))-(a.wins/(a.wins+a.losses||1)));
+    const top4=sorted.slice(0,POSTSEASON_TEAMS);
+    const s=_simSeries(top4[0],top4[1],SEMI_WINS_NEEDED);
+    const seriesOk=(s.a===SEMI_WINS_NEEDED||s.b===SEMI_WINS_NEEDED)&&Math.min(s.a,s.b)<SEMI_WINS_NEEDED&&(s.winner===top4[0]||s.winner===top4[1]);
+    G.postseasonBracket={teams:[],round:'semifinal',results:[]};
+    _simPostseasonAI(top4);
+    const r=G.postseasonBracket.results;
+    const champName=(r.find(x=>x.champion)||{}).winner;
+    const champInTop4=top4.some(t=>t.name===champName);
+    return {teams:POSTSEASON_TEAMS, seriesOk, rounds:r.length, champName, champInTop4};
+  })()
+`, ctx);
+check('진출팀 4팀 (POSTSEASON_TEAMS)', pssProbe.teams === 4);
+check('best-of-5 시리즈 종료 조건 정상 (한쪽만 3승)', pssProbe.seriesOk);
+check('브래킷 3라운드 + 우승팀 존재', pssProbe.rounds === 3 && !!pssProbe.champName);
+check('우승팀이 top4 소속', pssProbe.champInTop4, pssProbe.champName);
+
+// ── T3d. GM 회의 (8페이즈, SeasonModifiers) ──────────────────
+section('T3d. GM 회의 — 8페이즈 & 룰 투표');
+const gmProbe = vm.runInContext(`
+  (function(){
+    const picks=_pickGMProposals();
+    const distinct=picks.length===2&&picks[0].id!==picks[1].id;
+    const luxProp=GM_PROPOSALS.find(p=>p.effect.key==='luxuryLineBonus'&&p.effect.value>0);
+    const before=getLuxuryTaxLine();
+    applyGMModifiers([luxProp]);
+    const applied=getLuxuryTaxLine()===before+luxProp.effect.value;
+    const r=_resolveGMProposal(luxProp,true);
+    const tallyOk=r.yes>=1&&r.yes<=8&&r.no===8-r.yes&&(r.passed===(r.yes>=5));
+    const savePhase=G.phase;G.phase='gm_meeting';const pi=getPhaseInfo().id;G.phase=savePhase;
+    applyGMModifiers([]);
+    return {distinct, applied, tallyOk, phaseOk:pi==='gm_meeting'};
+  })()
+`, ctx);
+check('안건 2개 무중복 선정', gmProbe.distinct);
+check('가결 안건 effect가 seasonModifiers로 적용(사치세 라인)', gmProbe.applied);
+check('개표 집계(유저1+AI7=8, 과반5) 정상', gmProbe.tallyOk);
+check('getPhaseInfo가 gm_meeting 인식 (8페이즈)', gmProbe.phaseOk);
+
 // ── T4. H2 회귀: 스토브리그 정산 멱등성 ─────────────────────
 section('T4. H2 회귀 — showStoveLeague 재진입 멱등성');
 vm.runInContext(`G.myTeam.budget=Math.max(G.myTeam.budget,200);`, ctx); // 파산 게임오버 회피
@@ -274,13 +317,15 @@ check('2회차 재진입 시 페이롤 불변 (멱등)', p2 === p3, `${p2 / 100}
 
 // ── T6. 세이브 라운드트립 ───────────────────────────────────
 section('T6. 세이브 라운드트립');
+vm.runInContext("G.seasonModifiers={luxuryLineBonus:20};", ctx); // GM 회의 룰 지속 테스트용
 const beforeSave = { season: g('G.season'), gameNum: g('G.gameNum'), stove: g('G._stoveSettledSeason'), wins: g('G.myTeam.wins'), rosterN: g('G.myTeam.roster.length') };
 vm.runInContext('saveGame()', ctx);
-vm.runInContext('G.teams=[];G.myTeam=null;G._stoveSettledSeason=0;', ctx); // 상태 파괴 후 복원
+vm.runInContext('G.teams=[];G.myTeam=null;G._stoveSettledSeason=0;G.seasonModifiers={};', ctx); // 상태 파괴 후 복원
 const loaded = g('loadGame()');
 check('loadGame() 성공', loaded === true);
 check('season/gameNum 복원', g('G.season') === beforeSave.season && g('G.gameNum') === beforeSave.gameNum);
 check('_stoveSettledSeason 지속 (H2 세이브 회귀)', g('G._stoveSettledSeason') === beforeSave.stove, `${g('G._stoveSettledSeason')} vs ${beforeSave.stove}`);
+check('seasonModifiers 지속 (GM 회의 룰 세이브)', g('G.seasonModifiers && G.seasonModifiers.luxuryLineBonus') === 20);
 check('내 팀 승수 복원', g('G.myTeam.wins') === beforeSave.wins);
 check('로스터 인원 복원', g('G.myTeam.roster.length') === beforeSave.rosterN, `${g('G.myTeam.roster.length')} vs ${beforeSave.rosterN}`);
 

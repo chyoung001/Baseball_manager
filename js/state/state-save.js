@@ -53,6 +53,7 @@ function saveGame(){
       previousSeasonStandings:G.previousSeasonStandings,
       draftPool:(G.draftPool||[]).map(_compressPlayer),
       postseasonBracket:G.postseasonBracket,
+      seasonModifiers:G.seasonModifiers||{},
       allStars:G.allStars,
       awards:G.awards,
       teams:G.teams.map(_compressTeam),
@@ -93,6 +94,7 @@ function _restoreFromData(d){
   G._stoveSettledSeason=d._stoveSettledSeason||0;
   G.previousSeasonStandings=d.previousSeasonStandings||[];
   G.postseasonBracket=d.postseasonBracket||null;
+  G.seasonModifiers=d.seasonModifiers||{};
   G.allStars=d.allStars||[];
   G.awards=d.awards||[];
   // v2+ 압축 포맷 vs v1 원본 포맷 호환
@@ -164,6 +166,7 @@ function exportGame(){
       previousSeasonStandings:G.previousSeasonStandings,
       draftPool:(G.draftPool||[]).map(_compressPlayer),
       postseasonBracket:G.postseasonBracket,
+      seasonModifiers:G.seasonModifiers||{},
       allStars:G.allStars,
       awards:G.awards,
       teams:G.teams.map(_compressTeam),

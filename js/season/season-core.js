@@ -2,7 +2,7 @@
 // ── Phase Info ───────────────────────────────────────────────────
 function getPhaseInfo(){
   const p=SEASON_PHASES;
-  const phases=[p.PRESEASON,p.FIRST_HALF,p.ALLSTAR,p.SECOND_HALF,p.POSTSEASON,p.AWARDS,p.STOVE_LEAGUE];
+  const phases=[p.PRESEASON,p.FIRST_HALF,p.ALLSTAR,p.SECOND_HALF,p.POSTSEASON,p.AWARDS,p.GM_MEETING,p.STOVE_LEAGUE];
   return phases.find(ph=>ph.id===G.phase)||p.PRESEASON;
 }
 
@@ -15,6 +15,7 @@ function advancePhase(){
     case 'second_half':  break;
     case 'postseason':   showPostseason();break;
     case 'awards':       showAwards();break;
+    case 'gm_meeting':   showGMMeeting();break;
     case 'stove_league': showStoveLeague();break;
   }
   updateHeader();saveGame();

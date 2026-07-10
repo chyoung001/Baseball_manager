@@ -1,7 +1,8 @@
 // ===================== STATE CORE (Global State + Roster Getters) =====================
 // ===================== GAME STATE =====================
 let G={season:1,gameNum:0,totalGames:TOTAL_REGULAR,teamIdx:0,myTeam:null,teams:[],marketPlayers:[],trainingCooldown:0,matchInProgress:false,matchSpeed:500,currentMarketTab:'bat',fanEventUsedThisGame:false,testMode:false,
-  // Season phase system (7-phase)
+  seasonModifiers:{},           // GM 회의로 통과된 이번 시즌 룰 (SeasonModifiers)
+  // Season phase system (8-phase: preseason·first_half·allstar·second_half·postseason·awards·gm_meeting·stove_league)
   phase:'preseason',            // current phase id
   draftPool:[],                // 신인 드래프트 풀
   postseasonBracket:null,      // 포스트시즌 대진
@@ -23,7 +24,7 @@ function getFuturesPlayers(team){return team.roster.filter(p=>p.status==='future
 function getDevPlayers(team){return team.roster.filter(p=>p.status==='developmental');}
 function getILPlayers(team){return team.roster.filter(p=>p.status==='il');}
 function getActiveCount(team){return team.roster.filter(p=>(p.status||'active')==='active'&&p.role!=='overseas').length;}
-function canCallUp(team){const max=(G.phase==='second_half'&&G.gameNum>=EXPANDED_ENTRY_START)?EXPANDED_ROSTER_MAX:ACTIVE_ROSTER_MAX;return getActiveCount(team)<max;}
+function canCallUp(team){const expStart=EXPANDED_ENTRY_START-((G.seasonModifiers&&G.seasonModifiers.expandedEarly)||0);const max=(G.phase==='second_half'&&G.gameNum>=expStart)?EXPANDED_ROSTER_MAX:ACTIVE_ROSTER_MAX;return getActiveCount(team)<max;}
 function canPlayerDebut(player){if(player.canDebutYear&&player.canDebutYear>G.season)return false;return true;}
 function getActiveForeignCount(team){return team.roster.filter(p=>(p.status||'active')==='active'&&p.isForeign).length;}
 function canAddForeign(team){return getActiveForeignCount(team)<FOREIGN_PLAYER_MAX;}
