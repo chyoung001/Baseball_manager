@@ -1,6 +1,6 @@
 // ===================== STATE CORE (Global State + Roster Getters) =====================
 // ===================== GAME STATE =====================
-let G={season:1,gameNum:0,totalGames:TOTAL_REGULAR,teamIdx:0,myTeam:null,teams:[],marketPlayers:[],trainingCooldown:0,matchInProgress:false,matchSpeed:500,currentMarketTab:'bat',fanEventUsedThisGame:false,testMode:true,
+let G={season:1,gameNum:0,totalGames:TOTAL_REGULAR,teamIdx:0,myTeam:null,teams:[],marketPlayers:[],trainingCooldown:0,matchInProgress:false,matchSpeed:500,currentMarketTab:'bat',fanEventUsedThisGame:false,testMode:false,
   // Season phase system (7-phase)
   phase:'preseason',            // current phase id
   draftPool:[],                // 신인 드래프트 풀

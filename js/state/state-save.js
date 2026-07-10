@@ -49,6 +49,7 @@ function saveGame(){
       currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
       testMode:G.testMode,
       phase:G.phase,
+      _stoveSettledSeason:G._stoveSettledSeason||0,
       previousSeasonStandings:G.previousSeasonStandings,
       draftPool:(G.draftPool||[]).map(_compressPlayer),
       postseasonBracket:G.postseasonBracket,
@@ -85,10 +86,11 @@ function _restoreFromData(d){
   G.season=d.season||1; G.gameNum=d.gameNum||0; G.totalGames=d.totalGames||TOTAL_REGULAR;
   G.teamIdx=d.teamIdx||0; G.trainingCooldown=d.trainingCooldown||0;
   G.matchSpeed=d.matchSpeed||500; G.currentMarketTab=d.currentMarketTab||'bat';
-  G.fanEventUsedThisGame=d.fanEventUsedThisGame||false; G.testMode=d.testMode!=null?d.testMode:true;
+  G.fanEventUsedThisGame=d.fanEventUsedThisGame||false; G.testMode=d.testMode!=null?d.testMode:false;
   G.matchInProgress=false;
   // Phase & new fields 복원
   G.phase=d.phase||'preseason';
+  G._stoveSettledSeason=d._stoveSettledSeason||0;
   G.previousSeasonStandings=d.previousSeasonStandings||[];
   G.postseasonBracket=d.postseasonBracket||null;
   G.allStars=d.allStars||[];
@@ -158,6 +160,7 @@ function exportGame(){
       currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
       testMode:G.testMode,
       phase:G.phase,
+      _stoveSettledSeason:G._stoveSettledSeason||0,
       previousSeasonStandings:G.previousSeasonStandings,
       draftPool:(G.draftPool||[]).map(_compressPlayer),
       postseasonBracket:G.postseasonBracket,

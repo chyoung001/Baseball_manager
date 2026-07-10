@@ -26,21 +26,6 @@ function initTeams(myIdx){
   });
   G.myTeam=G.teams[myIdx];
 
-  // ── 테스트용 고정 선수 삽입 ──
-  const vikings=G.teams[0]; // 바이킹스
-  const testP=genPitcher('SP','S','power_hit');
-  testP.name='강두기';
-  testP.age=27;testP._seasonsPlayed=9;testP._serviceTime=9;testP._teamTenure=5;
-  // OVR 78 목표로 스탯 강제 조정
-  const _ts=['stuff','control','velocity','movement','stamina','clutch'];
-  _ts.forEach(s=>{testP[s]=78;});
-  let _tOvr=ovr(testP),_tAtt=0;
-  while(Math.abs(_tOvr-78)>1&&_tAtt<30){const d=78-_tOvr;const s=pick(_ts);testP[s]=clamp(testP[s]+Math.round(d*0.5),20,80);_tOvr=ovr(testP);_tAtt++;}
-  testP._potential=18;testP._contractYears=3;testP.salary=20;testP.condition=95;
-  testP.role='rotation';testP.status='active';
-  initSeasonStats(testP);
-  vikings.roster.push(testP);
-
   // Init season stats & new fields for all players
   G.teams.forEach(t=>t.roster.forEach(p=>{
     initSeasonStats(p);
