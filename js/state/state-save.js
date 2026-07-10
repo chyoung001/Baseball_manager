@@ -177,6 +177,8 @@ function _restoreFromData(d){
     }
     if(t.scoutingLevel===undefined) t.scoutingLevel=0;
     if(t.analyticsLevel===undefined) t.analyticsLevel=0;
+    if(t.slumpCareLevel===undefined) t.slumpCareLevel=0;   // P2-5 백필
+    if(t.mentalCoachLevel===undefined) t.mentalCoachLevel=0;
   });
   return true;
 }

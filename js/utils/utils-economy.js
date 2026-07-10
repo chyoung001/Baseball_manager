@@ -77,7 +77,10 @@ function calcAnnualUpkeep(team){
   const coachTotal=Object.values(cs).reduce((s,v)=>s+(v||0),0);
   const staffCost=Math.floor(coachTotal*0.5);
   const stadiumCost=Math.floor(Math.pow(team.stadiumLevel||0,2)*0.5);
-  const facilityCost=Math.floor(((team.medicalLevel||0)+(team.devLevel||0)+(team.scoutingLevel||0)+(team.analyticsLevel||0))*0.02);
+  // P2-5 4레벨 시설 유지비: L3+ 시설은 해당 레벨 도달 비용의 10~15%/시즌 (설계: 노후화 억제)
+  const _f4=lv=>+(FACILITY4_UPKEEP[lv||0]*(FACILITY4_COSTS[(lv||0)-1]||0)).toFixed(1);
+  const facilityCost=Math.floor(((team.medicalLevel||0)+(team.devLevel||0)+(team.scoutingLevel||0)+(team.analyticsLevel||0))*0.02)
+    +_f4(team.slumpCareLevel)+_f4(team.mentalCoachLevel);
   const farmCost=10;
   return {staffCost,stadiumCost,facilityCost,farmCost,total:staffCost+stadiumCost+facilityCost+farmCost};
 }

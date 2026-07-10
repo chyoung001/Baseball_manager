@@ -244,8 +244,11 @@ function simulatePlay(){
   const hasRunnersInScoring=!!(matchState.bases[1]||matchState.bases[2]);
   const tiebreakRunner=!!(matchState.bases[0]||matchState.bases[1]||matchState.bases[2])&&scoreDiff<=1;
   const isHighLeverage=inning>=7&&(scoreDiff<=3||hasRunnersInScoring||tiebreakRunner);
-  const batBigGame=isHighLeverage?((batter._clutchHidden||50)-50)*0.12:0;
-  const pitBigGame=isHighLeverage?((pitcher._clutchHidden||50)-50)*0.12:0;
+  // P2-5 멘탈 코칭 룸: 클러치 보정 증폭 (설계: 시설 7 — 자연 확장, 독립 레이어 아님)
+  const _mcBat=1+(MENTAL_COACH_AMP[batTeam.mentalCoachLevel||0]||0);
+  const _mcPit=1+(MENTAL_COACH_AMP[fldTeam.mentalCoachLevel||0]||0);
+  const batBigGame=isHighLeverage?((batter._clutchHidden||50)-50)*0.12*_mcBat:0;
+  const pitBigGame=isHighLeverage?((pitcher._clutchHidden||50)-50)*0.12*_mcPit:0;
 
   // ── [5] 유효 투수 스탯 (피로도 커브 반영) ──
   const effStuff=((pitcher.stuff||50)+pitchBonus+clutchAdd+pitSwing+pitBigGame)*velMult*stamFactor*condFactor;
@@ -607,9 +610,14 @@ function endMatch(){
     if((p._recentILReturn||0)>0) p._recentILReturn--;
     // 꾸준함 슬럼프 발동/해제 (모든 선수 가능, 꾸준한 선수는 낮은 확률)
     if((p._slumpGames||0)>0){ p._slumpGames--; }
-    else if(rand(1,100)<=Math.max(1, 15-Math.round((p._consistency||50)/5))){
-      p._slumpGames=rand(3,7);
-      addLog(`📉 ${p.name} 슬럼프 돌입! (${p._slumpGames}경기)`,'out');
+    else{
+      // P2-5 슬럼프 완화 시설: 발동 확률 완화 + L3+ 지속 -1경기
+      const _scLv=G.myTeam.slumpCareLevel||0;
+      const _slumpProb=Math.max(1,Math.round((15-Math.round((p._consistency||50)/5))*(1-SLUMP_CARE_RELIEF[_scLv])));
+      if(rand(1,100)<=_slumpProb){
+        p._slumpGames=Math.max(1,rand(3,7)-(_scLv>=3?1:0));
+        addLog(`📉 ${p.name} 슬럼프 돌입! (${p._slumpGames}경기)`,'out');
+      }
     }
   });
   getBenchBatters(G.myTeam).forEach(p=>{
@@ -1216,7 +1224,11 @@ function _simMyGame(){
     p.condition=clamp(p.condition-rand(Math.max(1,dropMin-durMod),Math.max(1,dropMax-durMod)),30,100);
     if(p.condition<55&&rand(1,300)<=Math.round((100-dur)/5)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
     if((p._slumpGames||0)>0) p._slumpGames--;
-    else if((p._consistency||50)<50&&rand(1,100)<=(12-Math.round((p._consistency||50)/5))){p._slumpGames=rand(3,7);}
+    else if((p._consistency||50)<50){
+      const _scLv=G.myTeam.slumpCareLevel||0;
+      const _prob=Math.max(1,Math.round((12-Math.round((p._consistency||50)/5))*(1-SLUMP_CARE_RELIEF[_scLv])));
+      if(rand(1,100)<=_prob)p._slumpGames=Math.max(1,rand(3,7)-(_scLv>=3?1:0));
+    }
   });
   getBenchBatters(G.myTeam).forEach(p=>{
     p.condition=clamp(p.condition+rand(1,3),30,100);
