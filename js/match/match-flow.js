@@ -265,10 +265,19 @@ function simulatePlay(){
   const adjEye=(batter.eye||50)+batBonus*0.3+batSwing*0.3;
   const batSpeed=(batter.speed||50);
 
-  // ── [7] 수비력 ──
-  const fldStarters=getStartingBatters(fldTeam);
-  const avgFielding=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effFielding(p),0)/fldStarters.length:50; // 전환 페널티 반영
-  const avgArm=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effArm(p),0)/fldStarters.length:50;
+  // ── [7] 수비력 (하프이닝 캐시 — 전환 페널티 포함 평균이 타석마다 재계산되던 것 방지) ──
+  // 수비 라인업은 하프이닝 중 바뀌지 않음: 이닝/공수 교대 시 키가 달라져 자동 재계산
+  const _defKey=fldKey+':'+matchState.inning+':'+matchState.half;
+  if(!matchState._defCache||matchState._defCache.key!==_defKey){
+    const fldStarters=getStartingBatters(fldTeam);
+    matchState._defCache={
+      key:_defKey,
+      avgFielding:fldStarters.length>0?fldStarters.reduce((s,p)=>s+effFielding(p),0)/fldStarters.length:50, // 전환 페널티 반영
+      avgArm:fldStarters.length>0?fldStarters.reduce((s,p)=>s+effArm(p),0)/fldStarters.length:50,
+    };
+  }
+  const avgFielding=matchState._defCache.avgFielding;
+  const avgArm=matchState._defCache.avgArm;
   const armPenalty=Math.max(0.4,1-avgArm/200);
 
   // ── [8] 동적 회귀 보정 ──
@@ -536,10 +545,28 @@ function _recordResult(team,didWin){
   else team.streak=team.streak<0?team.streak-1:-1;
 }
 
+// ═══════════════════════════════════════════════════════
+// 선수 컨디션 공용 헬퍼 — 실경기(endMatch)·간이 시뮬(_simMyGame) 공통
+// (동일 로직이 두 경로에 복제되어 수치가 발산하던 문제 해소)
+// ═══════════════════════════════════════════════════════
+// 부상 판정 임계: 내구성 1~100 → 2~20 (최소 2 보장)
+function _injuryThreshold(dur){return Math.max(2,Math.round((100-(dur||50))/5));}
+// 미등판/휴식 회복 보너스: 내구성 + (투수) 연투회복 히든
+function _restRecoveryBonus(p){
+  const durBonus=Math.round(((p._durability||50)-50)/25);
+  const recBonus=p.isPitcher?Math.round(((p._recovery||50)-50)/25):0;
+  return durBonus+recBonus;
+}
+// 슬럼프 발동 롤: 성공 시 지속 경기 수, 아니면 0 (P2-5 슬럼프 완화 시설 반영)
+function _rollSlumpOnset(p,team){
+  const scLv=(team&&team.slumpCareLevel)||0;
+  const prob=Math.max(1,Math.round((15-Math.round((p._consistency||50)/5))*(1-(SLUMP_CARE_RELIEF[scLv]||0))));
+  if(rand(1,100)>prob)return 0;
+  return Math.max(1,rand(3,7)-(scLv>=3?1:0));
+}
+
 function endMatch(){
   G.matchInProgress=false;G.gameNum++;
-  // P2-3 서비스타임: 1군 등록 경기 수 적립 (전 구단, 스토브에서 시리즈 비례 환산)
-  G.teams.forEach(t=>t.roster.forEach(p=>{if((p.status||'active')==='active'&&p.role!=='overseas')p._svcGames=(p._svcGames||0)+1;}));
   const s=matchState;const awayR=s.score.away.reduce((a,b)=>a+b,0);const homeR=s.score.home.reduce((a,b)=>a+b,0);
   if(homeR>awayR){s.home.wins++;s.away.losses++;_recordResult(s.home,true);_recordResult(s.away,false);}
   else{s.away.wins++;s.home.losses++;_recordResult(s.away,true);_recordResult(s.home,false);}
@@ -599,7 +626,7 @@ function endMatch(){
     const durMod=Math.round((dur-50)/15); // -3~+3: 높으면 하락 감소, 낮으면 추가 하락
     p.condition=clamp(p.condition-rand(Math.max(1,dropMin-durMod),Math.max(1,dropMax-durMod)),30,100);
     // 부상: 내구성에 비례한 점진적 확률 (최소 0.67% 보장, 재부상 위험 반영)
-    const _injThresh=Math.max(2, Math.round((100-dur)/5));
+    const _injThresh=_injuryThreshold(dur);
     const _injMult=(p._recentILReturn||0)>0?1.5:1.0; // 복귀 직후 재부상 위험 1.5배
     if(p.condition<55 && rand(1,300)<=Math.round(_injThresh*_injMult)){
       const _inj=rollInjuryDuration();
@@ -611,12 +638,10 @@ function endMatch(){
     // 꾸준함 슬럼프 발동/해제 (모든 선수 가능, 꾸준한 선수는 낮은 확률)
     if((p._slumpGames||0)>0){ p._slumpGames--; }
     else{
-      // P2-5 슬럼프 완화 시설: 발동 확률 완화 + L3+ 지속 -1경기
-      const _scLv=G.myTeam.slumpCareLevel||0;
-      const _slumpProb=Math.max(1,Math.round((15-Math.round((p._consistency||50)/5))*(1-SLUMP_CARE_RELIEF[_scLv])));
-      if(rand(1,100)<=_slumpProb){
-        p._slumpGames=Math.max(1,rand(3,7)-(_scLv>=3?1:0));
-        addLog(`📉 ${p.name} 슬럼프 돌입! (${p._slumpGames}경기)`,'out');
+      const _sg=_rollSlumpOnset(p,G.myTeam);
+      if(_sg>0){
+        p._slumpGames=_sg;
+        addLog(`📉 ${p.name} 슬럼프 돌입! (${_sg}경기)`,'out');
       }
     }
   });
@@ -648,13 +673,11 @@ function endMatch(){
       p.condition=clamp((p.condition||100)-condDrop,0,100);
     }else{
       // 미등판: 컨디션 회복 + 연투 초기화 (내구성 + 연투회복 히든 반영)
-      const durBonus=Math.round((dur-50)/25); // 내구성 높으면 추가 회복
-      const recBonus=Math.round(((p._recovery||50)-50)/25); // 연투회복 (투수 전용 히든): -2~+2
-      p.condition=clamp((p.condition||100)+15+durBonus+recBonus,0,100);
+      p.condition=clamp((p.condition||100)+15+_restRecoveryBonus(p),0,100);
       p._consecutiveDaysPitched=0;
     }
     // 투수 부상: 컨디션 40 미만, 최소 확률 보장 + 재부상 위험
-    const _pitInjThresh=Math.max(2, Math.round((100-dur)/5));
+    const _pitInjThresh=_injuryThreshold(dur);
     const _pitInjMult=(p._recentILReturn||0)>0?1.5:1.0;
     if(p.condition<40 && rand(1,400)<=Math.round(_pitInjThresh*_pitInjMult)){
       const _inj=rollInjuryDuration();
@@ -710,6 +733,8 @@ function runFuturesMiniGame(team) {
 
 function processPostGame() {
   const t = G.myTeam;
+  // 0. P2-3 서비스타임 적립 (전 구단, 게임일당 1회 — 실경기·간이 시뮬 공통 단일 훅)
+  G.teams.forEach(tm=>tm.roster.forEach(p=>{if((p.status||'active')==='active'&&p.role!=='overseas')p._svcGames=(p._svcGames||0)+1;}));
   // 1. Cooldown decrement (futures + il)
   t.roster.forEach(p=>{ if((p.cooldown||0)>0) p.cooldown--; });
   // 2. IL countdown
@@ -1222,13 +1247,9 @@ function _simMyGame(){
     const dur=p._durability||50;
     const durMod=Math.round((dur-50)/15);
     p.condition=clamp(p.condition-rand(Math.max(1,dropMin-durMod),Math.max(1,dropMax-durMod)),30,100);
-    if(p.condition<55&&rand(1,300)<=Math.round((100-dur)/5)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
+    if(p.condition<55&&rand(1,300)<=_injuryThreshold(dur)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
     if((p._slumpGames||0)>0) p._slumpGames--;
-    else if((p._consistency||50)<50){
-      const _scLv=G.myTeam.slumpCareLevel||0;
-      const _prob=Math.max(1,Math.round((12-Math.round((p._consistency||50)/5))*(1-SLUMP_CARE_RELIEF[_scLv])));
-      if(rand(1,100)<=_prob)p._slumpGames=Math.max(1,rand(3,7)-(_scLv>=3?1:0));
-    }
+    else{const _sg=_rollSlumpOnset(p,G.myTeam);if(_sg>0)p._slumpGames=_sg;} // 실경기와 동일 공식으로 통일
   });
   getBenchBatters(G.myTeam).forEach(p=>{
     p.condition=clamp(p.condition+rand(1,3),30,100);
@@ -1250,12 +1271,10 @@ function _simMyGame(){
       else if(p._consecutiveDaysPitched>=2) condDrop+=5;
       p.condition=clamp((p.condition||100)-condDrop,0,100);
     }else{
-      const durBonus=Math.round((dur-50)/25);
-      const recBonus=Math.round(((p._recovery||50)-50)/25); // 연투회복 히든
-      p.condition=clamp((p.condition||100)+15+durBonus+recBonus,0,100);
+      p.condition=clamp((p.condition||100)+15+_restRecoveryBonus(p),0,100);
       p._consecutiveDaysPitched=0;
     }
-    if(p.condition<40&&rand(1,400)<=Math.round((100-dur)/5)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
+    if(p.condition<40&&rand(1,400)<=_injuryThreshold(dur)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
   });
 
   // 해외연수 복귀
@@ -1276,8 +1295,6 @@ function _simMyGame(){
   simulateOtherGames();
   processPostGame();
   G.gameNum++;
-  // P2-3 서비스타임: 1군 등록 경기 수 적립 (간이 시뮬 경로)
-  G.teams.forEach(t=>t.roster.forEach(p=>{if((p.status||'active')==='active'&&p.role!=='overseas')p._svcGames=(p._svcGames||0)+1;}));
 
   // 9월 확대 엔트리
   if(G.phase==='second_half'&&G.gameNum===EXPANDED_ENTRY_START){

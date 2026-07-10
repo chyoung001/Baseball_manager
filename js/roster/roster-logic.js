@@ -24,20 +24,25 @@ function getPosGroup(pos, player) {
 // 포지션 전환 페널티 (P2-1, 설계: OVR 시스템 — 비대칭)
 // 반환: % 페널티 (수비 스탯 적용) / 0=페널티 없음 / null=전환 불가(→C)
 // ═══════════════════════════════════════════════════════
+// 전환 난이도 테이블 (상수 맵 — 타석마다 호출되는 핫패스라 배열 재생성/선형 탐색 제거)
+// 서브 포지션 생성 후보는 player-core.js의 _SUBPOS_CANDIDATES 참조 (교차 확인 필요)
+const _POS_SWITCH_TIERS={
+  '2B>SS':5,'SS>2B':5,'LF>RF':5,'RF>LF':5,'LF>1B':5,'RF>1B':5,'3B>1B':5, // 쉬움 -5%
+  'SS>3B':12,'CF>LF':12,'CF>RF':12,'2B>3B':12,                            // 보통 -10~15%
+};
 function _posSwitchBase(from,to){
   if(from===to||to==='DH') return 0; // DH로 이동은 라인업 슬롯 (무페널티)
   if(to==='C') return null; // 어디든→C 불가 (포수는 전문 훈련 없이 전환 안 됨) — DH 출신 포함
   if(from==='DH') return 22; // 본 포지션 DH(지명타자 전문)의 수비 전환은 어려움
-  const key=from+'>'+to;
-  if(['2B>SS','SS>2B','LF>RF','RF>LF','LF>1B','RF>1B','3B>1B'].includes(key)) return 5;  // 쉬움 -5%
-  if(['SS>3B','CF>LF','CF>RF','2B>3B'].includes(key)) return 12;                          // 보통 -10~15%
-  return 22;                                                                              // 어려움 -20~25% (OF↔IF, 1B→SS, 역방향)
+  return _POS_SWITCH_TIERS[from+'>'+to]||22; // 그 외 어려움 -20~25% (OF↔IF, 1B→SS, 역방향)
 }
 function getPosSwitchPenalty(p,to){
   const from=p._naturalPos||p.pos;
   let pen=_posSwitchBase(from,to);
   if(pen===null||pen===0) return pen;
-  if(Array.isArray(p._subPos)&&p._subPos.includes(to)) pen*=0.5; // 서브 포지션 실전 경험 → 절반
+  // 서브 포지션 실전 경험 → 절반, 단 최소 '쉬움'(5%) 수준 보장
+  // (예: 1B의 서브 LF는 기본 22 → 5 — 서브 경험자가 자연 인접 전환보다 불리하지 않도록)
+  if(Array.isArray(p._subPos)&&p._subPos.includes(to)) pen=Math.min(pen*0.5,5);
   const vers=p._versatility||50; // 다재다능 히든: 높으면 최대 -50%, 낮으면 최대 +50%
   pen*=clamp(1-(vers-50)/100,0.5,1.5);
   return Math.round(pen*10)/10;

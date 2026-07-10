@@ -120,9 +120,9 @@ function showStoveLeague(){
           if(!G._renewalCandidates) G._renewalCandidates=[];
           G._renewalCandidates.push(p);
         } else {
-          // AI 팀: 소속 구단 우선 재계약 시도 (P2-4: 절대 연봉 스케일)
+          // AI 팀: 소속 구단 우선 재계약 시도 (P2-4 절대 스케일 + 히든 보정 — 유저 협상과 동일 기준)
           const pOvr=ovr(p);
-          const renewSalary=Math.max(1,Math.floor(_calcSalary(pOvr,p._serviceTime||FA_SERVICE_TIME_THRESHOLD)));
+          const renewSalary=Math.max(SALARY_MIN,+(_calcSalary(pOvr,p._serviceTime||FA_SERVICE_TIME_THRESHOLD)*_contractHiddenMod(p,'renewal')).toFixed(1));
           const renewYears=_calcContractYears(pOvr);
           // 재계약 조건: OVR 50+ AND 팀 예산 여유 AND 50~80% 확률 (높은 OVR일수록 높음)
           const renewProb=pOvr>=84?80:pOvr>=75?70:pOvr>=67?60:pOvr>=51?50:20;
@@ -652,8 +652,8 @@ function _runAIFreeAgentBidding(){
   pool.forEach(fa=>{
     const pOvr=ovr(fa);
 
-    // 시장 가치 산정 (P2-4: 절대 연봉 스케일)
-    const marketSalary=Math.max(SALARY_MIN,+_calcSalary(pOvr,fa._serviceTime||FA_SERVICE_TIME_THRESHOLD).toFixed(1));
+    // 시장 가치 산정 (P2-4 절대 스케일 + 야망 히든 보정 — AI 입찰가에도 동일 반영)
+    const marketSalary=Math.max(SALARY_MIN,+(_calcSalary(pOvr,fa._serviceTime||FA_SERVICE_TIME_THRESHOLD)*_contractHiddenMod(fa,'fa')).toFixed(1));
 
     const contractYears=_calcContractYears(pOvr);
     const transferFee=+(pOvr*0.3+rand(5,15)).toFixed(1);
