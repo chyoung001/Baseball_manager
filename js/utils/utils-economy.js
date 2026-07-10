@@ -10,14 +10,31 @@ function deptUpgradeCost(lv){if(lv<30)return 3;if(lv<60)return 6;if(lv<80)return
 // ── 구단 재정 ──
 function getPayroll(team){return +team.roster.reduce((s,p)=>s+(p.salary||0),0).toFixed(1);}
 
-// 사치세/하드캡 (고정값)
+// ── P2-4 사치세 3단계 + 연속 초과 체증 (설계: 계약/연봉 로직) ──
 function getLeagueAvgPayroll(){
   if(!G.teams||G.teams.length===0)return 80;
   return +((G.teams.reduce((s,t)=>s+getPayroll(t),0)/G.teams.length).toFixed(1));
 }
-function getLuxuryTaxLine(){return LUXURY_TAX_THRESHOLD+((G.seasonModifiers&&G.seasonModifiers.luxuryLineBonus)||0);}
+function getLuxuryTaxLine(){return LUXURY_SOFT_CAP+((G.seasonModifiers&&G.seasonModifiers.luxuryLineBonus)||0);}
 function getHardCap(){return HARD_CAP+((G.seasonModifiers&&G.seasonModifiers.hardCapBonus)||0);}
-function getLuxuryTax(team){const pay=getPayroll(team);return pay>LUXURY_TAX_THRESHOLD?+((pay-LUXURY_TAX_THRESHOLD)*LUXURY_TAX_RATE).toFixed(1):0;}
+function getSalaryFloor(){return SALARY_FLOOR+((G.seasonModifiers&&G.seasonModifiers.salaryFloorBonus)||0);}
+// 연속 초과 체증률: 직전까지의 연속 초과 시즌 수 기준 (1시즌째=기본, 2시즌째=+10%p, 3시즌+=+20%p)
+function getLuxurySurcharge(team){
+  return Math.min(LUXURY_REPEAT_CAP,(team._luxOverStreak||0)*LUXURY_REPEAT_SURCHARGE);
+}
+function getLuxuryTax(team){
+  const over=getPayroll(team)-getLuxuryTaxLine();
+  if(over<=0) return 0;
+  const surcharge=getLuxurySurcharge(team);
+  let tax=0,prev=0;
+  for(const tier of LUXURY_TIERS){
+    const cap=Math.min(over,tier.upTo);
+    if(cap<=prev) break;
+    tax+=(cap-prev)*(tier.rate+surcharge);
+    prev=cap;
+  }
+  return +tax.toFixed(1);
+}
 
 // ── 코칭/훈련 ──
 function getCoachBonus(team,stat){
