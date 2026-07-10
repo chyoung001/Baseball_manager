@@ -232,6 +232,26 @@ check('시즌 스탯 NaN 없음', g(`G.teams.every(t=>t.roster.every(p=>{const s
 const lgAvg = g(`(function(){let h=0,ab=0;G.teams.forEach(t=>t.roster.forEach(p=>{if(!p.isPitcher&&p.ss){h+=p.ss.h||0;ab+=p.ss.ab||0;}}));return ab>0?h/ab:0;})()`);
 check(`리그 타율 온건 범위(0.15~0.40): ${lgAvg.toFixed(3)}`, lgAvg > 0.15 && lgAvg < 0.40);
 
+// ── T3b. 시리즈 구조 (3연전 상대 고정) ──────────────────────
+section('T3b. 시리즈 구조 — 21시리즈 × 3연전');
+const seriesProbe = vm.runInContext(`
+  (function(){
+    const save=G.gameNum;
+    const oppAt=gn=>{G.gameNum=gn;return G.teams.indexOf(getOpponent());};
+    const csAt=gn=>{G.gameNum=gn;return getCurrentSeries();};
+    const s0=[oppAt(0),oppAt(1),oppAt(2)];
+    const s1=oppAt(3);
+    const cs={g0:csAt(0),g2:csAt(2),g3:csAt(3)};
+    const homeConsistent=(function(){G.gameNum=0;const h0=isMyTeamHome();G.gameNum=2;const h2=isMyTeamHome();return h0===h2;})();
+    G.gameNum=save;
+    return {s0, s1, sameInSeries:s0[0]===s0[1]&&s0[1]===s0[2], cs, homeConsistent};
+  })()
+`, ctx);
+check('시리즈 내 3경기 상대 동일 (3연전)', seriesProbe.sameInSeries, JSON.stringify(seriesProbe.s0));
+check('다음 시리즈 상대 변경', seriesProbe.s1 !== seriesProbe.s0[0]);
+check('getCurrentSeries: g0→0, g2→0, g3→1', seriesProbe.cs.g0 === 0 && seriesProbe.cs.g2 === 0 && seriesProbe.cs.g3 === 1, JSON.stringify(seriesProbe.cs));
+check('시리즈 내 홈/원정 고정', seriesProbe.homeConsistent);
+
 // ── T4. H2 회귀: 스토브리그 정산 멱등성 ─────────────────────
 section('T4. H2 회귀 — showStoveLeague 재진입 멱등성');
 vm.runInContext(`G.myTeam.budget=Math.max(G.myTeam.budget,200);`, ctx); // 파산 게임오버 회피
