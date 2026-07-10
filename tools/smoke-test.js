@@ -620,6 +620,25 @@ const arbProbe = g(`(function(){
 check(`Arb 2년차 인상률 120~180% (3억 → ${arbProbe.a2min}~${arbProbe.a2max})`, arbProbe.a2min >= 3.5 && arbProbe.a2max <= 5.8);
 check(`Arb 3년차 인상률 110~150% (3억 → ${arbProbe.a3min}~${arbProbe.a3max})`, arbProbe.a3min >= 3.2 && arbProbe.a3max <= 4.8);
 
+// ── T14. P2-5 특수 시설 4레벨 — 비용 · 유지비 · 업그레이드 · 백필 ──
+section('T14. P2-5 특수 시설 4레벨 — 슬럼프케어·멘탈코칭');
+const facProbe = g(`(function(){
+  const initOk=G.teams.every(t=>typeof t.slumpCareLevel==='number'&&typeof t.mentalCoachLevel==='number');
+  const up0=calcAnnualUpkeep({coachStaff:{},stadiumLevel:0,slumpCareLevel:0,mentalCoachLevel:0}).facilityCost;
+  const up34=calcAnnualUpkeep({coachStaff:{},stadiumLevel:0,slumpCareLevel:3,mentalCoachLevel:4}).facilityCost;
+  const t=G.myTeam;const b0=t.budget=500;const l0=t.slumpCareLevel;
+  t.slumpCareLevel=0;
+  investUpgradeSlumpCare();investUpgradeSlumpCare();
+  const lvOk=t.slumpCareLevel===2&&Math.abs((b0-t.budget)-17)<0.01;
+  t.slumpCareLevel=l0;
+  return {initOk,diff:+(up34-up0).toFixed(1),lvOk,
+    costsOk:JSON.stringify(FACILITY4_COSTS)==='[5,12,25,40]'&&SLUMP_CARE_RELIEF[4]===0.5&&MENTAL_COACH_AMP[4]===0.5};
+})()`);
+check('전 팀 신규 시설 필드 초기화/백필 (slumpCare·mentalCoach)', facProbe.initOk);
+check('설계 상수 (비용 5/12/25/40억 · 완화 50% · 증폭 50%)', facProbe.costsOk);
+check(`4레벨 유지비 L3+L4 = +${facProbe.diff} (기대 8.5 = 25×10% + 40×15%)`, facProbe.diff === 8.5);
+check('업그레이드 2회: Lv.2 도달 + 17억(5+12) 차감', facProbe.lvOk);
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');

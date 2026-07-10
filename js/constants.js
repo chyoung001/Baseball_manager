@@ -60,6 +60,13 @@ const LUXURY_REPEAT_CAP = 0.20;       // 체증 상한 +20%p (3시즌+ 고정)
 const SALARY_FLOOR = 50;              // 샐러리 플로어 (탱킹 방지) — 설계 목표 80억은 P2-3 연봉 현실화(신인 슬롯·Arb 인상률) 후 상향 (현행 리그 평균 페이롤 ~60억 기준 과도기 값)
 const HARD_CAP = 280;                 // AI 영입 가드 상한 (설계상 하드캡은 폐지 — 내부 안전장치)
 
+// ── P2-5 신규 4레벨 시설 (설계: 재정 밸런스 — 7시설 체계 중 신규 2종 선행 도입) ──
+// 기존 5축(구장/육성/스카우팅/의료/분석)의 0~100 → 4레벨 전면 전환은 P3 파크팩터와 함께 진행
+const FACILITY4_COSTS = [5, 12, 25, 40];            // 레벨 1~4 업그레이드 비용 (슬럼프케어·멘탈코칭 공통)
+const SLUMP_CARE_RELIEF = [0, 0.10, 0.25, 0.40, 0.50]; // 슬럼프 완화율 (L0~L4)
+const MENTAL_COACH_AMP = [0, 0.15, 0.25, 0.35, 0.50];  // 클러치 보정 증폭률 (L0~L4)
+const FACILITY4_UPKEEP = [0, 0, 0, 0.10, 0.15];     // 연 유지비 (해당 레벨 도달 비용 대비, L3+)
+
 const STADIUM_REVENUE_BONUS = 0.12; // 레벨당 +12% 시즌 수익
 const STADIUM_MAX_LEVEL = 5;
 const STADIUM_COST_PER_LEVEL = 20;  // stadiumLevel * 20억
