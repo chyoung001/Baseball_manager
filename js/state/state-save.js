@@ -44,7 +44,7 @@ function _expandTeam(c,idx){
 function saveGame(){
   try{
     const snap={
-      _v:4, season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
+      _v:5, season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
       teamIdx:G.teamIdx, trainingCooldown:G.trainingCooldown||0, matchSpeed:G.matchSpeed,
       currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
       testMode:G.testMode,
@@ -121,6 +121,16 @@ function _restoreFromData(d){
     (G.marketPlayers||[]).forEach(_scale);
     (G.draftPool||[]).forEach(_scale);
   }
+  // v5 히든 스탯 마이그레이션: 7~20 → 1~100 (×5 선형 매핑, P2-2)
+  if(!d._v||d._v<5){
+    const _HIDDEN_KEYS=['_potential','_durability','_consistency','_clutchHidden','_workEthic'];
+    const _hidScale=p=>_HIDDEN_KEYS.forEach(k=>{
+      if(typeof p[k]==='number'&&p[k]<=20)p[k]=clamp(p[k]*5,1,100);
+    });
+    G.teams.forEach(t=>t.roster.forEach(_hidScale));
+    (G.marketPlayers||[]).forEach(_hidScale);
+    (G.draftPool||[]).forEach(_hidScale);
+  }
   // v2→v3 마이그레이션: phase명 매핑, 신규 선수 필드 초기화
   if(!d._v||d._v<3){
     if(G.phase==='spring_camp')G.phase='preseason';
@@ -141,8 +151,15 @@ function _restoreFromData(d){
     if(p.isMedicalTreated===undefined)p.isMedicalTreated=false;
     if(p.agingImmunityYears===undefined)p.agingImmunityYears=0;
     if(p.isForeign===undefined)p.isForeign=false;
-    if(p._workEthic===undefined)p._workEthic=_genHidden?_genHidden():rand(7,20);
+    if(p._workEthic===undefined)p._workEthic=_genHidden?_genHidden():rand(35,100);
     if(p._slumpGames===undefined)p._slumpGames=0;
+    // P2-2 신규 히든 6종 백필 (구세이브)
+    if(p._versatility===undefined)p._versatility=_genHidden();
+    if(p._ambition===undefined)p._ambition=_genHidden();
+    if(p._loyalty===undefined)p._loyalty=_genHidden();
+    if(p._temperament===undefined)p._temperament=_genHidden();
+    if(p.isPitcher&&p._recovery===undefined)p._recovery=_genHidden();
+    if(!p.isPitcher&&p._pullTendency===undefined)p._pullTendency=_genPullTendency();
   }));
   // 팀 필드 마이그레이션
   G.teams.forEach(t=>{

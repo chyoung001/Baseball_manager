@@ -211,7 +211,7 @@ function _showRenewalNegotiation(){
   if(renewals.length===0){showToast('재계약 대상 선수가 없습니다.');showStoveLeague();return;}
 
   // 총 예상 비용
-  const totalExpCost=renewals.reduce((s,p)=>{const e=getExpectedContract(p);return s+e.salary*e.years;},0);
+  const totalExpCost=renewals.reduce((s,p)=>{const e=getExpectedContract(p,'renewal');return s+e.salary*e.years;},0);
 
   $('modalTitle').textContent='';
   $('modalBody').innerHTML=`
@@ -233,7 +233,7 @@ function _showRenewalNegotiation(){
       <!-- 선수 목록 -->
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
         ${renewals.map((p,i)=>{
-          const o=ovr(p);const exp=getExpectedContract(p);const w=approxWAR(p);
+          const o=ovr(p);const exp=getExpectedContract(p,'renewal');const w=approxWAR(p);
           return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#111827;border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:border-color 0.2s;" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='var(--border)'" onclick="_startRenewalNego(${i})">
             <span class="pos-badge${p.isPitcher?' pitcher':''}" style="font-size:0.6rem;padding:2px 8px;">${ALL_POS_NAMES[p.pos]||p.pos}</span>
             <div style="flex:1;">
@@ -495,7 +495,7 @@ function _aiPlayerValue(p){
   else if(age<=33) val-=10;
   else val-=25-(age-34)*5; // 34세: -25, 35세: -30, 36세: -35...
   // 잠재력 가산
-  val+=((p._potential||10)-10)*2;
+  val+=((p._potential||50)-50)*0.4;
   // 연봉 효율 페널티: 고액+저능력 → 가치 급감
   if(sal>10&&o<59) val-=sal*2;
   else if(sal>20&&o<67) val-=sal;

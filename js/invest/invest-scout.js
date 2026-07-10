@@ -86,9 +86,9 @@ function executeScoutCamp(posCategory) {
     attempts++;
   }
 
-  // POT-OVR 정합성: 목표 OVR에 도달 가능하도록 POT 최소값 보장
-  const minPotScout = Math.ceil((ovr(p) - 30) / 2.5);
-  p._potential = Math.max(p._potential||10, clamp(minPotScout, 7, 20));
+  // POT-OVR 정합성: 목표 OVR에 도달 가능하도록 POT 최소값 보장 (1~100)
+  const minPotScout = Math.ceil((ovr(p) - 30) * 2);
+  p._potential = Math.max(p._potential||50, clamp(minPotScout, 35, 100));
 
   // 선수 데이터 준비 (아직 로스터에 추가하지 않음)
   p.name = genLatinName();  // 남미 선수 이름

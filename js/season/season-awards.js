@@ -44,12 +44,12 @@ function showAwards(){
     pitTriple?{title:'투수 트리플 크라운',name:pitTriple.p.name,team:pitTriple.team.name,emoji:pitTriple.team.emoji}:null,
   ].filter(Boolean);
 
-  // 수상자 보너스: 잠재력 +1~2, 인기도 +20
+  // 수상자 보너스: 잠재력 +5~10 (1~100 스케일), 인기도 +20
   G.awards.forEach(a=>{
-    const potBoost=(a.title==='MVP'||a.title==='투수 트리플 크라운')?2:1;
+    const potBoost=(a.title==='MVP'||a.title==='투수 트리플 크라운')?10:5;
     G.teams.forEach(t=>t.roster.forEach(p=>{
       if(p.name===a.name){
-        p._potential=clamp((p._potential||10)+potBoost,1,20);
+        p._potential=clamp((p._potential||50)+potBoost,35,100);
         p.popularity=clamp(p.popularity+20,0,100);
       }
     }));

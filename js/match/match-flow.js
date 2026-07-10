@@ -230,12 +230,13 @@ function simulatePlay(){
   // ── [4] 히든 스탯 반영 ──
   const hasRISP=!!(matchState.bases[1]||matchState.bases[2]);
   const clutchAdd=hasRISP?((pitcher.clutch||50)*0.05):0;
-  const batCon=batter._consistency||10;
+  const batCon=batter._consistency||50; // 1~100 스케일
   const batInSlump=(batter._slumpGames||0)>0;
-  const batSwingBase=20-batCon;
+  const batSwingBase=Math.round((100-batCon)/5);
   const batSwing=batInSlump?rand(-batSwingBase,Math.floor(batSwingBase*0.3)):rand(-batSwingBase,batSwingBase);
-  const pitCon=pitcher._consistency||10;
-  const pitSwing=rand(-(20-pitCon),20-pitCon);
+  const pitCon=pitcher._consistency||50;
+  const pitSwingBase=Math.round((100-pitCon)/5);
+  const pitSwing=rand(-pitSwingBase,pitSwingBase);
   const aTotal=matchState.score.away.reduce((a,b)=>a+b,0);
   const hTotal=matchState.score.home.reduce((a,b)=>a+b,0);
   const inning=matchState.inning||1;
@@ -243,8 +244,8 @@ function simulatePlay(){
   const hasRunnersInScoring=!!(matchState.bases[1]||matchState.bases[2]);
   const tiebreakRunner=!!(matchState.bases[0]||matchState.bases[1]||matchState.bases[2])&&scoreDiff<=1;
   const isHighLeverage=inning>=7&&(scoreDiff<=3||hasRunnersInScoring||tiebreakRunner);
-  const batBigGame=isHighLeverage?((batter._clutchHidden||10)-10)*0.6:0;
-  const pitBigGame=isHighLeverage?((pitcher._clutchHidden||10)-10)*0.6:0;
+  const batBigGame=isHighLeverage?((batter._clutchHidden||50)-50)*0.12:0;
+  const pitBigGame=isHighLeverage?((pitcher._clutchHidden||50)-50)*0.12:0;
 
   // ── [5] 유효 투수 스탯 (피로도 커브 반영) ──
   const effStuff=((pitcher.stuff||50)+pitchBonus+clutchAdd+pitSwing+pitBigGame)*velMult*stamFactor*condFactor;
@@ -587,13 +588,13 @@ function endMatch(){
   // 의료 시설 레벨에 따라 컨디션 저하 감소
   const medReduction=Math.floor((G.myTeam.medicalLevel||0)/20);
   const dropMin=Math.max(1,2-medReduction),dropMax=Math.max(dropMin,5-medReduction);
-  // _durability 히든 스탯 반영 (1~20): 점진적 컨디션 보정 + 부상 확률
+  // _durability 히든 스탯 반영 (1~100): 점진적 컨디션 보정 + 부상 확률
   getStartingBatters(G.myTeam).forEach(p=>{
-    const dur=p._durability||10;
-    const durMod=Math.round((dur-10)/3); // -3~+3: 높으면 하락 감소, 낮으면 추가 하락
+    const dur=p._durability||50;
+    const durMod=Math.round((dur-50)/15); // -3~+3: 높으면 하락 감소, 낮으면 추가 하락
     p.condition=clamp(p.condition-rand(Math.max(1,dropMin-durMod),Math.max(1,dropMax-durMod)),30,100);
     // 부상: 내구성에 비례한 점진적 확률 (최소 0.67% 보장, 재부상 위험 반영)
-    const _injThresh=Math.max(2, 20-dur);
+    const _injThresh=Math.max(2, Math.round((100-dur)/5));
     const _injMult=(p._recentILReturn||0)>0?1.5:1.0; // 복귀 직후 재부상 위험 1.5배
     if(p.condition<55 && rand(1,300)<=Math.round(_injThresh*_injMult)){
       const _inj=rollInjuryDuration();
@@ -604,7 +605,7 @@ function endMatch(){
     if((p._recentILReturn||0)>0) p._recentILReturn--;
     // 꾸준함 슬럼프 발동/해제 (모든 선수 가능, 꾸준한 선수는 낮은 확률)
     if((p._slumpGames||0)>0){ p._slumpGames--; }
-    else if(rand(1,100)<=Math.max(1, 15-(p._consistency||10))){
+    else if(rand(1,100)<=Math.max(1, 15-Math.round((p._consistency||50)/5))){
       p._slumpGames=rand(3,7);
       addLog(`📉 ${p.name} 슬럼프 돌입! (${p._slumpGames}경기)`,'out');
     }
@@ -620,7 +621,7 @@ function endMatch(){
   (s.relieversUsed.away||[]).forEach(p=>_pitchedSet.add(p));
 
   G.myTeam.roster.filter(p=>p.isPitcher&&p.role!=='overseas'&&(p.status||'active')==='active').forEach(p=>{
-    const dur=p._durability||10;
+    const dur=p._durability||50;
     const didPitch=_pitchedSet.has(p);
 
     if(didPitch){
@@ -636,13 +637,14 @@ function endMatch(){
       else if(p._consecutiveDaysPitched>=2) condDrop+=5;
       p.condition=clamp((p.condition||100)-condDrop,0,100);
     }else{
-      // 미등판: 컨디션 회복 + 연투 초기화
-      const durBonus=Math.round((dur-10)/5); // 내구성 높으면 추가 회복
-      p.condition=clamp((p.condition||100)+15+durBonus,0,100);
+      // 미등판: 컨디션 회복 + 연투 초기화 (내구성 + 연투회복 히든 반영)
+      const durBonus=Math.round((dur-50)/25); // 내구성 높으면 추가 회복
+      const recBonus=Math.round(((p._recovery||50)-50)/25); // 연투회복 (투수 전용 히든): -2~+2
+      p.condition=clamp((p.condition||100)+15+durBonus+recBonus,0,100);
       p._consecutiveDaysPitched=0;
     }
     // 투수 부상: 컨디션 40 미만, 최소 확률 보장 + 재부상 위험
-    const _pitInjThresh=Math.max(2, 20-dur);
+    const _pitInjThresh=Math.max(2, Math.round((100-dur)/5));
     const _pitInjMult=(p._recentILReturn||0)>0?1.5:1.0;
     if(p.condition<40 && rand(1,400)<=Math.round(_pitInjThresh*_pitInjMult)){
       const _inj=rollInjuryDuration();
@@ -1207,12 +1209,12 @@ function _simMyGame(){
   const medReduction=Math.floor((G.myTeam.medicalLevel||0)/20);
   const dropMin=Math.max(1,2-medReduction),dropMax=Math.max(dropMin,5-medReduction);
   getStartingBatters(G.myTeam).forEach(p=>{
-    const dur=p._durability||10;
-    const durMod=Math.round((dur-10)/3);
+    const dur=p._durability||50;
+    const durMod=Math.round((dur-50)/15);
     p.condition=clamp(p.condition-rand(Math.max(1,dropMin-durMod),Math.max(1,dropMax-durMod)),30,100);
-    if(p.condition<55&&rand(1,300)<=(20-dur)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
+    if(p.condition<55&&rand(1,300)<=Math.round((100-dur)/5)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
     if((p._slumpGames||0)>0) p._slumpGames--;
-    else if((p._consistency||10)<10&&rand(1,100)<=(12-(p._consistency||10))){p._slumpGames=rand(3,7);}
+    else if((p._consistency||50)<50&&rand(1,100)<=(12-Math.round((p._consistency||50)/5))){p._slumpGames=rand(3,7);}
   });
   getBenchBatters(G.myTeam).forEach(p=>{
     p.condition=clamp(p.condition+rand(1,3),30,100);
@@ -1222,7 +1224,7 @@ function _simMyGame(){
   const pitchedToday=new Set();
   pitchedToday.add(homeSP);pitchedToday.add(awaySP);
   G.myTeam.roster.filter(p=>p.isPitcher&&p.role!=='overseas'&&(p.status||'active')==='active').forEach(p=>{
-    const dur=p._durability||10;
+    const dur=p._durability||50;
     const didPitch=pitchedToday.has(p)||(p._simNP>0);
     if(didPitch){
       const np=p._simNP||0;
@@ -1234,11 +1236,12 @@ function _simMyGame(){
       else if(p._consecutiveDaysPitched>=2) condDrop+=5;
       p.condition=clamp((p.condition||100)-condDrop,0,100);
     }else{
-      const durBonus=Math.round((dur-10)/5);
-      p.condition=clamp((p.condition||100)+15+durBonus,0,100);
+      const durBonus=Math.round((dur-50)/25);
+      const recBonus=Math.round(((p._recovery||50)-50)/25); // 연투회복 히든
+      p.condition=clamp((p.condition||100)+15+durBonus+recBonus,0,100);
       p._consecutiveDaysPitched=0;
     }
-    if(p.condition<40&&rand(1,400)<=(20-dur)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
+    if(p.condition<40&&rand(1,400)<=Math.round((100-dur)/5)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
   });
 
   // 해외연수 복귀
