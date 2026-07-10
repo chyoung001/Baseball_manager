@@ -11,8 +11,8 @@ function showScoutReport(idx){
 
   // ── 계약 정보 ──
   const st=p._serviceTime||0;
-  const phase=st<=PRE_ARB_MAX_SERVICE?'프리아브':st<=ARB_MAX_SERVICE?'연봉조정':'FA자격';
-  const phColor=st<=PRE_ARB_MAX_SERVICE?'#67e8f9':st<=ARB_MAX_SERVICE?'#f59e0b':'#10b981';
+  const phase=getPhaseLabel(p);
+  const phColor=getPhaseColor(p);
   const contractLeft=p._contractYears||1;
   const potCap=maxOvrFromPot(p._potential||50);
   const growthRoom=Math.max(0,potCap-ovrRaw(p)); // 절대 raw 기준 성장 여지

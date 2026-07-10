@@ -51,6 +51,8 @@ function showAwards(){
       if(p.name===a.name){
         p._potential=clamp((p._potential||50)+potBoost,35,100);
         p.popularity=clamp(p.popularity+20,0,100);
+        // P2-3 크리스 브라이언트 룰: 신인왕 수상 → 서비스타임 자동 1풀 시즌 인정
+        if(a.title==='신인왕')p._rookieFullCredit=true;
       }
     }));
   });

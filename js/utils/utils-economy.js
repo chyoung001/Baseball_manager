@@ -10,6 +10,22 @@ function deptUpgradeCost(lv){if(lv<30)return 3;if(lv<60)return 6;if(lv<80)return
 // ── 구단 재정 ──
 function getPayroll(team){return +team.roster.reduce((s,p)=>s+(p.salary||0),0).toFixed(1);}
 
+// ── P2-3 계약 단계 판정 (서비스타임 + 슈퍼2) ──
+function getContractPhase(p){
+  const st=p._serviceTime||0;
+  if(st>=FA_SERVICE_TIME_THRESHOLD)return'fa';
+  if(st>=ARB_MIN_SERVICE||(p._super2&&st>=2))return'arb';
+  return'pre';
+}
+function getPhaseLabel(p){const ph=getContractPhase(p);return ph==='pre'?'프리아브':ph==='arb'?'연봉조정':'FA자격';}
+function getPhaseColor(p){const ph=getContractPhase(p);return ph==='pre'?'#67e8f9':ph==='arb'?'#f59e0b':'#10b981';}
+// 서비스타임 적립: 1군 등록 15시리즈+ = 1풀 시즌, 미만은 21시리즈 대비 비례 (설계 8번)
+function _serviceGainFromGames(games){
+  const series=Math.floor((games||0)/SERIES_LENGTH);
+  if(series>=SERVICE_FULL_SERIES)return 1;
+  return +(series/Math.round(TOTAL_REGULAR/SERIES_LENGTH)).toFixed(2);
+}
+
 // ── P2-4 사치세 3단계 + 연속 초과 체증 (설계: 계약/연봉 로직) ──
 function getLeagueAvgPayroll(){
   if(!G.teams||G.teams.length===0)return 80;

@@ -535,6 +535,8 @@ function _recordResult(team,didWin){
 
 function endMatch(){
   G.matchInProgress=false;G.gameNum++;
+  // P2-3 서비스타임: 1군 등록 경기 수 적립 (전 구단, 스토브에서 시리즈 비례 환산)
+  G.teams.forEach(t=>t.roster.forEach(p=>{if((p.status||'active')==='active'&&p.role!=='overseas')p._svcGames=(p._svcGames||0)+1;}));
   const s=matchState;const awayR=s.score.away.reduce((a,b)=>a+b,0);const homeR=s.score.home.reduce((a,b)=>a+b,0);
   if(homeR>awayR){s.home.wins++;s.away.losses++;_recordResult(s.home,true);_recordResult(s.away,false);}
   else{s.away.wins++;s.home.losses++;_recordResult(s.away,true);_recordResult(s.home,false);}
@@ -1262,6 +1264,8 @@ function _simMyGame(){
   simulateOtherGames();
   processPostGame();
   G.gameNum++;
+  // P2-3 서비스타임: 1군 등록 경기 수 적립 (간이 시뮬 경로)
+  G.teams.forEach(t=>t.roster.forEach(p=>{if((p.status||'active')==='active'&&p.role!=='overseas')p._svcGames=(p._svcGames||0)+1;}));
 
   // 9월 확대 엔트리
   if(G.phase==='second_half'&&G.gameNum===EXPANDED_ENTRY_START){

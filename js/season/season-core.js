@@ -264,6 +264,7 @@ function _processDraftPick(){
         G.draftPool.splice(idx,1);
         best.status='futures';
         best.canDebutYear=G.season+1;
+        applyRookieContract(best,ds.round,ds.pickInRound+1); // P2-3 신인 슬롯 연봉 + 3년 고정
         // 로스터 정원 초과 시 자동 방출 (OVR 최저 + 고령 2군 선수)
         if(team.roster.length>=FUTURES_ORG_MAX){
           const cuts=team.roster.filter(p=>p.status==='futures'||p.status==='developmental')
@@ -304,6 +305,7 @@ function draftPick(uid){
   if(!p)return;
   p.status='futures';
   p.canDebutYear=G.season+1;
+  applyRookieContract(p,ds.round,ds.pickInRound+1); // P2-3 신인 슬롯 연봉 + 3년 고정
   G.myTeam.roster.push(p);
   initSeasonStats(p);
   ds.myPicks.push(p.name);
