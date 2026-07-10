@@ -99,12 +99,20 @@ const QUALIFY_RATIO_LEAGUE  = 0.50; // 리그 리�� (규정의 50%)
 const QUALIFY_RATIO_AWARDS  = 0.70; // 시상 (규정의 70%)
 const QUALIFY_RATIO_DASH    = 0.30; // 대시보드 (규정의 30%)
 
+// ===================== SEASON LENGTH (v2: 63경기/21시리즈) =====================
+// NOTE: 시즌 아웃 부상이 TOTAL_REGULAR를 참조하므로 INJURY_TYPES보다 먼저 정의.
+const TOTAL_REGULAR=63;           // 정규시즌 총 경기 (21시리즈 × 3연전)
+const FIRST_HALF_END=30;          // 전반기 종료 (G1~G30)
+const EXPANDED_ENTRY_START=43;    // 확대 엔트리 시작 경기 (9월 확대, G43~)
+const SERIES_LENGTH=3;            // 시리즈당 경기 수 (3연전 고정)
+const TOTAL_SERIES=21;            // 시즌 총 시리즈 수
+
 // ── 부상 유형 (가중 랜덤 선택) ──
 const INJURY_TYPES = [
   { type:'minor',    weight:50, minGames:3,  maxGames:7,  label:'경미한 부상' },
   { type:'moderate', weight:35, minGames:8,  maxGames:18, label:'중등도 부상' },
-  { type:'severe',   weight:12, minGames:20, maxGames:40, label:'���증 부상' },
-  { type:'season',   weight:3,  minGames:84, maxGames:84, label:'시즌 아웃' },
+  { type:'severe',   weight:12, minGames:20, maxGames:40, label:'중증 부상' },
+  { type:'season',   weight:3,  minGames:TOTAL_REGULAR, maxGames:TOTAL_REGULAR, label:'시즌 아웃' },
 ];
 function rollInjuryDuration(){
   const total=INJURY_TYPES.reduce((s,t)=>s+t.weight,0);
@@ -139,11 +147,9 @@ const SEASON_PHASES={
   AWARDS:        {id:'awards',        name:'시상식 & 은퇴',    icon:'🏅'},
   STOVE_LEAGUE:  {id:'stove_league',  name:'스토브리그',       icon:'🔥'},
 };
-const TOTAL_REGULAR=84;           // 정규시즌 총 경기
-const FIRST_HALF_END=42;          // 전반기 종료
-const EXPANDED_ENTRY_START=71;    // 확대 엔트리 시작 경기
-const EXPANDED_ROSTER_MAX=32;     // 확대 엔트리 1군 최대
-const POSTSEASON_TEAMS=5;         // 포스트시즌 진출 팀 수 (KBO 스타일)
+// TOTAL_REGULAR / FIRST_HALF_END / EXPANDED_ENTRY_START 는 상단(SEASON LENGTH)에서 정의됨
+const EXPANDED_ROSTER_MAX=32;     // 확대 엔트리 1군 최대 (TODO P2: v2 26→28로 조정)
+const POSTSEASON_TEAMS=5;         // 포스트시즌 진출 팀 수 (TODO P1a-4: v2 4팀 균형 토너먼트로 변경)
 const RETIRE_MIN_AGE_PROXY=8;     // 시즌 수 기준 은퇴 가능 (생성 후 N시즌)
 
 // ===================== DRAFT CONSTANTS =====================
