@@ -18,6 +18,8 @@ function initTeams(myIdx){
       medicalLevel:0,
       scoutingLevel:0,
       analyticsLevel:0,
+      slumpCareLevel:0,   // P2-5 슬럼프 완화 시설 (0~4)
+      mentalCoachLevel:0, // P2-5 멘탈 코칭 룸 (0~4)
       coachStaff:{batting:0,eye:0,defense:0,speed:0,pitching:0,control:0,movement:0,stamina:0,medical:0},
       moralBoost:0,
       eventRevenue:0,

@@ -7,6 +7,30 @@ function renderInvestInfra() {
   const aLv     = t.analyticsLevel || 0;
   const medDrop = Math.floor(medLv / 20);
 
+  // P2-5 신규 4레벨 시설 카드 (설계: 재정 밸런스 — 비용 5/12/25/40억, L3+ 유지비)
+  function fac4Card(key, icon, name, desc, effectFn, upgradeFn){
+    const lv = t[key] || 0;
+    const cost = FACILITY4_COSTS[lv];
+    const upkeep = FACILITY4_UPKEEP[lv] * (FACILITY4_COSTS[lv-1] || 0);
+    return `<div class="facility-card" onclick="${upgradeFn}()">
+      <div class="facility-icon">${icon}</div>
+      <div class="facility-name">${name}</div>
+      <div class="facility-desc">${desc}</div>
+      <div class="prog-bar" style="margin-top:8px;">
+        <div class="prog-bar-fill" style="width:${lv/4*100}%;background:${statColor(lv/4*100)};"></div>
+      </div>
+      <div class="facility-level">Lv.${lv}/4</div>
+      <div style="font-size:0.7rem;color:var(--accent2);margin-top:4px;">${effectFn(lv)}${upkeep>0?` · 유지비 ${won(+upkeep.toFixed(1))}/시즌`:''}</div>
+      <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px;">
+        ${lv>=4?'<span style="color:#4ade80;">✅ 최대 레벨</span>':`💰 ${won(cost)} → Lv.${lv+1}${lv+1>=3?' <span style="color:#f59e0b;">(유지비 발생)</span>':''}`}
+      </div>
+    </div>`;
+  }
+  const slumpCard = fac4Card('slumpCareLevel','🧊','슬럼프 완화 시설','슬럼프 발동 억제 · L3+ 지속 -1경기',
+    lv=>`완화율 ${Math.round(SLUMP_CARE_RELIEF[lv]*100)}%${lv<4?` → ${Math.round(SLUMP_CARE_RELIEF[lv+1]*100)}%`:''}`,'investUpgradeSlumpCare');
+  const mentalCard = fac4Card('mentalCoachLevel','🧠','멘탈 코칭 룸','하이 레버리지 클러치 보정 증폭',
+    lv=>`클러치 증폭 +${Math.round(MENTAL_COACH_AMP[lv]*100)}%${lv<4?` → +${Math.round(MENTAL_COACH_AMP[lv+1]*100)}%`:''}`,'investUpgradeMentalCoach');
+
   const facilityCards = FACILITIES.map((f, i) => {
     const lv = t[f.key];
     const c  = upgradeCost(lv);
@@ -97,12 +121,31 @@ function renderInvestInfra() {
       </div>
     </div>
 
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-title">▸ 특수 시설 (4레벨制 · P2-5)</div>
+      <div style="margin-bottom:10px;font-size:0.72rem;color:var(--text-dim);">레벨 3 이상은 시즌마다 유지비가 발생합니다 (도달 비용의 10~15%).</div>
+      <div class="facility-grid">${slumpCard}${mentalCard}</div>
+    </div>
+
     <div class="card">
       <div class="card-title">▸ 시설</div>
       <div style="margin-bottom:10px;font-size:0.72rem;color:var(--text-dim);">구단 운영 효율에 영향을 줍니다. 80 이상은 효율이 감소합니다.</div>
       <div class="facility-grid">${facilityCards}</div>
     </div>`;
 }
+
+// P2-5 신규 4레벨 시설 업그레이드
+function _investUpgradeFac4(key,label){
+  const t = G.myTeam, lv = t[key] || 0;
+  if(lv >= 4) { showToast('🚫 최대 레벨!'); return; }
+  const cost = FACILITY4_COSTS[lv];
+  if(!canSpend(t,cost)) { showToast('🚫 사용 가능 자금 부족!'); return; }
+  t.budget -= cost; t[key] = lv + 1;
+  showToast(`${label} Lv.${lv+1} 완공!`);
+  updateHeader(); renderInvest(); saveGame();
+}
+function investUpgradeSlumpCare(){_investUpgradeFac4('slumpCareLevel','🧊 슬럼프 완화 시설');}
+function investUpgradeMentalCoach(){_investUpgradeFac4('mentalCoachLevel','🧠 멘탈 코칭 룸');}
 
 function investUpgradeStadium() {
   const t = G.myTeam, lv = t.stadiumLevel || 0;

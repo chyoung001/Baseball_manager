@@ -2,17 +2,35 @@
 // 계약 협상 시스템
 // ═══════════════════════════════════════════════════════
 
+// ── 히든 스탯 기반 요구액 보정 (P2-2, 설계서 상황 B/C) ──
+// 야망(상황 C): 기대 연봉 ±10% 공격성. 충성심(상황 B): 재계약+재적 3년+ 시 홈타운 디스카운트,
+// 야망이 충성심보다 크면 차이 × 0.5%p 만큼 할인 상쇄. (o = (히든-50)/5 : 구 스케일 오프셋)
+function _contractHiddenMod(p,context){
+  const oAmb=((p._ambition||50)-50)/5;
+  let mult=1+oAmb*0.01; // 야망 -10~+10 → ×0.90~1.10
+  if(context==='renewal'&&(p._teamTenure||0)>=3){
+    const oLoy=((p._loyalty||50)-50)/5;
+    let disc=Math.max(0,oLoy*1.25); // 충성심 만점 → 12.5% 할인
+    if(oAmb>oLoy)disc=Math.max(0,disc-(oAmb-oLoy)*0.5);
+    mult*=1-disc/100;
+  }
+  return mult;
+}
+
 // 선수의 기대 계약 조건 (내부값)
-function getExpectedContract(p){
+// (기존 Math.max(1,Math.floor(...))는 1억 미만 연봉을 전부 1억으로 부풀려 최저연봉급
+//  선수의 요구액을 최대 3.3배 인플레시켰음 — 소수 그대로 유지, 슈퍼2도 전달)
+function getExpectedContract(p,context){
   const pOvr=ovr(p);
-  const salary=Math.max(1,Math.floor(_calcSalary(pOvr,p._serviceTime||0)));
+  const base=Math.max(SALARY_MIN,+_calcSalary(pOvr,p._serviceTime||0,p._super2).toFixed(1));
+  const salary=Math.max(SALARY_MIN,+(base*_contractHiddenMod(p,context)).toFixed(1));
   const years=_calcContractYears(pOvr);
-  return {salary,years,totalValue:salary*years};
+  return {salary,years,totalValue:+(salary*years).toFixed(1)};
 }
 
 // 유저 제안 판정: 'accept' | 'reject'
-function evaluateOffer(p,offerSalary,offerYears){
-  const exp=getExpectedContract(p);
+function evaluateOffer(p,offerSalary,offerYears,context){
+  const exp=getExpectedContract(p,context);
   const offerTotal=offerSalary*offerYears;
   const totalRatio=offerTotal/Math.max(1,exp.totalValue);
   const aavOk=offerSalary>=exp.salary*0.6;
@@ -37,13 +55,16 @@ function _faSnatchProb(p){
 let _negoState=null;
 
 function showNegotiationModal(p, context, onAccept, onFail, extraData){
-  const exp=getExpectedContract(p);
+  const exp=getExpectedContract(p,context);
   const aLv=G.myTeam.analyticsLevel||0;
   // 데이터 분석팀 레벨에 따른 에이전트 요구 조건 힌트 정확도
   const hintSalary=aLv>=60?exp.salary:aLv>=30?Math.floor(exp.salary*(0.8+Math.random()*0.4)):Math.floor(exp.salary*(0.5+Math.random()));
   const hintYears=aLv>=60?exp.years:aLv>=30?clamp(exp.years+rand(-1,1),1,6):clamp(exp.years+rand(-2,2),1,6);
 
-  _negoState={p,context,onAccept,onFail,extraData,attemptsLeft:3,exp};
+  // 참을성(상황 C): 협상 인내 — 높으면 역제안 기회 4회, 낮으면 2회
+  const tem=p._temperament||50;
+  const maxAttempts=tem>=65?4:tem<40?2:3;
+  _negoState={p,context,onAccept,onFail,extraData,attemptsLeft:maxAttempts,maxAttempts,exp};
 
   _renderNegotiationUI(hintSalary,hintYears);
 }
@@ -52,8 +73,8 @@ function _renderNegotiationUI(hintSalary,hintYears){
   const s=_negoState;if(!s)return;
   const p=s.p,o=ovr(p);
   const st=p._serviceTime||0;
-  const phase=st<=PRE_ARB_MAX_SERVICE?'프리아브':st<=ARB_MAX_SERVICE?'연봉조정':'FA자격';
-  const phColor=st<=PRE_ARB_MAX_SERVICE?'#67e8f9':st<=ARB_MAX_SERVICE?'#f59e0b':'#10b981';
+  const phase=getPhaseLabel(p);
+  const phColor=getPhaseColor(p);
   const contextLabel=s.context==='renewal'?'재계약':s.context==='fa'?'FA 영입':s.context==='salary'?'연봉 협상':'계약';
   const war=approxWAR(p);
 
@@ -81,8 +102,8 @@ function _renderNegotiationUI(hintSalary,hintYears){
       <span>HR <b style="color:${(ss.hr||0)>=10?'#a855f7':'var(--text)'};">${ss.hr||0}</b></span><span>RBI <b>${ss.rbi||0}</b></span>`;
   }
 
-  // 남은 협상 도트
-  const dots=Array.from({length:3},(_, i)=>{
+  // 남은 협상 도트 (참을성에 따라 2~4회)
+  const dots=Array.from({length:s.maxAttempts||3},(_, i)=>{
     if(i<s.attemptsLeft) return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);"></span>';
     return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#374151;"></span>';
   }).join('');
@@ -219,7 +240,7 @@ function _submitNegotiation(){
 
   if(sal<SALARY_MIN){$('negoResult').innerHTML=`<div style="color:#ef4444;font-size:0.72rem;padding:8px;background:#ef444411;border-radius:6px;">최소 연봉은 ${SALARY_MIN}억입니다.</div>`;return;}
 
-  const result=evaluateOffer(s.p,sal,yrs);
+  const result=evaluateOffer(s.p,sal,yrs,s.context);
   s.attemptsLeft--;
 
   if(result==='accept'){
@@ -267,7 +288,7 @@ function _submitNegotiation(){
       const exp=s.exp;
       const hint85=won(Math.floor(exp.totalValue*0.85));
       // 남은 기회 도트 업데이트
-      const dotsHTML=Array.from({length:3},(_,i)=>{
+      const dotsHTML=Array.from({length:s.maxAttempts||3},(_,i)=>{
         if(i<s.attemptsLeft) return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);"></span>';
         return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#374151;"></span>';
       }).join('');

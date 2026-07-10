@@ -36,11 +36,51 @@ function showStoveLeague(){
 
   // 정산은 시즌당 1회만 (재진입/돌아가기 시 중복 정산으로 인한 예산·서비스타임·FA 붕괴 방지)
   if(!isFirstYear && G._stoveSettledSeason!==G.season){
-    // 수익 정산 (모든 팀) — 시즌 1 첫 시작 시 건너뜀
+    // 수익 정산 (모든 팀) — P2-4: 사치세 3단계 + 연대 기금 7% 풀 적립
+    let _solidarityPool=0,_luxuryPool=0;
     G.teams.forEach(team=>{
       const tr=sorted.indexOf(team)+1;
       const rev=calcSeasonRevenue(team,tr);
+      _solidarityPool+=rev.solidarity;
+      _luxuryPool+=rev.luxTax;
       team.budget+=rev.net;
+      if(team===G.myTeam)G._lastSeasonRev=rev; // 결산 화면 표시용 스냅샷
+    });
+
+    // P2-4 사치세 연속 초과 카운터 (과세 후 갱신 — 다음 시즌 체증 기준)
+    // 리셋: 2시즌 연속 온전히 소프트캡 아래 체류 시에만 (설계 엄격 규칙)
+    G.teams.forEach(team=>{
+      if(getPayroll(team)>getLuxuryTaxLine()){
+        team._luxOverStreak=(team._luxOverStreak||0)+1;
+        team._luxUnderStreak=0;
+      }else{
+        team._luxUnderStreak=(team._luxUnderStreak||0)+1;
+        if(team._luxUnderStreak>=2)team._luxOverStreak=0;
+      }
+    });
+
+    // P2-4 샐러리 플로어 (탱킹 방지): 미달액 50% 선수 분배 + 50% 소각 → 전액 벌과금 지출
+    const _floorLine=getSalaryFloor();
+    const _floorFail=new Set();
+    G.teams.forEach(team=>{
+      const shortfall=+(_floorLine-getPayroll(team)).toFixed(1);
+      if(shortfall>0){
+        _floorFail.add(team);
+        team.budget=+(team.budget-shortfall).toFixed(1);
+        if(team===G.myTeam)showToast(`🚨 샐러리 플로어(${won(_floorLine)}) 미달! 벌과금 ${won(shortfall)} + 분배금 수령 박탈`);
+      }
+    });
+
+    // P2-4 분배금: 연대 기금 + 사치세 → 하위 4팀 역순위 (8위 35% / 7위 30% / 6위 20% / 5위 15%)
+    // 수령 자격: 샐러리 플로어 달성 팀만 (탱킹 먹튀 방지)
+    const _distPool=+(_solidarityPool+_luxuryPool).toFixed(1);
+    const _shares=[0.35,0.30,0.20,0.15];
+    const _bottom4=sorted.slice(-4).reverse(); // [8위,7위,6위,5위]
+    _bottom4.forEach((team,i)=>{
+      if(_floorFail.has(team))return;
+      const share=+(_distPool*_shares[i]).toFixed(1);
+      team.budget=+(team.budget+share).toFixed(1);
+      if(team===G.myTeam&&share>0)showToast(`🤝 리그 분배금 +${won(share)} (연대 기금+사치세)`);
     });
 
     // 연간 고정 지출 차감 (모든 팀)
@@ -56,9 +96,17 @@ function showStoveLeague(){
     G._aiRenewalLog=[];
     G.teams.forEach(team=>{
       team.roster.forEach(p=>{
-        if((p.status||'active')==='active'){
-          p._serviceTime=(p._serviceTime||0)+1;
+        // P2-3 서비스타임 시리즈 비례 적립: 1군 등록 15시리즈+ = 1풀 시즌, 미만 비례
+        // 신인왕 수상 시 자동 1풀 시즌 (크리스 브라이언트 룰)
+        let svcGain;
+        if(p._svcGames===undefined){
+          svcGain=(p.status||'active')==='active'?1:0; // 구세이브 과도기: 등록 기록 없으면 기존 규칙
+        }else{
+          svcGain=_serviceGainFromGames(p._svcGames);
         }
+        if(p._rookieFullCredit){svcGain=Math.max(svcGain,1);p._rookieFullCredit=false;}
+        if(svcGain>0)p._serviceTime=+((p._serviceTime||0)+svcGain).toFixed(2);
+        p._svcGames=0;
         p._teamTenure=(p._teamTenure||0)+1;
         p._contractYears=(p._contractYears||1)-1;
       });
@@ -72,15 +120,9 @@ function showStoveLeague(){
           if(!G._renewalCandidates) G._renewalCandidates=[];
           G._renewalCandidates.push(p);
         } else {
-          // AI 팀: 소속 구단 우선 재계약 시도
+          // AI 팀: 소속 구단 우선 재계약 시도 (P2-4: 절대 연봉 스케일)
           const pOvr=ovr(p);
-          const taxLine=LUXURY_TAX_THRESHOLD;
-          let renewSalary;
-          if(pOvr>=84) renewSalary=Math.floor(taxLine*rand(100,180)/1000);
-          else if(pOvr>=75) renewSalary=Math.floor(taxLine*rand(60,100)/1000);
-          else if(pOvr>=67) renewSalary=Math.floor(taxLine*rand(30,50)/1000);
-          else if(pOvr>=51) renewSalary=Math.floor(taxLine*rand(10,20)/1000);
-          else renewSalary=Math.max(1,Math.floor(taxLine*rand(5,10)/1000));
+          const renewSalary=Math.max(1,Math.floor(_calcSalary(pOvr,p._serviceTime||FA_SERVICE_TIME_THRESHOLD)));
           const renewYears=_calcContractYears(pOvr);
           // 재계약 조건: OVR 50+ AND 팀 예산 여유 AND 50~80% 확률 (높은 OVR일수록 높음)
           const renewProb=pOvr>=84?80:pOvr>=75?70:pOvr>=67?60:pOvr>=51?50:20;
@@ -107,6 +149,15 @@ function showStoveLeague(){
       // AI 팀은 FA 방출 선수만 로스터에서 제거, 유저 팀은 재계약 결정 후 제거
       if(team!==G.myTeam) team.roster=team.roster.filter(p=>!released.includes(p) && !(p.isForeign && (p._contractYears||0)<=0));
     });
+
+    // P2-3 슈퍼2 선정: 서비스 2년차(2.0~2.99) 상위 22% → Arb 조기 자격 (Arb 4년, FA 시기 동일)
+    const _s2Pool=[];
+    G.teams.forEach(team=>team.roster.forEach(p=>{
+      const st=p._serviceTime||0;
+      if(st>=2&&st<ARB_MIN_SERVICE&&!p._super2)_s2Pool.push(p);
+    }));
+    _s2Pool.sort((a,b)=>(b._serviceTime||0)-(a._serviceTime||0));
+    _s2Pool.slice(0,Math.ceil(_s2Pool.length*SUPER2_TOP_RATIO)).forEach(p=>{p._super2=true;});
 
     // AI 로스터 최적화 (승격/강등/방출/캡 정리)
     G.teams.filter(t=>t!==G.myTeam).forEach(t=>_aiOptimizeRoster(t));
@@ -163,8 +214,8 @@ function showStoveLeague(){
       </div>
     </div>`:'';
 
-  // 수익 정보 (시즌 1 첫 시작 시에는 수익 정산 없음)
-  const r=isFirstYear?null:calcSeasonRevenue(t,rank);
+  // 수익 정보 (시즌 1 첫 시작 시에는 수익 정산 없음) — 정산 시점 스냅샷 우선 (재계산 오차 방지)
+  const r=isFirstYear?null:(G._lastSeasonRev||calcSeasonRevenue(t,rank));
   const revenueHTML=isFirstYear?`
     <div class="card" style="background:var(--bg-card-hover);padding:12px;margin-bottom:12px;">
       <div style="font-size:0.72rem;color:var(--accent);margin-bottom:6px;">📋 팀 현황</div>
@@ -179,7 +230,8 @@ function showStoveLeague(){
       <div style="font-size:0.78rem;color:var(--text-dim);line-height:1.8;">
         인기도 +${won(r.popRev)} | 승리 +${won(r.winB)} | 시설 +${won(r.facB)} | 스타 +${won(r.starB)} | 순위 +${won(r.rankB)}
         ${r.stadBonus>0?' | 구장 +'+won(r.stadBonus):''}
-        ${r.luxTax>0?'<br><span style="color:#ef4444;">사치세 -'+won(r.luxTax)+'</span>':''}
+        ${r.luxTax>0?'<br><span style="color:#ef4444;">사치세 -'+won(r.luxTax)+' (3단계 누진)</span>':''}
+        ${r.solidarity>0?'<br><span style="color:#f59e0b;">연대 기금 -'+won(r.solidarity)+' (수입 7%, 하위 4팀 분배)</span>':''}
         <hr style="border-color:#333;margin:6px 0;">
         <span style="font-weight:700;color:var(--accent);">최종 수익: +${won(r.net)} → 보유 자금: ${won(t.budget)}</span>
       </div>
@@ -211,7 +263,7 @@ function _showRenewalNegotiation(){
   if(renewals.length===0){showToast('재계약 대상 선수가 없습니다.');showStoveLeague();return;}
 
   // 총 예상 비용
-  const totalExpCost=renewals.reduce((s,p)=>{const e=getExpectedContract(p);return s+e.salary*e.years;},0);
+  const totalExpCost=renewals.reduce((s,p)=>{const e=getExpectedContract(p,'renewal');return s+e.salary*e.years;},0);
 
   $('modalTitle').textContent='';
   $('modalBody').innerHTML=`
@@ -233,7 +285,7 @@ function _showRenewalNegotiation(){
       <!-- 선수 목록 -->
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
         ${renewals.map((p,i)=>{
-          const o=ovr(p);const exp=getExpectedContract(p);const w=approxWAR(p);
+          const o=ovr(p);const exp=getExpectedContract(p,'renewal');const w=approxWAR(p);
           return `<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#111827;border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:border-color 0.2s;" onmouseover="this.style.borderColor='#f59e0b'" onmouseout="this.style.borderColor='var(--border)'" onclick="_startRenewalNego(${i})">
             <span class="pos-badge${p.isPitcher?' pitcher':''}" style="font-size:0.6rem;padding:2px 8px;">${ALL_POS_NAMES[p.pos]||p.pos}</span>
             <div style="flex:1;">
@@ -321,18 +373,27 @@ function _calcNewSalary(p){
   const war=approxWAR(p);
   const st=p._serviceTime||0;
   const oldSalary=p.salary||0;
+  const phase=getContractPhase(p);
   let newSalary;
 
-  if(st<=PRE_ARB_MAX_SERVICE){
-    // 프리아브: 최저 연봉 고정, 팀 완전 통제
-    newSalary=PRE_ARB_SALARY;
-  }else if(st<=ARB_MAX_SERVICE){
-    // 연봉조정 (Arbitration): OVR/WAR 기반 자동 인상
-    if(pOvr>=75)newSalary=+(oldSalary*1.4+rand(1,3)*0.1).toFixed(1);
-    else if(pOvr>=59)newSalary=+(oldSalary*1.2+rand(0,2)*0.1).toFixed(1);
-    else if(pOvr>=37)newSalary=+(oldSalary*1.1).toFixed(1);
-    else newSalary=Math.max(SALARY_MIN,+(oldSalary*0.9).toFixed(1));
-    if(war>=3)newSalary=Math.round(newSalary*1.15);
+  if(phase==='pre'){
+    // 프리아브: 신인 계약 연봉 유지 (슬롯 연봉 3년 고정, 인상 없음)
+    newSalary=Math.max(PRE_ARB_SALARY,oldSalary);
+  }else if(phase==='arb'){
+    // P2-3 연봉조정 (Arbitration): 연차별 설계 인상률
+    // Arb1 = 성적 기반 베이스라인 / Arb2 = 전년 120~180% / Arb3+ = 전년 110~150%
+    // 연차는 명시적 카운터(_arbYears, 호출부에서 시즌당 1회 증가) — floor(서비스타임) 파생 시
+    // 슈퍼2 진입 기준이 뒤바뀌거나 부분 출전으로 연차가 정체되는 버그가 있어 교체
+    const arbYear=Math.max(1,p._arbYears||1);
+    if(arbYear<=1||oldSalary<=PRE_ARB_SALARY*1.5){
+      newSalary=_calcSalary(pOvr,ARB_MIN_SERVICE,p._super2); // 베이스라인 (전년 연봉 무관)
+    }else if(arbYear===2){
+      newSalary=+(oldSalary*(rand(120,180)/100)).toFixed(1);
+    }else{
+      newSalary=+(oldSalary*(rand(110,150)/100)).toFixed(1);
+    }
+    if(war>=3)newSalary=+(newSalary*1.15).toFixed(1);
+    newSalary=Math.max(SALARY_MIN,+newSalary);
   }else{
     // FA 자격자: 자유 시장 가치 기반
     if(pOvr>=75)newSalary=+(oldSalary*1.3+rand(5,20)*0.1).toFixed(1);
@@ -349,9 +410,9 @@ function _calcNewSalary(p){
 }
 
 function _getSalaryPhase(p){
-  const st=p._serviceTime||0;
-  if(st<=PRE_ARB_MAX_SERVICE)return'프리아브';
-  if(st<=ARB_MAX_SERVICE)return'연봉조정';
+  const ph=getContractPhase(p);
+  if(ph==='pre')return'프리아브';
+  if(ph==='arb')return(p._super2&&(p._serviceTime||0)<ARB_MIN_SERVICE)?'연봉조정(슈퍼2)':'연봉조정';
   return'FA자격';
 }
 
@@ -370,6 +431,8 @@ function _showSalaryNegotiation(){
     }
     // 프리아브/연봉조정 자동 조정은 시즌당 1회만 — 재진입 시 복리 인상 방지
     if(p._salaryAdjSeason===G.season)return;
+    // P2-3 Arb 연차 누적 (슈퍼2 조기 진입 포함, 서비스타임과 독립)
+    if(getContractPhase(p)==='arb')p._arbYears=(p._arbYears||0)+1;
     const oldSalary=p.salary||0;
     const newSalary=_calcNewSalary(p);
     if(newSalary!==oldSalary){
@@ -493,9 +556,9 @@ function _aiPlayerValue(p){
   else if(age<=27) val+=8;
   else if(age<=31) val+=0;
   else if(age<=33) val-=10;
-  else val-=25-(age-34)*5; // 34세: -25, 35세: -30, 36세: -35...
+  else val-=25+(age-34)*5; // 34세: -25, 35세: -30, 36세: -35... (부호 오류 수정)
   // 잠재력 가산
-  val+=((p._potential||10)-10)*2;
+  val+=((p._potential||50)-50)*0.4;
   // 연봉 효율 페널티: 고액+저능력 → 가치 급감
   if(sal>10&&o<59) val-=sal*2;
   else if(sal>20&&o<67) val-=sal;
@@ -553,7 +616,8 @@ function _aiOptimizeRoster(team){
   }
 
   // ── 3. 고액 연봉 정리: 페이롤 > 하드캡 90% 시 비효율 선수 방출 ──
-  const capThreshold=getHardCap()*0.9;
+  // P2-4: AI 정리 임계는 소프트캡(사치세 라인) 기준 — 하드캡 상향(280) 후 세금 구간 방치 방지
+  const capThreshold=getLuxuryTaxLine()*1.05;
   if(getPayroll(team)>capThreshold){
     const expensive=team.roster
       .filter(p=>(p.salary||0)>5&&_aiPlayerValue(p)<80)
@@ -587,15 +651,9 @@ function _runAIFreeAgentBidding(){
 
   pool.forEach(fa=>{
     const pOvr=ovr(fa);
-    const taxLine=LUXURY_TAX_THRESHOLD;
 
-    // 시장 가치 산정 (사치세 비율 기반)
-    let marketSalary;
-    if(pOvr>=84) marketSalary=+(taxLine*rand(100,180)/1000).toFixed(1);
-    else if(pOvr>=75) marketSalary=+(taxLine*rand(60,100)/1000).toFixed(1);
-    else if(pOvr>=67) marketSalary=+(taxLine*rand(30,50)/1000).toFixed(1);
-    else if(pOvr>=51) marketSalary=+(taxLine*rand(10,20)/1000).toFixed(1);
-    else marketSalary=+(taxLine*rand(5,10)/1000).toFixed(1);
+    // 시장 가치 산정 (P2-4: 절대 연봉 스케일)
+    const marketSalary=Math.max(SALARY_MIN,+_calcSalary(pOvr,fa._serviceTime||FA_SERVICE_TIME_THRESHOLD).toFixed(1));
 
     const contractYears=_calcContractYears(pOvr);
     const transferFee=+(pOvr*0.3+rand(5,15)).toFixed(1);
@@ -613,9 +671,9 @@ function _runAIFreeAgentBidding(){
       const need=teamNeed(t);
       const posMatch=fa.isPitcher?need.needPit:need.needBat;
       const canAfford=need.budget>(marketSalary*contractYears+transferFee);
-      // 샐러리캡 90% 초과 시 추가 영입 중단
+      // P2-4: 소프트캡(사치세 라인) 근접 시 추가 영입 중단 — AI가 모르고 세금 구간에 눌러앉는 것 방지
       const payroll=getPayroll(t);
-      if(payroll+marketSalary>getHardCap()*0.9) return false;
+      if(payroll+marketSalary>getLuxuryTaxLine()*1.05) return false;
       // 높은 OVR → 더 많은 팀이 관심 (랜덤 경쟁)
       const interest=pOvr>=84?60:pOvr>=75?45:pOvr>=67?30:20;
       return canAfford&&(posMatch||rand(1,100)<=interest);
@@ -664,12 +722,11 @@ function _runAIFreeAgentBidding(){
 function _showFAMarket(){
   G.marketPlayers=[];
   const faMult=G.myTeam.concept==='pitching'?1.05:G.myTeam.concept==='prospect'?1.10:1.0;
-  const taxLine=LUXURY_TAX_THRESHOLD;
 
   // 1. 계약 만료로 FA 풀에 남은 선수 (AI가 안 가져간 것)
   (G.faPool||[]).forEach(fa=>{
     fa.price=+(fa.price||((ovr(fa)*0.3+rand(5,15))*faMult)).toFixed(1);
-    if(!fa.salary) fa.salary=+(taxLine*rand(10,30)/1000).toFixed(1);
+    if(!fa.salary) fa.salary=Math.max(SALARY_MIN,+_calcSalary(ovr(fa),fa._serviceTime||FA_SERVICE_TIME_THRESHOLD).toFixed(1));
     if(!fa._contractYears) fa._contractYears=_calcContractYears(ovr(fa));
     fa.status='futures';
     if(!fa.ss)initSeasonStats(fa);

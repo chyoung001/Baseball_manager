@@ -7,15 +7,15 @@ function showScoutReport(idx){
   const rdLv=G.myTeam.analyticsLevel||0;
   const accuracy=rdLv>=60?'높음':rdLv>=30?'보통':'낮음';
   const tm=G.testMode;
-  function debugNum(key){return tm?`<span style="font-family:'JetBrains Mono',monospace;color:#a855f7;font-size:0.75rem;margin-left:6px;">[${p[key]||0}/20]</span>`:''}
+  function debugNum(key){return tm?`<span style="font-family:'JetBrains Mono',monospace;color:#a855f7;font-size:0.75rem;margin-left:6px;">[${p[key]||0}/100]</span>`:''}
 
   // ── 계약 정보 ──
   const st=p._serviceTime||0;
-  const phase=st<=PRE_ARB_MAX_SERVICE?'프리아브':st<=ARB_MAX_SERVICE?'연봉조정':'FA자격';
-  const phColor=st<=PRE_ARB_MAX_SERVICE?'#67e8f9':st<=ARB_MAX_SERVICE?'#f59e0b':'#10b981';
+  const phase=getPhaseLabel(p);
+  const phColor=getPhaseColor(p);
   const contractLeft=p._contractYears||1;
-  const potCap=maxOvrFromPot(p._potential||10);
-  const growthRoom=Math.max(0,potCap-o);
+  const potCap=maxOvrFromPot(p._potential||50);
+  const growthRoom=Math.max(0,potCap-ovrRaw(p)); // 절대 raw 기준 성장 여지
   const foreignBadge=p.isForeign?'<span style="background:#3b82f622;color:#3b82f6;font-size:0.6rem;padding:1px 5px;border-radius:3px;margin-left:4px;">외국인</span>':'';
 
   // ── 능력치 바 생성 ──
@@ -60,6 +60,42 @@ function showScoutReport(idx){
       <div><div style="color:var(--text-dim);">K</div><div>${s.k||0}</div></div>
       <div><div style="color:var(--text-dim);">SB</div><div>${s.sb||0}</div></div>
     </div>`;
+  }
+
+  // ── P2-1 가중치 힌트 (프론트오피스 레벨별: L1 TOP2 / L2 4단계 / L3 전환 시뮬) ──
+  const aTier=_displayTier(rdLv);
+  const subPosBadge=(!p.isPitcher&&Array.isArray(p._subPos)&&p._subPos.length>0)
+    ?`<span style="background:#8b5cf622;color:#a78bfa;font-size:0.6rem;padding:1px 6px;border-radius:3px;">서브 ${p._subPos.map(x=>ALL_POS_NAMES[x]||x).join('·')}</span>`:'';
+  let weightHTML='';
+  if(aTier>=1){
+    const w=_ovrWeights(p);
+    const KN=p.isPitcher
+      ?{stuff:'구위',control:'제구',velocity:'구속',movement:'무브',stamina:'지구력',clutch:'위기'}
+      :{contact:'컨택',power:'파워',eye:'선구',speed:'주력',fielding:'수비',arm:'어깨'};
+    const entries=Object.keys(w).map(k=>({label:KN[k]||k,w:w[k]})).sort((a,b)=>b.w-a.w);
+    let body='';
+    if(aTier===1){
+      body=`<span style="font-size:0.7rem;color:var(--text-dim);">핵심 스탯: </span>${entries.slice(0,2).map(e=>`<b style="font-size:0.72rem;color:var(--accent);">${e.label}</b>`).join('<span style="color:var(--text-dim);"> · </span>')}<span style="font-size:0.62rem;color:var(--text-dim);margin-left:6px;">(분석팀 Lv.20+ 정보)</span>`;
+    }else{
+      const lvl=x=>x>=0.20?['매우높음','#a855f7']:x>=0.15?['높음','#10b981']:x>=0.10?['보통','#f59e0b']:['낮음','var(--text-dim)'];
+      body=`<div style="display:flex;gap:4px;flex-wrap:wrap;">${entries.map(e=>{const g=lvl(e.w);return `<span style="background:#111827;border-radius:4px;padding:2px 7px;font-size:0.62rem;color:var(--text-dim);">${e.label} <b style="color:${g[1]};">${g[0]}</b></span>`;}).join('')}</div>`;
+    }
+    let simHTML='';
+    if(aTier>=3&&!p.isPitcher){
+      const sims=['C','1B','2B','3B','SS','LF','CF','RF'].filter(x=>x!==p.pos).map(t=>{
+        const v=simulatePosOvr(p,t);
+        return v==null
+          ?`<span style="background:#111827;border-radius:4px;padding:2px 7px;font-size:0.62rem;color:#ef4444;">${ALL_POS_NAMES[t]||t} 불가</span>`
+          :`<span style="background:#111827;border-radius:4px;padding:2px 7px;font-size:0.62rem;color:var(--text-dim);">${ALL_POS_NAMES[t]||t} <b style="color:${statColor(v)};">${v}</b></span>`;
+      }).join('');
+      simHTML=`<div style="font-size:0.62rem;color:var(--text-dim);margin:6px 0 4px;">포지션 전환 시 OVR (전환 페널티 반영):</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${sims}</div>`;
+    }
+    weightHTML=`<div style="background:var(--bg-card-hover);border-radius:8px;padding:10px;margin-bottom:12px;">
+      <div style="font-size:0.68rem;color:var(--accent);margin-bottom:6px;">📐 포지션 가중치 ${subPosBadge}</div>
+      ${body}${simHTML}
+    </div>`;
+  }else if(subPosBadge){
+    weightHTML=`<div style="margin-bottom:12px;">${subPosBadge}</div>`;
   }
 
   $('modalTitle').textContent=`📋 선수 분석 — ${p.name}`;
@@ -115,6 +151,9 @@ function showScoutReport(idx){
         ${statsHTML}
       </div>
 
+      <!-- 포지션 가중치 힌트 (P2-1, 프론트오피스 레벨별) -->
+      ${weightHTML}
+
       <!-- 시즌 성적 -->
       <div style="background:var(--bg-card-hover);border-radius:8px;padding:10px;margin-bottom:12px;">
         <div style="font-size:0.68rem;color:var(--accent);margin-bottom:6px;">📈 시즌 ${G.season} 성적</div>
@@ -143,10 +182,35 @@ function showScoutReport(idx){
           <div class="scout-grade ${r.clt.cls}">${r.clt.text}</div>
           <div class="scout-desc">${r.cltText}</div>
         </div>
-        <div class="scout-item" style="grid-column:span 2;">
+        <div class="scout-item">
           <div class="scout-label">🏋️ 프로의식 ${debugNum('_workEthic')}</div>
           <div class="scout-grade ${r.we.cls}">${r.we.text}</div>
           <div class="scout-desc">${r.weText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">🧩 다재다능 ${debugNum('_versatility')}</div>
+          <div class="scout-grade ${r.ver.cls}">${r.ver.text}</div>
+          <div class="scout-desc">${r.verText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">🚀 야망 ${debugNum('_ambition')}</div>
+          <div class="scout-grade ${r.amb.cls}">${r.amb.text}</div>
+          <div class="scout-desc">${r.ambText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">💙 충성심 ${debugNum('_loyalty')}</div>
+          <div class="scout-grade ${r.loy.cls}">${r.loy.text}</div>
+          <div class="scout-desc">${r.loyText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">🧘 참을성 ${debugNum('_temperament')}</div>
+          <div class="scout-grade ${r.tem.cls}">${r.tem.text}</div>
+          <div class="scout-desc">${r.temText}</div>
+        </div>
+        <div class="scout-item">
+          <div class="scout-label">${p.isPitcher?'🔄 연투회복':'↩️ 당김성향'} ${debugNum(p.isPitcher?'_recovery':'_pullTendency')}</div>
+          <div class="scout-grade ${r.ext.cls}">${r.ext.text}</div>
+          <div class="scout-desc">${r.extText}</div>
         </div>
       </div>
 
@@ -212,16 +276,15 @@ function changePlayerPos(rosterIdx, newPos) {
   const p = G.myTeam.roster[rosterIdx];
   if(!p || G.matchInProgress) return;
   const oldPos = p.pos;
-  // DH로 전환: 원래 포지션 기억
-  if(newPos === 'DH' && oldPos !== 'DH') {
-    p._naturalPos = oldPos;
-  }
-  // DH에서 해제: naturalPos 삭제
-  if(oldPos === 'DH' && newPos !== 'DH') {
-    delete p._naturalPos;
-  }
+  // 본 포지션 영구 기록 (P2-1 전환 페널티 기준점, 구세이브 보정)
+  if(!p.isPitcher && p._naturalPos == null && oldPos !== 'DH') p._naturalPos = oldPos;
   p.pos = newPos;
   if(p.isPitcher) p.role = newPos === 'SP' ? 'rotation' : 'bullpen';
+  // 전환 페널티 안내 (본 포지션 이탈 시 수비 스탯 % 감소)
+  if(!p.isPitcher && newPos !== 'DH'){
+    const pen = getPosSwitchPenalty(p, newPos);
+    if(pen > 0) showToast(`⚠️ ${p.name} ${ALL_POS_NAMES[newPos]||newPos} 전환 — 수비 −${pen}% (다재다능·서브 경험 반영)`);
+  }
   document.querySelectorAll('.pos-changeable.open').forEach(e => e.classList.remove('open'));
   renderRoster();saveGame();
 }

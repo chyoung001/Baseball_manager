@@ -48,9 +48,24 @@ const FACILITIES=[
 ];
 
 // ===================== INVESTMENT CONSTANTS (단위: 억원) =====================
-const LUXURY_TAX_THRESHOLD = 140; // 사치세 라인 (고정)
-const HARD_CAP = 210;             // 하드캡 (고정)
-const LUXURY_TAX_RATE = 0.30;     // 초과분의 30% 사치세
+// ── P2-4 사치세 3단계 (설계: 계약/연봉 로직 — 소프트캡 200억 CBT) ──
+const LUXURY_SOFT_CAP = 200;          // 소프트캡 (GM 회의로 유동)
+const LUXURY_TIERS = [                // 초과분 구간별 세율: 200~220 20% / 220~250 40% / 250+ 60%
+  {upTo:20, rate:0.20},
+  {upTo:50, rate:0.40},
+  {upTo:Infinity, rate:0.60},
+];
+const LUXURY_REPEAT_SURCHARGE = 0.10; // 연속 초과 시즌당 +10%p 체증
+const LUXURY_REPEAT_CAP = 0.20;       // 체증 상한 +20%p (3시즌+ 고정)
+const SALARY_FLOOR = 50;              // 샐러리 플로어 (탱킹 방지) — 설계 목표 80억은 P2-3 연봉 현실화(신인 슬롯·Arb 인상률) 후 상향 (현행 리그 평균 페이롤 ~60억 기준 과도기 값)
+const HARD_CAP = 280;                 // AI 영입 가드 상한 (설계상 하드캡은 폐지 — 내부 안전장치)
+
+// ── P2-5 신규 4레벨 시설 (설계: 재정 밸런스 — 7시설 체계 중 신규 2종 선행 도입) ──
+// 기존 5축(구장/육성/스카우팅/의료/분석)의 0~100 → 4레벨 전면 전환은 P3 파크팩터와 함께 진행
+const FACILITY4_COSTS = [5, 12, 25, 40];            // 레벨 1~4 업그레이드 비용 (슬럼프케어·멘탈코칭 공통)
+const SLUMP_CARE_RELIEF = [0, 0.10, 0.25, 0.40, 0.50]; // 슬럼프 완화율 (L0~L4)
+const MENTAL_COACH_AMP = [0, 0.15, 0.25, 0.35, 0.50];  // 클러치 보정 증폭률 (L0~L4)
+const FACILITY4_UPKEEP = [0, 0, 0, 0.10, 0.15];     // 연 유지비 (해당 레벨 도달 비용 대비, L3+)
 
 const STADIUM_REVENUE_BONUS = 0.12; // 레벨당 +12% 시즌 수익
 const STADIUM_MAX_LEVEL = 5;
@@ -155,6 +170,8 @@ const GM_PROPOSALS=[
   {id:'salary_relax',  icon:'💰', name:'샐러리캡 완화',       desc:'사치세 라인 +20억 (부자 구단 유리)',    aiSupport:0.45, effect:{key:'luxuryLineBonus', value:20}},
   {id:'salary_tight',  icon:'📉', name:'샐러리캡 강화',       desc:'사치세 라인 -20억 (전력 평준화)',       aiSupport:0.50, effect:{key:'luxuryLineBonus', value:-20}},
   {id:'hardcap_up',    icon:'🏦', name:'하드캡 인상',         desc:'하드캡 +30억 (초고액 계약 허용)',       aiSupport:0.40, effect:{key:'hardCapBonus',   value:30}},
+  {id:'floor_up',      icon:'🧱', name:'샐러리 플로어 인상',   desc:'플로어 +10억 (최소 지출 강제 강화)',    aiSupport:0.45, effect:{key:'salaryFloorBonus', value:10}},
+  {id:'floor_down',    icon:'🪶', name:'샐러리 플로어 완화',   desc:'플로어 -10억 (리빌딩 구단 숨통)',       aiSupport:0.50, effect:{key:'salaryFloorBonus', value:-10}},
   {id:'expanded_early',icon:'📋', name:'확대 엔트리 조기 시행', desc:'9월 확대 엔트리를 5경기 앞당김',        aiSupport:0.60, effect:{key:'expandedEarly',  value:5}},
   {id:'champ_bonus',   icon:'🏆', name:'우승 상금 인상',       desc:'챔피언 상금 +30억',                    aiSupport:0.70, effect:{key:'champBonusExtra',value:30}},
   {id:'draft_bumper',  icon:'🌱', name:'드래프트 풍년',       desc:'다음 신인 풀 품질 소폭 상승',           aiSupport:0.65, effect:{key:'draftQualityBonus', value:3}},
@@ -172,11 +189,14 @@ const DRAFT_ROUNDS=6;             // 드래프트 라운드 수 (6라운드 × 8
 const DRAFT_POOL_SIZE=32;         // 드래프트 풀 크기 (4라운드 × 8팀)
 
 // ===================== FA & SALARY CONSTANTS (KBO-style, 단위: 억원) =====================
-const FA_SERVICE_TIME_THRESHOLD=6;   // FA 자격 서비스 타임 (KBO 기준)
-const PRE_ARB_MAX_SERVICE=3;         // 프리FA: 0~3시즌 (최저 연봉 고정)
-const ARB_MIN_SERVICE=4;             // 연봉조정 시작: 4시즌
-const ARB_MAX_SERVICE=6;             // 연봉조정 종료: 6시즌
-const PRE_ARB_SALARY=0.3;           // 프리FA 최저 연봉 (0.3억 = 3000만원)
+// P2-3 설계 정렬: 신인 계약 3년(서비스 0~2) → Arb 서비스 3~5 → FA 서비스 6+
+const FA_SERVICE_TIME_THRESHOLD=6;   // FA 자격 서비스 타임
+const PRE_ARB_MAX_SERVICE=2;         // 프리Arb: 서비스 0~2 (신인 계약 기간)
+const ARB_MIN_SERVICE=3;             // 연봉조정 시작: 3시즌 (슈퍼2는 2시즌+상위 22%)
+const ARB_MAX_SERVICE=5;             // 연봉조정 종료: 5시즌
+const SUPER2_TOP_RATIO=0.22;         // 슈퍼2: 2년차 서비스 상위 22%에 Arb 조기 자격
+const SERVICE_FULL_SERIES=15;        // 1풀 시즌 인정 최소 1군 등록 시리즈 (21시리즈 중)
+const PRE_ARB_SALARY=0.3;           // 프리Arb 최저 연봉 (0.3억 = 3000만원)
 const SALARY_MIN=0.3;               // 리그 최저 연봉 (3000만원)
 const SALARY_ADJUSTMENT_FACTOR=0.3;  // WAR 기반 연봉 조정 계수
 

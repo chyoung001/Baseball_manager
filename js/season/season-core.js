@@ -30,9 +30,9 @@ function showPreseason(){
     // 대규모 스탯 업데이트 (에이징 + 프로의식 기반, 잠재력은 천장 역할만)
     G.teams.forEach(team=>{
       team.roster.forEach(p=>{
-        const pot=p._potential||10;
-        const we=p._workEthic||10;
-        const ethicMod=0.5+(we/20); // 0.85~1.5
+        const pot=p._potential||50;
+        const we=p._workEthic||50;
+        const ethicMod=0.5+(we/100); // 0.85~1.5 (히든 1~100)
         const seasonsPlayed=p._seasonsPlayed||0;
 
         // 에이징 면역 체크 (의료 센터 대성공)
@@ -40,7 +40,7 @@ function showPreseason(){
           p.agingImmunityYears--;
           const immuneGrowth=Math.round((rand(0,2)+Math.floor(team.devLevel/30))*ethicMod);
           const stats=p.isPitcher?['stuff','control','velocity','movement','stamina','clutch']:['contact','power','eye','speed','fielding','arm'];
-          if(ovr(p)<maxOvrFromPot(pot)){
+          if(ovrRaw(p)<maxOvrFromPot(pot)){
             stats.forEach(s=>{p[s]=clamp((p[s]||0)+immuneGrowth,STAT_MIN,STAT_MAX);});
           }
           p.condition=rand(75,100);
@@ -52,8 +52,8 @@ function showPreseason(){
 
         // 프로의식 기반 에이징 커브 시작 시점 조정
         // 기본: 8시즌부터 하락, 12시즌부터 급하락
-        // workEthic 15+: 2~3시즌 지연 / workEthic 7-: 1~2시즌 조기
-        const ethicShift=we>=15?-rand(2,3):we<=7?rand(1,2):0;
+        // workEthic 75+: 2~3시즌 지연 / workEthic 35-: 1~2시즌 조기
+        const ethicShift=we>=75?-rand(2,3):we<=35?rand(1,2):0;
         const agingStart=8+ethicShift;
         const agingSevere=12+ethicShift;
 
@@ -76,7 +76,7 @@ function showPreseason(){
         const growth=Math.round(baseGrowth*ethicMod);
 
         const potCap=maxOvrFromPot(pot);
-        const canGrow=ovr(p)<potCap;
+        const canGrow=ovrRaw(p)<potCap;
         if(p.isPitcher){
           if(canGrow)['stuff','movement'].forEach(s=>{p[s]=clamp((p[s]||0)+growth,STAT_MIN,STAT_MAX);});
           p.velocity=clamp((p.velocity||0)+(canGrow?growth:0)-velPen,STAT_MIN,STAT_MAX);
@@ -98,6 +98,18 @@ function showPreseason(){
         p._slumpGames=0; // 시즌 초기화
         p._tradeRefused=false; // 거부권 리셋
         if(p.age)p.age++;
+
+        // P2-1 서브 포지션 습득: 다재다능 65+ 타자, 커리어 중 최대 1개 추가 (10% 확률)
+        if(!p.isPitcher&&!p._subPosLearned&&(p._versatility||50)>=65
+          &&Array.isArray(p._subPos)&&p._subPos.length<2&&rand(1,100)<=10){
+          const natPos=p._naturalPos||p.pos;
+          const cand=(_SUBPOS_CANDIDATES[natPos]||[]).filter(x=>!p._subPos.includes(x));
+          if(cand.length){
+            p._subPos.push(pick(cand));
+            p._subPosLearned=true;
+            if(team===G.myTeam)showToast(`🧩 ${p.name} 서브 포지션 습득! (${p._subPos.join('·')})`);
+          }
+        }
       });
     });
   }
@@ -140,8 +152,8 @@ function _confirmPreseason(){
 function _getTopChanges(team){
   const changes=[];
   team.roster.filter(p=>(p.status||'active')==='active').slice(0,20).forEach(p=>{
-    const pot=p._potential||10;const sp=p._seasonsPlayed||0;
-    if(pot>=14){changes.push({name:p.name,stat:'성장↑',delta:rand(1,3)});}
+    const pot=p._potential||50;const sp=p._seasonsPlayed||0;
+    if(pot>=70){changes.push({name:p.name,stat:'성장↑',delta:rand(1,3)});}
     else if(sp>=10){changes.push({name:p.name,stat:'노화↓',delta:-rand(1,3)});}
   });
   return changes.slice(0,5);
@@ -242,7 +254,7 @@ function _processDraftPick(){
         if(!p.isPitcher&&needBat)score+=rand(5,10);
         if(p.isPitcher&&needPit)score+=rand(5,10);
         // POT 가중치
-        if((p._potential||10)>=15)score+=rand(3,8);
+        if((p._potential||50)>=75)score+=rand(3,8);
         return {p,score};
       }).sort((a,b)=>b.score-a.score);
 
@@ -252,6 +264,7 @@ function _processDraftPick(){
         G.draftPool.splice(idx,1);
         best.status='futures';
         best.canDebutYear=G.season+1;
+        applyRookieContract(best,ds.round,ds.pickInRound+1); // P2-3 신인 슬롯 연봉 + 3년 고정
         // 로스터 정원 초과 시 자동 방출 (OVR 최저 + 고령 2군 선수)
         if(team.roster.length>=FUTURES_ORG_MAX){
           const cuts=team.roster.filter(p=>p.status==='futures'||p.status==='developmental')
@@ -292,6 +305,7 @@ function draftPick(uid){
   if(!p)return;
   p.status='futures';
   p.canDebutYear=G.season+1;
+  applyRookieContract(p,ds.round,ds.pickInRound+1); // P2-3 신인 슬롯 연봉 + 3년 고정
   G.myTeam.roster.push(p);
   initSeasonStats(p);
   ds.myPicks.push(p.name);

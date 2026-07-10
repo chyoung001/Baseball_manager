@@ -18,16 +18,16 @@ function _posOffensePenalty(pos){
 // 에이징 커브 잠재력: 23세 이하 높은 POT, 36세+ POT 캡
 // OVR 기반 최소 잠재력: 이미 고능력을 증명한 선수는 잠재력 하한 보장
 function _agingPotential(age, basePot, currentOvr){
-  // OVR 기반 최소 잠재력 (능력이 증명된 선수)
-  const ovrFloor=currentOvr>=84?14 : currentOvr>=75?12 : currentOvr>=67?10 : 7;
+  // OVR 기반 최소 잠재력 (능력이 증명된 선수) — POT 1~100 스케일
+  const ovrFloor=currentOvr>=84?70 : currentOvr>=75?60 : currentOvr>=67?50 : 35;
 
   let pot;
-  if(age<=23)      pot=clamp(basePot+rand(1,3), 7, 20);
-  else if(age<=29) pot=clamp(basePot-rand(0,1), 7, 20);
-  else if(age<=35) pot=clamp(basePot-rand(1,3), 7, 15);
+  if(age<=23)      pot=clamp(basePot+rand(5,15), 35, 100);
+  else if(age<=29) pot=clamp(basePot-rand(0,5), 35, 100);
+  else if(age<=35) pot=clamp(basePot-rand(5,15), 35, 75);
   else {
-    const ovrLevel=Math.round((currentOvr-20)/6);
-    pot=clamp(Math.min(basePot, ovrLevel+rand(0,2)), 7, 10);
+    const ovrLevel=Math.round((currentOvr-1)/1.98);
+    pot=clamp(Math.min(basePot, ovrLevel+rand(0,10)), 35, 50);
   }
 
   return Math.max(pot, ovrFloor);
@@ -79,8 +79,8 @@ function _forceDraftOvr(p, targetOvr){
   stats.forEach(s=>{p[s]=clamp(rand(1,14),STAT_MIN,STAT_MAX);});
   // 타겟 OVR까지 조정
   let att=0;
-  while(Math.abs(ovr(p)-targetOvr)>2 && att<30){
-    const diff=targetOvr-ovr(p);
+  while(Math.abs(ovrRaw(p)-targetOvr)>2 && att<30){
+    const diff=targetOvr-ovrRaw(p);
     const s=pick(stats);
     p[s]=clamp(p[s]+Math.round(diff*0.5),STAT_MIN,STAT_MAX);
     att++;

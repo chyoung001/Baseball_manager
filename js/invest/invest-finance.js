@@ -5,6 +5,9 @@ function renderInvestFinance() {
   const luxTax = getLuxuryTax(t);
   const overHard = payroll >= getHardCap();
   const overSoft = payroll > getLuxuryTaxLine();
+  const floorLine = getSalaryFloor();
+  const underFloor = payroll < floorLine;
+  const surcharge = getLuxurySurcharge(t);
   const stadMult = (1 + (t.stadiumLevel || 0) * STADIUM_REVENUE_BONUS).toFixed(2);
 
   const sortedRoster = [...t.roster].sort((a, b) => (b.salary || 0) - (a.salary || 0));
@@ -15,13 +18,13 @@ function renderInvestFinance() {
       <div class="finance-grid" style="margin-bottom:12px;">
         <div class="finance-item">
           <div class="finance-label">총 페이롤</div>
-          <div class="finance-value" style="color:${overHard?'#ef4444':overSoft?'#f97316':'var(--accent2)'};">${won(payroll)}</div>
-          <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">소프트 ${won(getLuxuryTaxLine())} / 한도 ${won(getHardCap())}</div>
+          <div class="finance-value" style="color:${overHard?'#ef4444':overSoft?'#f97316':underFloor?'#ef4444':'var(--accent2)'};">${won(payroll)}</div>
+          <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">플로어 ${won(floorLine)} / 소프트캡 ${won(getLuxuryTaxLine())}</div>
         </div>
         <div class="finance-item">
           <div class="finance-label">시즌 사치세</div>
           <div class="finance-value" style="color:${luxTax>0?'#ef4444':'var(--accent2)'};">${luxTax > 0 ? '-'+won(luxTax) : '없음'}</div>
-          <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">초과분 × ${LUXURY_TAX_RATE*100}%</div>
+          <div style="font-size:0.65rem;color:var(--text-dim);margin-top:2px;">누진 20/40/60%${surcharge>0?` +연속초과 ${Math.round(surcharge*100)}%p`:''}</div>
         </div>
         <div class="finance-item">
           <div class="finance-label">경기장 수익 배율</div>
@@ -34,7 +37,8 @@ function renderInvestFinance() {
         </div>
       </div>
       ${overHard ? `<div class="invest-warning">🚫 하드 캡(${won(getHardCap())}) 초과! 신규 선수 영입이 불가합니다.</div>` : ''}
-      ${overSoft && !overHard ? `<div class="invest-warning" style="border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.08);">⚠️ 사치세 구간! 초과분 ${won(payroll - getLuxuryTaxLine())} × ${LUXURY_TAX_RATE*100}% = <strong>${won(luxTax)}</strong>이 시즌 수익에서 차감됩니다.</div>` : ''}
+      ${overSoft && !overHard ? `<div class="invest-warning" style="border-color:#f97316;color:#f97316;background:rgba(249,115,22,0.08);">⚠️ 사치세 구간! 초과분 ${won(+(payroll - getLuxuryTaxLine()).toFixed(1))} → 누진 과세 <strong>${won(luxTax)}</strong> (20/40/60%${surcharge>0?`, 연속 초과 +${Math.round(surcharge*100)}%p`:''}). 시즌 수익에서 차감됩니다.</div>` : ''}
+      ${underFloor ? `<div class="invest-warning" style="border-color:#ef4444;color:#ef4444;background:rgba(239,68,68,0.08);">🚨 샐러리 플로어(${won(floorLine)}) 미달! 시즌 종료 시 미달액 <strong>${won(+(floorLine-payroll).toFixed(1))}</strong> 전액 벌과금 + 리그 분배금 수령 박탈.</div>` : ''}
 
       <div class="card-title" style="margin-top:14px;">▸ 선수 연봉 내역</div>
       <div style="overflow-x:auto;">

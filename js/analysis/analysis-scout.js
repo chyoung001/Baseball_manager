@@ -25,13 +25,13 @@ function renderAnalysisScout() {
   }
 
   function hiddenBar(val, revealed, max) {
-    max = max || 20;
+    max = max || 100; // 히든 스탯 1~100 스케일
     // 테스트 모드가 아니고 분석팀 레벨이 부족하면 잠금 (데이터분석팀 투자 가치 부여)
     if (!tm && revealed === false) {
       return `<span style="color:var(--text-dim);font-size:0.7rem;" title="데이터분석팀 투자로 열람">🔒</span>`;
     }
     const pct = Math.round((val / max) * 100);
-    const color = val >= 17 ? '#a855f7' : val >= 13 ? '#10b981' : val >= 9 ? '#f59e0b' : val >= 5 ? '#f97316' : '#ef4444';
+    const color = val >= 85 ? '#a855f7' : val >= 65 ? '#10b981' : val >= 45 ? '#f59e0b' : val >= 25 ? '#f97316' : '#ef4444';
     return tm
       ? `<div style="display:flex;align-items:center;gap:4px;">
           <div style="width:50px;height:5px;background:#1f2937;border-radius:3px;overflow:hidden;">
@@ -71,8 +71,8 @@ function renderAnalysisScout() {
             const o = ovr(p);
             const av = getAnalyticsHiddenInfo(p, aLv);  // 분석팀 레벨별 열람 가능 히든스탯
             const st = p._serviceTime || 0;
-            const phase = st <= PRE_ARB_MAX_SERVICE ? '프리아브' : st <= ARB_MAX_SERVICE ? '연봉조정' : 'FA자격';
-            const phColor = st <= PRE_ARB_MAX_SERVICE ? '#67e8f9' : st <= ARB_MAX_SERVICE ? '#f59e0b' : '#10b981';
+            const phase = getPhaseLabel(p);
+            const phColor = getPhaseColor(p);
             return `<tr>
               <td style="text-align:left;"><span class="player-name" style="font-size:0.72rem;">${p.name}</span><span class="scout-btn" onclick="showScoutReport(${G.myTeam.roster.indexOf(p)});event.stopPropagation();" title="선수 분석">📋</span></td>
               <td><span class="pos-badge${p.isPitcher ? ' pitcher' : ''}" style="font-size:0.55rem;padding:1px 4px;">${ALL_POS_NAMES[p.pos] || p.pos}</span></td>
@@ -80,11 +80,11 @@ function renderAnalysisScout() {
               <td style="color:${statColor(o)};font-weight:700;">${o}</td>
               <td style="font-family:'JetBrains Mono',monospace;">${won(p.salary || 0)}</td>
               <td><span style="color:${phColor};font-size:0.65rem;font-weight:600;">${phase}</span> <span style="color:var(--text-dim);font-size:0.6rem;">${st}yr</span></td>
-              <td>${hiddenBar(p._potential || 10)}</td>
-              <td>${hiddenBar(p._durability || 10, av.durability !== undefined)}</td>
-              <td>${hiddenBar(p._consistency || 10, av.consistency !== undefined)}</td>
-              <td>${hiddenBar(p._clutchHidden || 10, av.clutchHidden !== undefined)}</td>
-              <td>${hiddenBar(p._workEthic || 10)}</td>
+              <td>${hiddenBar(p._potential || 50)}</td>
+              <td>${hiddenBar(p._durability || 50, av.durability !== undefined)}</td>
+              <td>${hiddenBar(p._consistency || 50, av.consistency !== undefined)}</td>
+              <td>${hiddenBar(p._clutchHidden || 50, av.clutchHidden !== undefined)}</td>
+              <td>${hiddenBar(p._workEthic || 50)}</td>
               <td style="color:${(p.condition || 100) < 40 ? '#ef4444' : 'var(--text)'};">${p.condition || 100}%${(p._slumpGames||0)>0?'<span style="color:#ef4444;font-size:0.6rem;"> 📉</span>':''}</td>
             </tr>`;
           }).join('')}</tbody>

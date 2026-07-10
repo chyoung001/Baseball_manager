@@ -243,11 +243,13 @@ const realism = g(`(function(){
   const qual=all.filter(p=>!p.isPitcher&&p.ss&&(p.ss.ab||0)>=100);
   const avg=p=>(p.ss.h||0)/(p.ss.ab||1);
   const maxAVG=qual.length?Math.max(...qual.map(avg)):0;
-  const maxHR=Math.max(0,...all.map(p=>(p.ss&&p.ss.hr)||0));
-  return {maxAVG,maxHR,nQual:qual.length};
+  let hrLeader=null;
+  all.forEach(p=>{if(p.ss&&(!hrLeader||(p.ss.hr||0)>(hrLeader.ss.hr||0)))hrLeader=p;});
+  const maxHR=hrLeader?(hrLeader.ss.hr||0):0;
+  return {maxAVG,maxHR,nQual:qual.length,hrAB:hrLeader?(hrLeader.ss.ab||0):0,hrPow:hrLeader?(hrLeader.power||0):0};
 })()`);
 check(`① 개인 최고타율 현실성(<0.430): ${realism.maxAVG.toFixed(3)} (100타수+ ${realism.nQual}명)`, realism.maxAVG < 0.430);
-check(`① 개인 최다홈런 현실성(${g('TOTAL_REGULAR')}경기 <38): ${realism.maxHR}`, realism.maxHR < 38);
+check(`① 개인 최다홈런 현실성(${g('TOTAL_REGULAR')}경기 <38): ${realism.maxHR} (ab=${realism.hrAB}, pow=${realism.hrPow})`, realism.maxHR < 38);
 
 // ── T3b. 시리즈 구조 (3연전 상대 고정) ──────────────────────
 section('T3b. 시리즈 구조 — 21시리즈 × 3연전');
@@ -394,6 +396,258 @@ const marketRender = g(`(function(){
   return {ok, err};
 })()`);
 check('market 전 티어 렌더 무예외', marketRender.skip || marketRender.ok, marketRender.err);
+
+// ── T9. P2-1 OVR Z-score 상대평가 엔진 ───────────────────────
+section('T9. P2-1 OVR — Z-score 상대평가 + 역할 가중치 + 다재다능 세금');
+const zProbe = g(`(function(){
+  const acc={};
+  G.teams.forEach(t=>t.roster.forEach(p=>{
+    if((p.status||'active')!=='active')return;
+    const gr=_ovrCalibGroup(p);(acc[gr]=acc[gr]||[]).push(ovr(p));
+  }));
+  const means={};let allOk=true;
+  for(const gr in acc){
+    const a=acc[gr];const m=a.reduce((s,x)=>s+x,0)/a.length;
+    means[gr]=Math.round(m*10)/10;
+    if(m<46||m>54)allOk=false;
+  }
+  // raw vs 상대 분리: 두 값이 다른 선수 존재 + 양쪽 다 유한
+  const all=G.teams.flatMap(t=>t.roster);
+  const splitOk=all.every(p=>Number.isFinite(ovrRaw(p))&&Number.isFinite(ovr(p)))&&all.some(p=>ovrRaw(p)!==ovr(p));
+  // 다재다능 세금: _subPos 1개 → −1, 2개 → −2
+  // (플레이크 방지: 샘플 선수가 이미 서브 보유 시 base에 세금이 선반영되므로 비우고 측정, 원복)
+  const t0=all.find(p=>!p.isPitcher&&ovr(p)>=30&&ovr(p)<=70)||all[0];
+  const savedSub=t0._subPos;
+  t0._subPos=[];const base=ovr(t0);
+  t0._subPos=['2B'];const tax1=base-ovr(t0);
+  t0._subPos=['2B','3B'];const tax2=base-ovr(t0);
+  t0._subPos=savedSub;
+  return {means:JSON.stringify(means),allOk,splitOk,tax1,tax2};
+})()`);
+check(`전 그룹 1군 평균 OVR ≈50 (46~54): ${zProbe.means}`, zProbe.allOk);
+check('ovrRaw/ovr 분리 (유한 + 상이 선수 존재)', zProbe.splitOk);
+check(`다재다능 세금 (서브1 −1 / 서브2 −2): ${zProbe.tax1}/${zProbe.tax2}`, zProbe.tax1 === 1 && zProbe.tax2 === 2);
+
+// ── T10. P2-2 히든 스탯 10종 — 1~100 스케일 + 마이그레이션 + 협상 연동 ──
+section('T10. P2-2 히든 스탯 — 10종 · 1~100 스케일 · v4→v5 마이그레이션 · 협상 연동');
+const hidProbe = g(`(function(){
+  const all=G.teams.flatMap(t=>t.roster);
+  const OLD5=['_potential','_durability','_consistency','_clutchHidden','_workEthic'];
+  const NEW4=['_versatility','_ambition','_loyalty','_temperament'];
+  // ① 전 선수 히든 1~100 범위
+  let rangeOk=true;
+  all.forEach(p=>{
+    OLD5.concat(NEW4).forEach(k=>{const v=p[k];if(typeof v!=='number'||v<1||v>100)rangeOk=false;});
+    const ext=p.isPitcher?p._recovery:p._pullTendency;
+    if(typeof ext!=='number'||ext<1||ext>100)rangeOk=false;
+  });
+  // ② 리그 프로의식 평균 ≈52.5 (45~60)
+  const weMean=all.reduce((s,p)=>s+p._workEthic,0)/all.length;
+  // ③ POT 천장: 50→59, 100→100
+  const capOk=maxOvrFromPot(50)===59&&maxOvrFromPot(100)===100;
+  return {rangeOk,weMean:Math.round(weMean*10)/10,weOk:weMean>=45&&weMean<=60,capOk};
+})()`);
+check('전 선수 히든 10종 존재 + 1~100 범위', hidProbe.rangeOk);
+check(`리그 프로의식 평균 ≈52.5 (45~60): ${hidProbe.weMean}`, hidProbe.weOk);
+check('maxOvrFromPot 재보정 (50→59, 100→100)', hidProbe.capOk);
+
+// v4 세이브(히든 7~20) → v5 마이그레이션 (×5 변환 + 신규 6종 백필)
+vm.runInContext('saveGame()', ctx);
+const hidMig = vm.runInContext(`
+  (function(){
+    const d=JSON.parse(localStorage.getItem(SAVE_KEY));
+    d._v=4;                                    // v4 세이브로 위장
+    const c=d.teams[0].roster[0];
+    c._potential=10; c._durability=20; c._workEthic=7; // 구 7~20 히든 주입
+    delete c._versatility; delete c._ambition; delete c._loyalty;
+    delete c._temperament; delete c._recovery; delete c._pullTendency;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+    G.teams=[]; G.myTeam=null;
+    const ok=loadGame();
+    const p=G.teams[0].roster[0];
+    const ext=p.isPitcher?p._recovery:p._pullTendency;
+    return {ok, pot:p._potential, dur:p._durability, we:p._workEthic,
+      backfillOk:[p._versatility,p._ambition,p._loyalty,p._temperament,ext].every(v=>typeof v==='number'&&v>=1&&v<=100)};
+  })()
+`, ctx);
+check('v4 세이브 로드 성공', hidMig.ok === true);
+check(`히든 ×5 변환 (10→50, 20→100, 7→35): ${hidMig.pot}/${hidMig.dur}/${hidMig.we}`, hidMig.pot === 50 && hidMig.dur === 100 && hidMig.we === 35);
+check('신규 히든 6종 백필 (1~100)', hidMig.backfillOk);
+
+// 협상 연동: 야망 프리미엄 / 충성심 재계약 디스카운트 (결정적 헬퍼 검증)
+const negoProbe = g(`(function(){
+  const mk=(amb,loy,tenure)=>({_ambition:amb,_loyalty:loy,_teamTenure:tenure});
+  const m=(p,ctx)=>_contractHiddenMod(p,ctx);
+  return {
+    ambUp:   m(mk(100,50,0),'fa'),        // 야망 만점 → >1
+    ambDown: m(mk(35,50,0),'fa'),         // 야망 최저 → <1
+    loyDisc: m(mk(50,90,5),'renewal'),    // 충성심 90 재계약 → 할인 (<1)
+    loyNoTenure: m(mk(50,90,1),'renewal'),// 재적 3년 미만 → 할인 없음 (=1)
+    ambOffset: m(mk(100,90,5),'renewal'), // 야망>충성심 → 할인 축소 (loyDisc보다 큼)
+  };
+})()`);
+check(`야망 협상 공격성 (만점 ×${negoProbe.ambUp.toFixed(2)} / 최저 ×${negoProbe.ambDown.toFixed(2)})`, negoProbe.ambUp > 1 && negoProbe.ambDown < 1);
+check(`충성심 재계약 디스카운트 (충90·재적5 ×${negoProbe.loyDisc.toFixed(3)})`, negoProbe.loyDisc < 1);
+check('재적 3년 미만 → 디스카운트 없음', negoProbe.loyNoTenure === 1);
+check('야망>충성심 → 할인 상쇄', negoProbe.ambOffset > negoProbe.loyDisc);
+
+// ── T11. P2-1 서브 포지션 — 생성 분포 · 전환 페널티 · 유효 수비 · L3 시뮬 ──
+section('T11. P2-1 서브 포지션 — 분포 · 비대칭 전환 페널티 · 유효 수비 · 백필');
+const subProbe = g(`(function(){
+  const bats=G.teams.flatMap(t=>t.roster).filter(p=>!p.isPitcher);
+  let n0=0,n12=0,valid=true;
+  bats.forEach(p=>{
+    if(!Array.isArray(p._subPos)){valid=false;return;}
+    const n=p._subPos.length;
+    if(n===0)n0++;else if(n<=2)n12++;else valid=false;
+    p._subPos.forEach(s=>{if(s==='C'||s==='DH')valid=false;});
+    if((p._naturalPos||p.pos)==='C'&&p._subPos.length>0)valid=false;
+  });
+  const tot=Math.max(1,n0+n12);
+  return {valid,r0:Math.round(n0/tot*100),n:tot};
+})()`);
+check('서브 포지션 구조 유효 (배열·최대2·C/DH 제외·포수 서브 없음)', subProbe.valid);
+check(`서브 0개 비율 ≈60~68% (관측 ${subProbe.r0}%, 허용 45~85, n=${subProbe.n})`, subProbe.r0 >= 45 && subProbe.r0 <= 85);
+const penProbe = g(`(function(){
+  const mk=(nat,vers,subs)=>({_naturalPos:nat,pos:nat,_versatility:vers,_subPos:subs||[],isPitcher:false,fielding:80,arm:60});
+  const base5=getPosSwitchPenalty(mk('2B',50),'SS');
+  const base12=getPosSwitchPenalty(mk('SS',50),'3B');
+  const base22=getPosSwitchPenalty(mk('LF',50),'SS');
+  const toC=getPosSwitchPenalty(mk('1B',50),'C');
+  const toDH=getPosSwitchPenalty(mk('SS',50),'DH');
+  const subHalf=getPosSwitchPenalty(mk('2B',50,['SS']),'SS');
+  const versCut=getPosSwitchPenalty(mk('2B',100),'SS');
+  const dhOut=getPosSwitchPenalty(mk('DH',50),'SS');  // 본 포지션 DH → 수비 전환 어려움 22
+  const dhToC=getPosSwitchPenalty(mk('DH',50),'C');   // DH 출신도 →C 불가
+  const pe=mk('2B',50); pe.pos='SS';
+  const eff=effFielding(pe); // 80×0.95=76
+  const pSim=mk('2B',50);
+  const simC=simulatePosOvr(pSim,'C');
+  const simSS=simulatePosOvr(pSim,'SS');
+  const pure=pSim.pos==='2B'&&pSim.fielding===80&&pSim.arm===60;
+  return {base5,base12,base22,toC,toDH,subHalf,versCut,dhOut,dhToC,eff,simC,simSSOk:Number.isFinite(simSS),pure};
+})()`);
+check(`전환 페널티 테이블 (쉬움5/보통12/어려움22): ${penProbe.base5}/${penProbe.base12}/${penProbe.base22}`, penProbe.base5 === 5 && penProbe.base12 === 12 && penProbe.base22 === 22);
+check('→C 전환 불가(null) · →DH 무페널티(0)', penProbe.toC === null && penProbe.toDH === 0);
+check(`본 포지션 DH: 수비 전환 22% · →C 불가 (${penProbe.dhOut}/${penProbe.dhToC})`, penProbe.dhOut === 22 && penProbe.dhToC === null);
+check(`서브 경험 → 절반(${penProbe.subHalf}) · 다재다능 100 → 절반(${penProbe.versCut})`, penProbe.subHalf === 2.5 && penProbe.versCut === 2.5);
+check(`유효 수비 반영: 2B→SS 수비80 → ${penProbe.eff} (기대 76)`, penProbe.eff === 76);
+check('L3 전환 시뮬: C는 null · 타 포지션 유한 · 원본 무변이', penProbe.simC === null && penProbe.simSSOk && penProbe.pure);
+// 구세이브 백필: _subPos/_naturalPos 없는 타자 → 로드 시 자동 생성
+vm.runInContext('saveGame()', ctx);
+const subMig = vm.runInContext(`
+  (function(){
+    const d=JSON.parse(localStorage.getItem(SAVE_KEY));
+    const idx=d.teams[0].roster.findIndex(p=>!p.isPitcher&&p.pos&&p.pos!=='C'&&p.pos!=='DH');
+    const c=d.teams[0].roster[idx];
+    delete c._subPos; delete c._naturalPos;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+    G.teams=[]; G.myTeam=null;
+    const ok=loadGame();
+    const p=G.teams[0].roster[idx];
+    return {ok, natOk:p._naturalPos===p.pos, subOk:Array.isArray(p._subPos)&&p._subPos.length<=2};
+  })()
+`, ctx);
+check('구세이브 백필: _naturalPos=현 포지션 + _subPos 롤', subMig.ok === true && subMig.natOk && subMig.subOk);
+
+// ── T12. P2-4 사치세 3단계 — 누진 · 연속 초과 체증 · 플로어 · 연봉 절대화 ──
+section('T12. P2-4 재정 — 3단계 사치세 · 체증 · 샐러리 플로어 · 연봉 스케일');
+const taxProbe = g(`(function(){
+  const mods=G.seasonModifiers; G.seasonModifiers={}; // 라인 200 고정
+  const mk=(pay,streak)=>({roster:[{salary:pay}],_luxOverStreak:streak||0});
+  const r={
+    line:getLuxuryTaxLine(), floor:getSalaryFloor(),
+    t210:getLuxuryTax(mk(210)),        // 10×20% = 2
+    t230:getLuxuryTax(mk(230)),        // 20×20%+10×40% = 8
+    t260:getLuxuryTax(mk(260)),        // 20×20%+30×40%+10×60% = 22
+    tUnder:getLuxuryTax(mk(190)),      // 0
+    tRepeat1:getLuxuryTax(mk(230,1)),  // +10%p → 20×30%+10×50% = 11
+    tRepeatCap:getLuxuryTax(mk(230,5)),// 상한 +20%p → 20×40%+10×60% = 14
+  };
+  G.seasonModifiers=mods;
+  return r;
+})()`);
+check(`소프트캡 200 / 플로어 50 (과도기, 설계 목표 80)`, taxProbe.line === 200 && taxProbe.floor === 50);
+check(`누진 과세 (210→${taxProbe.t210} / 230→${taxProbe.t230} / 260→${taxProbe.t260} / 190→${taxProbe.tUnder})`,
+  taxProbe.t210 === 2 && taxProbe.t230 === 8 && taxProbe.t260 === 22 && taxProbe.tUnder === 0);
+check(`연속 초과 체증 (+10%p→${taxProbe.tRepeat1} / 상한 +20%p→${taxProbe.tRepeatCap})`,
+  taxProbe.tRepeat1 === 11 && taxProbe.tRepeatCap === 14);
+const streakProbe = g(`(function(){
+  return G.teams.every(t=>typeof t._luxOverStreak==='number'||typeof t._luxUnderStreak==='number');
+})()`);
+check('정산 시 전 팀 연속 초과/미만 카운터 기록', streakProbe === true);
+const salProbe = g(`(function(){
+  let faOk=true,arbOk=true,preOk=true;
+  for(let i=0;i<40;i++){
+    const fa=_calcSalary(90,7); if(fa<20||fa>30)faOk=false;
+    const arb=_calcSalary(70,5); if(arb<2||arb>3)arbOk=false;
+    const pre=_calcSalary(90,2); if(pre>0.8)preOk=false;
+  }
+  return {faOk,arbOk,preOk};
+})()`);
+check('연봉 절대화: FA 90 OVR 20~30억 / Arb 70 OVR 2~3억 / 프리Arb ≤0.8억', salProbe.faOk && salProbe.arbOk && salProbe.preOk);
+const payProbe = g(`(function(){
+  const pays=G.teams.map(t=>getPayroll(t)).sort((a,b)=>a-b);
+  const avg=pays.reduce((s,x)=>s+x,0)/pays.length;
+  const underFloor=pays.filter(x=>x<getSalaryFloor()).length;
+  return {min:Math.round(pays[0]),max:Math.round(pays[pays.length-1]),avg:Math.round(avg),underFloor,finite:pays.every(Number.isFinite)};
+})()`);
+check(`리그 페이롤 유한값 (min ${payProbe.min} / avg ${payProbe.avg} / max ${payProbe.max} / 플로어 미달 ${payProbe.underFloor}팀)`, payProbe.finite);
+check(`페이롤 평균 온건 범위 (40~220억): ${payProbe.avg}`, payProbe.avg >= 40 && payProbe.avg <= 220);
+check(`플로어 미달 팀 소수 (≤5팀): ${payProbe.underFloor}`, payProbe.underFloor <= 5);
+
+// ── T13. P2-3 서비스타임 — 경계 · 슈퍼2 · 시리즈 비례 적립 · Arb 인상률 · 신인 슬롯 ──
+section('T13. P2-3 서비스타임 — 경계·슈퍼2·비례 적립·Arb 인상률·신인 슬롯');
+const svcProbe = g(`(function(){
+  const phase=st=>getContractPhase({_serviceTime:st});
+  return {
+    p2:phase(2),p3:phase(3),p5:phase(5),p6:phase(6),
+    s2:getContractPhase({_serviceTime:2,_super2:true}),
+    g63:_serviceGainFromGames(63), g45:_serviceGainFromGames(45),
+    g30:_serviceGainFromGames(30), g2:_serviceGainFromGames(2),
+    slot1:_rookieSlotSalary(1), slot2:_rookieSlotSalary(2), slot8:_rookieSlotSalary(8),
+    slot9:_rookieSlotSalary(9), slot16:_rookieSlotSalary(16), slot48:_rookieSlotSalary(48),
+  };
+})()`);
+check(`계약 단계 경계 (서비스 2=pre / 3=arb / 5=arb / 6=fa): ${svcProbe.p2}/${svcProbe.p3}/${svcProbe.p5}/${svcProbe.p6}`,
+  svcProbe.p2 === 'pre' && svcProbe.p3 === 'arb' && svcProbe.p5 === 'arb' && svcProbe.p6 === 'fa');
+check('슈퍼2: 서비스 2년차 조기 Arb 자격 (FA 시기 동일)', svcProbe.s2 === 'arb');
+check(`시리즈 비례 적립 (63경기→${svcProbe.g63} / 45→${svcProbe.g45} / 30→${svcProbe.g30} / 2→${svcProbe.g2})`,
+  svcProbe.g63 === 1 && svcProbe.g45 === 1 && svcProbe.g30 === 0.48 && svcProbe.g2 === 0);
+check(`신인 슬롯 연봉 (전체1→${svcProbe.slot1} / 8→${svcProbe.slot8} / 9→${svcProbe.slot9} / 16→${svcProbe.slot16} / 48→${svcProbe.slot48})`,
+  svcProbe.slot1 === 1.5 && svcProbe.slot2 === 1.2 && svcProbe.slot8 === 0.8 && svcProbe.slot9 === 0.7 && svcProbe.slot16 === 0.5 && svcProbe.slot48 === 0.3);
+const arbProbe = g(`(function(){
+  // _arbYears 명시 카운터 기반 (floor(서비스타임) 파생의 슈퍼2 플립·소수 정체 버그 수정 반영)
+  const mk=(st,sal,ay)=>{const p={_serviceTime:st,salary:sal,_arbYears:ay,isPitcher:false,pos:'1B',contact:60,power:60,eye:60,speed:60,fielding:60,arm:60};initSeasonStats(p);return p;};
+  const a2=[],a3=[];
+  for(let i=0;i<30;i++){a2.push(_calcNewSalary(mk(4,3,2)));a3.push(_calcNewSalary(mk(5,3,3)));}
+  // 슈퍼2 수정 검증: st=3(과거 arbStart 플립 지점)이라도 카운터가 2면 인상률 경로 (베이스라인 재롤 아님)
+  const s2=[];for(let i=0;i<20;i++){const p=mk(3,6,2);p._super2=true;s2.push(_calcNewSalary(p));}
+  return {a2min:Math.min(...a2),a2max:Math.max(...a2),a3min:Math.min(...a3),a3max:Math.max(...a3),
+    s2min:Math.min(...s2),s2max:Math.max(...s2)};
+})()`);
+check(`Arb 2년차 인상률 120~180% (3억 → ${arbProbe.a2min}~${arbProbe.a2max})`, arbProbe.a2min >= 3.5 && arbProbe.a2max <= 5.8);
+check(`Arb 3년차 인상률 110~150% (3억 → ${arbProbe.a3min}~${arbProbe.a3max})`, arbProbe.a3min >= 3.2 && arbProbe.a3max <= 4.8);
+check(`슈퍼2 fy=3 Arb2 인상 보장 (6억 → ${arbProbe.s2min}~${arbProbe.s2max}, 삭감 없음)`, arbProbe.s2min >= 7.0);
+
+// ── T14. P2-5 특수 시설 4레벨 — 비용 · 유지비 · 업그레이드 · 백필 ──
+section('T14. P2-5 특수 시설 4레벨 — 슬럼프케어·멘탈코칭');
+const facProbe = g(`(function(){
+  const initOk=G.teams.every(t=>typeof t.slumpCareLevel==='number'&&typeof t.mentalCoachLevel==='number');
+  const up0=calcAnnualUpkeep({coachStaff:{},stadiumLevel:0,slumpCareLevel:0,mentalCoachLevel:0}).facilityCost;
+  const up34=calcAnnualUpkeep({coachStaff:{},stadiumLevel:0,slumpCareLevel:3,mentalCoachLevel:4}).facilityCost;
+  const t=G.myTeam;const b0=t.budget=500;const l0=t.slumpCareLevel;
+  t.slumpCareLevel=0;
+  investUpgradeSlumpCare();investUpgradeSlumpCare();
+  const lvOk=t.slumpCareLevel===2&&Math.abs((b0-t.budget)-17)<0.01;
+  t.slumpCareLevel=l0;
+  return {initOk,diff:+(up34-up0).toFixed(1),lvOk,
+    costsOk:JSON.stringify(FACILITY4_COSTS)==='[5,12,25,40]'&&SLUMP_CARE_RELIEF[4]===0.5&&MENTAL_COACH_AMP[4]===0.5};
+})()`);
+check('전 팀 신규 시설 필드 초기화/백필 (slumpCare·mentalCoach)', facProbe.initOk);
+check('설계 상수 (비용 5/12/25/40억 · 완화 50% · 증폭 50%)', facProbe.costsOk);
+check(`4레벨 유지비 L3+L4 = +${facProbe.diff} (기대 8.5 = 25×10% + 40×15%)`, facProbe.diff === 8.5);
+check('업그레이드 2회: Lv.2 도달 + 17억(5+12) 차감', facProbe.lvOk);
 
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
