@@ -10,13 +10,22 @@
   --accent3: #ef4444;
   --accent4: #3b82f6;
   --text: #e5e7eb;
-  --text-dim: #6b7280;
+  --text-dim: #9ca3af;   /* 본문/라벨용 — bg-card 위 ≈5.9:1 (WCAG AA 통과) */
+  --text-decor: #6b7280; /* 순수 장식(구분선/빈 별) 전용 — 텍스트에는 사용 금지 */
   --text-bright: #ffffff;
   --border: #1f2937;
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:var(--bg-dark); color:var(--text); font-family:'Noto Sans KR',sans-serif; min-height:100vh; overflow-x:hidden; }
+
+/* ── 접근성: 키보드 포커스 표시 + 모션 축소 ── */
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{ animation-duration:.001ms!important; animation-iteration-count:1!important; transition-duration:.001ms!important; scroll-behavior:auto!important; }
+}
+/* 좁은 화면에서 넓은 대시보드 테이블 가로 스크롤 (열 잘림 방지) */
+#dashLineup, #dashPitching { overflow-x:auto; }
 
 .header {
   background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);
