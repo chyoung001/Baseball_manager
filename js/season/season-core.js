@@ -98,6 +98,18 @@ function showPreseason(){
         p._slumpGames=0; // 시즌 초기화
         p._tradeRefused=false; // 거부권 리셋
         if(p.age)p.age++;
+
+        // P2-1 서브 포지션 습득: 다재다능 65+ 타자, 커리어 중 최대 1개 추가 (10% 확률)
+        if(!p.isPitcher&&!p._subPosLearned&&(p._versatility||50)>=65
+          &&Array.isArray(p._subPos)&&p._subPos.length<2&&rand(1,100)<=10){
+          const natPos=p._naturalPos||p.pos;
+          const cand=(_SUBPOS_CANDIDATES[natPos]||[]).filter(x=>!p._subPos.includes(x));
+          if(cand.length){
+            p._subPos.push(pick(cand));
+            p._subPosLearned=true;
+            if(team===G.myTeam)showToast(`🧩 ${p.name} 서브 포지션 습득! (${p._subPos.join('·')})`);
+          }
+        }
       });
     });
   }

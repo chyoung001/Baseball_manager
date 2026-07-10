@@ -6,18 +6,55 @@ function getPosGroup(pos, player) {
   if(['1B','2B','3B','SS'].includes(pos)) return ['1B','2B','3B','SS','DH'];
   // 포수: DH 옵션만
   if(pos === 'C') return ['C','DH'];
-  // DH: 원래 포지션 그룹으로 복귀
+  // DH: 원래 포지션 그룹으로 복귀 (C는 본 포지션이 아닌 한 전환 불가 — P2-1)
   if(pos === 'DH') {
     const nat = player && player._naturalPos;
-    if(!nat) return ['C','1B','2B','3B','SS','LF','CF','RF'];
+    if(!nat) return ['1B','2B','3B','SS','LF','CF','RF'];
     if(['LF','CF','RF'].includes(nat)) return ['LF','CF','RF'];
     if(['1B','2B','3B','SS'].includes(nat)) return ['1B','2B','3B','SS'];
     if(nat === 'C') return ['C'];
-    return ['C','1B','2B','3B','SS','LF','CF','RF'];
+    return ['1B','2B','3B','SS','LF','CF','RF'];
   }
   // 투수: 자유 변경
   if(['SP','CP','SU','MR','LR','RP'].includes(pos)) return ['SP','CP','SU','MR','LR'];
   return null;
+}
+
+// ═══════════════════════════════════════════════════════
+// 포지션 전환 페널티 (P2-1, 설계: OVR 시스템 — 비대칭)
+// 반환: % 페널티 (수비 스탯 적용) / 0=페널티 없음 / null=전환 불가(→C)
+// ═══════════════════════════════════════════════════════
+function _posSwitchBase(from,to){
+  if(from===to||to==='DH'||from==='DH') return 0; // DH는 포지션이 아닌 라인업 슬롯
+  if(to==='C') return null; // 어디든→C 불가 (포수는 전문 훈련 없이 전환 안 됨)
+  const key=from+'>'+to;
+  if(['2B>SS','SS>2B','LF>RF','RF>LF','LF>1B','RF>1B','3B>1B'].includes(key)) return 5;  // 쉬움 -5%
+  if(['SS>3B','CF>LF','CF>RF','2B>3B'].includes(key)) return 12;                          // 보통 -10~15%
+  return 22;                                                                              // 어려움 -20~25% (OF↔IF, 1B→SS, 역방향)
+}
+function getPosSwitchPenalty(p,to){
+  const from=p._naturalPos||p.pos;
+  let pen=_posSwitchBase(from,to);
+  if(pen===null||pen===0) return pen;
+  if(Array.isArray(p._subPos)&&p._subPos.includes(to)) pen*=0.5; // 서브 포지션 실전 경험 → 절반
+  const vers=p._versatility||50; // 다재다능 히든: 높으면 최대 -50%, 낮으면 최대 +50%
+  pen*=clamp(1-(vers-50)/100,0.5,1.5);
+  return Math.round(pen*10)/10;
+}
+// 유효 수비 스탯 — 현재 포지션 기준 전환 페널티 반영 (매치 엔진용)
+function effFielding(p){const pen=p.isPitcher?0:(getPosSwitchPenalty(p,p.pos)||0);return Math.round((p.fielding||50)*(1-pen/100));}
+function effArm(p){const pen=p.isPitcher?0:(getPosSwitchPenalty(p,p.pos)||0);return Math.round((p.arm||50)*(1-pen/100));}
+// 포지션 전환 OVR 시뮬 (프론트오피스 L3 힌트): 전환 페널티 반영 상대 OVR, 불가 시 null
+function simulatePosOvr(p,to){
+  if(p.isPitcher) return null;
+  const pen=getPosSwitchPenalty(p,to);
+  if(pen===null) return null;
+  const o={pos:p.pos,f:p.fielding,a:p.arm};
+  p.pos=to;
+  if(pen>0){p.fielding=Math.round(o.f*(1-pen/100));p.arm=Math.round(o.a*(1-pen/100));}
+  const v=ovr(p);
+  p.pos=o.pos;p.fielding=o.f;p.arm=o.a;
+  return v;
 }
 
 // 행 클릭 시 포지션 드롭다운 클릭이면 무시

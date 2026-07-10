@@ -22,6 +22,7 @@ function genBatter(pos, gradeOrTier, concept, team){
   let p={
     _uid:Date.now().toString(36)+Math.random().toString(36).slice(2,7),
     name:genName(), pos, isPitcher:false, role:'starting', status:'active',
+    _naturalPos:pos, _subPos:_rollSubPos(pos), // P2-1 서브 포지션 (다재다능 세금·전환 페널티 연동)
     xp:0, cooldown:0, isOnIL:false, ilGamesLeft:0, rehabGamesLeft:0, age:22,
     contact:  _genStatFromOvr(targetOvr+posPen),
     power:    _genStatFromOvr(targetOvr+posPen),

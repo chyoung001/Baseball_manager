@@ -62,6 +62,42 @@ function showScoutReport(idx){
     </div>`;
   }
 
+  // ── P2-1 가중치 힌트 (프론트오피스 레벨별: L1 TOP2 / L2 4단계 / L3 전환 시뮬) ──
+  const aTier=_displayTier(rdLv);
+  const subPosBadge=(!p.isPitcher&&Array.isArray(p._subPos)&&p._subPos.length>0)
+    ?`<span style="background:#8b5cf622;color:#a78bfa;font-size:0.6rem;padding:1px 6px;border-radius:3px;">서브 ${p._subPos.map(x=>ALL_POS_NAMES[x]||x).join('·')}</span>`:'';
+  let weightHTML='';
+  if(aTier>=1){
+    const w=_ovrWeights(p);
+    const KN=p.isPitcher
+      ?{stuff:'구위',control:'제구',velocity:'구속',movement:'무브',stamina:'지구력',clutch:'위기'}
+      :{contact:'컨택',power:'파워',eye:'선구',speed:'주력',fielding:'수비',arm:'어깨'};
+    const entries=Object.keys(w).map(k=>({label:KN[k]||k,w:w[k]})).sort((a,b)=>b.w-a.w);
+    let body='';
+    if(aTier===1){
+      body=`<span style="font-size:0.7rem;color:var(--text-dim);">핵심 스탯: </span>${entries.slice(0,2).map(e=>`<b style="font-size:0.72rem;color:var(--accent);">${e.label}</b>`).join('<span style="color:var(--text-dim);"> · </span>')}<span style="font-size:0.62rem;color:var(--text-dim);margin-left:6px;">(분석팀 Lv.20+ 정보)</span>`;
+    }else{
+      const lvl=x=>x>=0.20?['매우높음','#a855f7']:x>=0.15?['높음','#10b981']:x>=0.10?['보통','#f59e0b']:['낮음','var(--text-dim)'];
+      body=`<div style="display:flex;gap:4px;flex-wrap:wrap;">${entries.map(e=>{const g=lvl(e.w);return `<span style="background:#111827;border-radius:4px;padding:2px 7px;font-size:0.62rem;color:var(--text-dim);">${e.label} <b style="color:${g[1]};">${g[0]}</b></span>`;}).join('')}</div>`;
+    }
+    let simHTML='';
+    if(aTier>=3&&!p.isPitcher){
+      const sims=['C','1B','2B','3B','SS','LF','CF','RF'].filter(x=>x!==p.pos).map(t=>{
+        const v=simulatePosOvr(p,t);
+        return v==null
+          ?`<span style="background:#111827;border-radius:4px;padding:2px 7px;font-size:0.62rem;color:#ef4444;">${ALL_POS_NAMES[t]||t} 불가</span>`
+          :`<span style="background:#111827;border-radius:4px;padding:2px 7px;font-size:0.62rem;color:var(--text-dim);">${ALL_POS_NAMES[t]||t} <b style="color:${statColor(v)};">${v}</b></span>`;
+      }).join('');
+      simHTML=`<div style="font-size:0.62rem;color:var(--text-dim);margin:6px 0 4px;">포지션 전환 시 OVR (전환 페널티 반영):</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${sims}</div>`;
+    }
+    weightHTML=`<div style="background:var(--bg-card-hover);border-radius:8px;padding:10px;margin-bottom:12px;">
+      <div style="font-size:0.68rem;color:var(--accent);margin-bottom:6px;">📐 포지션 가중치 ${subPosBadge}</div>
+      ${body}${simHTML}
+    </div>`;
+  }else if(subPosBadge){
+    weightHTML=`<div style="margin-bottom:12px;">${subPosBadge}</div>`;
+  }
+
   $('modalTitle').textContent=`📋 선수 분석 — ${p.name}`;
   $('modalBody').innerHTML=`
     <div style="text-align:left;">
@@ -114,6 +150,9 @@ function showScoutReport(idx){
         <div style="font-size:0.68rem;color:var(--accent);margin-bottom:6px;">📊 능력치</div>
         ${statsHTML}
       </div>
+
+      <!-- 포지션 가중치 힌트 (P2-1, 프론트오피스 레벨별) -->
+      ${weightHTML}
 
       <!-- 시즌 성적 -->
       <div style="background:var(--bg-card-hover);border-radius:8px;padding:10px;margin-bottom:12px;">
@@ -237,16 +276,15 @@ function changePlayerPos(rosterIdx, newPos) {
   const p = G.myTeam.roster[rosterIdx];
   if(!p || G.matchInProgress) return;
   const oldPos = p.pos;
-  // DH로 전환: 원래 포지션 기억
-  if(newPos === 'DH' && oldPos !== 'DH') {
-    p._naturalPos = oldPos;
-  }
-  // DH에서 해제: naturalPos 삭제
-  if(oldPos === 'DH' && newPos !== 'DH') {
-    delete p._naturalPos;
-  }
+  // 본 포지션 영구 기록 (P2-1 전환 페널티 기준점, 구세이브 보정)
+  if(!p.isPitcher && p._naturalPos == null && oldPos !== 'DH') p._naturalPos = oldPos;
   p.pos = newPos;
   if(p.isPitcher) p.role = newPos === 'SP' ? 'rotation' : 'bullpen';
+  // 전환 페널티 안내 (본 포지션 이탈 시 수비 스탯 % 감소)
+  if(!p.isPitcher && newPos !== 'DH'){
+    const pen = getPosSwitchPenalty(p, newPos);
+    if(pen > 0) showToast(`⚠️ ${p.name} ${ALL_POS_NAMES[newPos]||newPos} 전환 — 수비 −${pen}% (다재다능·서브 경험 반영)`);
+  }
   document.querySelectorAll('.pos-changeable.open').forEach(e => e.classList.remove('open'));
   renderRoster();saveGame();
 }

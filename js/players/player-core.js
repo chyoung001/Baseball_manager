@@ -51,6 +51,24 @@ function _genPullTendency(){
   return randGauss(50, 15, 1, 100);
 }
 
+// ── 서브 포지션 (P2-1): 생성 분포 0개 60% / 1개 35% / 2개 5% ──
+// 후보는 인접 포지션만. C는 서브 취득 불가(전문 포지션), DH는 슬롯이라 제외.
+const _SUBPOS_CANDIDATES={
+  '1B':['3B','LF','RF'], '2B':['SS','3B'], SS:['2B','3B'], '3B':['1B','2B'],
+  LF:['RF','CF','1B'], CF:['LF','RF'], RF:['LF','CF','1B'], DH:['1B','LF','RF'], C:[],
+};
+function _rollSubPos(pos){
+  const cand=(_SUBPOS_CANDIDATES[pos]||[]).slice();
+  if(cand.length===0) return [];
+  const roll=rand(1,100);
+  const n=roll<=60?0:roll<=95?1:2;
+  const subs=[];
+  while(subs.length<Math.min(n,cand.length)){
+    subs.push(cand.splice(rand(0,cand.length-1),1)[0]);
+  }
+  return subs;
+}
+
 // 등급별 잠재력 기반값 — 등급이 높을수록 최소 잠재력 보장
 function _gradePotBase(grade){
   if(grade==='S') return randGauss(85,5,75,100);  // S급: 최소 75 보장
