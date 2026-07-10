@@ -99,12 +99,20 @@ const QUALIFY_RATIO_LEAGUE  = 0.50; // 리그 리�� (규정의 50%)
 const QUALIFY_RATIO_AWARDS  = 0.70; // 시상 (규정의 70%)
 const QUALIFY_RATIO_DASH    = 0.30; // 대시보드 (규정의 30%)
 
+// ===================== SEASON LENGTH (v2: 63경기/21시리즈) =====================
+// NOTE: 시즌 아웃 부상이 TOTAL_REGULAR를 참조하므로 INJURY_TYPES보다 먼저 정의.
+const TOTAL_REGULAR=63;           // 정규시즌 총 경기 (21시리즈 × 3연전)
+const FIRST_HALF_END=30;          // 전반기 종료 (G1~G30)
+const EXPANDED_ENTRY_START=43;    // 확대 엔트리 시작 경기 (9월 확대, G43~)
+const SERIES_LENGTH=3;            // 시리즈당 경기 수 (3연전 고정)
+const TOTAL_SERIES=21;            // 시즌 총 시리즈 수
+
 // ── 부상 유형 (가중 랜덤 선택) ──
 const INJURY_TYPES = [
   { type:'minor',    weight:50, minGames:3,  maxGames:7,  label:'경미한 부상' },
   { type:'moderate', weight:35, minGames:8,  maxGames:18, label:'중등도 부상' },
-  { type:'severe',   weight:12, minGames:20, maxGames:40, label:'���증 부상' },
-  { type:'season',   weight:3,  minGames:84, maxGames:84, label:'시즌 아웃' },
+  { type:'severe',   weight:12, minGames:20, maxGames:40, label:'중증 부상' },
+  { type:'season',   weight:3,  minGames:TOTAL_REGULAR, maxGames:TOTAL_REGULAR, label:'시즌 아웃' },
 ];
 function rollInjuryDuration(){
   const total=INJURY_TYPES.reduce((s,t)=>s+t.weight,0);
@@ -137,13 +145,26 @@ const SEASON_PHASES={
   SECOND_HALF:   {id:'second_half',   name:'후반기 시즌',      icon:'⚾'},
   POSTSEASON:    {id:'postseason',    name:'포스트시즌',       icon:'🏆'},
   AWARDS:        {id:'awards',        name:'시상식 & 은퇴',    icon:'🏅'},
+  GM_MEETING:    {id:'gm_meeting',    name:'GM 회의',          icon:'🗳️'},
   STOVE_LEAGUE:  {id:'stove_league',  name:'스토브리그',       icon:'🔥'},
 };
-const TOTAL_REGULAR=84;           // 정규시즌 총 경기
-const FIRST_HALF_END=42;          // 전반기 종료
-const EXPANDED_ENTRY_START=71;    // 확대 엔트리 시작 경기
-const EXPANDED_ROSTER_MAX=32;     // 확대 엔트리 1군 최대
-const POSTSEASON_TEAMS=5;         // 포스트시즌 진출 팀 수 (KBO 스타일)
+
+// ── GM 회의 안건 풀 (다음 시즌 룰 재정의 — SeasonModifiers) ──
+// effect.key → G.seasonModifiers[key]=value 로 적용. aiSupport = AI 단장 찬성 확률.
+const GM_PROPOSALS=[
+  {id:'salary_relax',  icon:'💰', name:'샐러리캡 완화',       desc:'사치세 라인 +20억 (부자 구단 유리)',    aiSupport:0.45, effect:{key:'luxuryLineBonus', value:20}},
+  {id:'salary_tight',  icon:'📉', name:'샐러리캡 강화',       desc:'사치세 라인 -20억 (전력 평준화)',       aiSupport:0.50, effect:{key:'luxuryLineBonus', value:-20}},
+  {id:'hardcap_up',    icon:'🏦', name:'하드캡 인상',         desc:'하드캡 +30억 (초고액 계약 허용)',       aiSupport:0.40, effect:{key:'hardCapBonus',   value:30}},
+  {id:'expanded_early',icon:'📋', name:'확대 엔트리 조기 시행', desc:'9월 확대 엔트리를 5경기 앞당김',        aiSupport:0.60, effect:{key:'expandedEarly',  value:5}},
+  {id:'champ_bonus',   icon:'🏆', name:'우승 상금 인상',       desc:'챔피언 상금 +30억',                    aiSupport:0.70, effect:{key:'champBonusExtra',value:30}},
+  {id:'draft_bumper',  icon:'🌱', name:'드래프트 풍년',       desc:'다음 신인 풀 품질 소폭 상승',           aiSupport:0.65, effect:{key:'draftQualityBonus', value:3}},
+];
+// TOTAL_REGULAR / FIRST_HALF_END / EXPANDED_ENTRY_START 는 상단(SEASON LENGTH)에서 정의됨
+const EXPANDED_ROSTER_MAX=32;     // 확대 엔트리 1군 최대 (TODO P2: v2 26→28로 조정)
+const POSTSEASON_TEAMS=4;         // 포스트시즌 진출 팀 수 (v2 균형 토너먼트)
+const SEMI_WINS_NEEDED=3;         // 준플레이오프 5전 3선승
+const FINAL_WINS_NEEDED=4;        // 챔피언십 7전 4선승
+const CHAMPIONSHIP_BONUS=50;      // 우승 상금 (억)
 const RETIRE_MIN_AGE_PROXY=8;     // 시즌 수 기준 은퇴 가능 (생성 후 N시즌)
 
 // ===================== DRAFT CONSTANTS =====================

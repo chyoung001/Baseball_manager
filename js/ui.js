@@ -19,6 +19,14 @@ function updateHeader(){
   $('hdrSeason').textContent=G.season;$('hdrBudget').textContent=G.myTeam.budget;
   $('hdrPop').innerHTML=starsHTML(G.myTeam.popularity);$('hdrGame').textContent=G.gameNum;
   const tg=$('hdrTotalGames');if(tg)tg.textContent=G.totalGames||TOTAL_REGULAR;
+  // 시리즈 표시 (정규시즌 중에만) — 예: "🆚 5/21시리즈 vs 세이버스 (2/3)"
+  const hs=$('hdrSeries');
+  if(hs){
+    if((G.phase==='first_half'||G.phase==='second_half')&&typeof getCurrentSeries==='function'){
+      const opp=getOpponent();
+      hs.textContent=`🆚 ${getCurrentSeries()+1}/${TOTAL_SERIES}시리즈 ${opp?opp.emoji+opp.name:''} (${getGameInSeries()+1}/${SERIES_LENGTH})`;
+    } else hs.textContent='';
+  }
   const ph=getPhaseInfo();
   const phEl=$('hdrPhase');if(phEl)phEl.textContent=`${ph.icon} ${ph.name}`;
   updateNavAdvance();

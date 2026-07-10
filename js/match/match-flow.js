@@ -2,9 +2,14 @@
 // 게임 진행 흐름: startMatch → simulatePlay → endMatch, AI 시뮬, 포스트게임 처리
 // 의존: match-state.js, match-engine.js, match-ui.js, helpers.js, state.js, constants.js
 
+// ── 시리즈 구조 (21시리즈 × 3연전) ──
+function getCurrentSeries(){return Math.floor(G.gameNum/SERIES_LENGTH);}   // 0-기반 시리즈 인덱스
+function getGameInSeries(){return G.gameNum%SERIES_LENGTH;}                 // 시리즈 내 경기 순번 (0,1,2)
+function isMyTeamHome(){return getCurrentSeries()%2===0;}                   // 시리즈 단위 홈/원정 (3경기 동일 구장)
 function getOpponent(){
+  // 상대는 시리즈 단위로 고정 — 3연전 동안 동일 팀, 시리즈마다 순환.
   const o=G.teams.filter(t=>t!==G.myTeam);
-  return o[G.gameNum%o.length];
+  return o[getCurrentSeries()%o.length];
 }
 
 function getStartingPitcher(team){
@@ -51,7 +56,7 @@ function startMatch(){
     G.myTeam.moralBoost=0;
   }
 
-  const opp=getOpponent();const isHome=G.gameNum%2===0;
+  const opp=getOpponent();const isHome=isMyTeamHome();
   const homeTeam=isHome?G.myTeam:opp;const awayTeam=isHome?opp:G.myTeam;
 
   // Reset stamina & NP for game
@@ -963,7 +968,7 @@ function _simMyGame(){
   if(!rosterCheck.ok)return false;
 
   const opp=getOpponent();
-  const isHome=G.gameNum%2===0;
+  const isHome=isMyTeamHome();
   const homeTeam=isHome?G.myTeam:opp;
   const awayTeam=isHome?opp:G.myTeam;
 

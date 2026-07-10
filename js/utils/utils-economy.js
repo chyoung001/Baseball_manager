@@ -15,8 +15,8 @@ function getLeagueAvgPayroll(){
   if(!G.teams||G.teams.length===0)return 80;
   return +((G.teams.reduce((s,t)=>s+getPayroll(t),0)/G.teams.length).toFixed(1));
 }
-function getLuxuryTaxLine(){return LUXURY_TAX_THRESHOLD;}
-function getHardCap(){return HARD_CAP;}
+function getLuxuryTaxLine(){return LUXURY_TAX_THRESHOLD+((G.seasonModifiers&&G.seasonModifiers.luxuryLineBonus)||0);}
+function getHardCap(){return HARD_CAP+((G.seasonModifiers&&G.seasonModifiers.hardCapBonus)||0);}
 function getLuxuryTax(team){const pay=getPayroll(team);return pay>LUXURY_TAX_THRESHOLD?+((pay-LUXURY_TAX_THRESHOLD)*LUXURY_TAX_RATE).toFixed(1):0;}
 
 // ── 코칭/훈련 ──
