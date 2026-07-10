@@ -196,9 +196,8 @@ const ARB_MIN_SERVICE=3;             // 연봉조정 시작: 3시즌 (슈퍼2는
 const ARB_MAX_SERVICE=5;             // 연봉조정 종료: 5시즌
 const SUPER2_TOP_RATIO=0.22;         // 슈퍼2: 2년차 서비스 상위 22%에 Arb 조기 자격
 const SERVICE_FULL_SERIES=15;        // 1풀 시즌 인정 최소 1군 등록 시리즈 (21시리즈 중)
-const PRE_ARB_SALARY=0.3;           // 프리Arb 최저 연봉 (0.3억 = 3000만원)
 const SALARY_MIN=0.3;               // 리그 최저 연봉 (3000만원)
-const SALARY_ADJUSTMENT_FACTOR=0.3;  // WAR 기반 연봉 조정 계수
+const PRE_ARB_SALARY=SALARY_MIN;    // 프리Arb 최저 연봉 = 리그 최저 (별도 값 아님 — 결합 명시)
 
 // ── 포지션별 계약 이벤트 그룹 ──
 const POS_CONTRACT_GROUP={
