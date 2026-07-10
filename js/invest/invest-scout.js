@@ -20,10 +20,10 @@ function renderInvestScoutCamp() {
         <table class="data-table" style="font-size:0.72rem;">
           <thead><tr><th>등급</th><th>확률</th><th>결과</th></tr></thead>
           <tbody>
-            <tr><td style="color:#ef4444;">꽝</td><td>60%</td><td>OVR 35~45 선수</td></tr>
-            <tr><td style="color:#f59e0b;">본전</td><td>34%</td><td>OVR 50~60 선수</td></tr>
-            <tr><td style="color:#10b981;">대박</td><td>5%</td><td>OVR 65~69 선수</td></tr>
-            <tr><td style="color:#a855f7;">초대박</td><td>1%</td><td>OVR 75~80 선수</td></tr>
+            <tr><td style="color:#ef4444;">꽝</td><td>60%</td><td>OVR 26~42 선수</td></tr>
+            <tr><td style="color:#f59e0b;">본전</td><td>34%</td><td>OVR 51~67 선수</td></tr>
+            <tr><td style="color:#10b981;">대박</td><td>5%</td><td>OVR 75~82 선수</td></tr>
+            <tr><td style="color:#a855f7;">초대박</td><td>1%</td><td>OVR 92~100 선수</td></tr>
           </tbody>
         </table>
         <div style="font-size:0.65rem;color:var(--text-dim);margin-top:6px;">* 생성 선수는 즉시 로스터에 추가되며 OVR에 맞는 FA급 연봉이 자동 체결됩니다.</div>
@@ -57,14 +57,14 @@ function executeScoutCamp(posCategory) {
   // 확률 롤
   const roll = rand(1, 100);
   let ovrMin, ovrMax, grade, gradeColor, gradeEmoji;
-  if (roll <= 60)       { ovrMin=35; ovrMax=45; grade='꽝';   gradeColor='#ef4444'; gradeEmoji='😢'; }
-  else if (roll <= 94)  { ovrMin=50; ovrMax=60; grade='본전'; gradeColor='#f59e0b'; gradeEmoji='😐'; }
-  else if (roll <= 99)  { ovrMin=65; ovrMax=69; grade='대박'; gradeColor='#10b981'; gradeEmoji='🎉'; }
-  else                  { ovrMin=75; ovrMax=80; grade='초대박';gradeColor='#a855f7'; gradeEmoji='🔥'; }
+  if (roll <= 60)       { ovrMin=26; ovrMax=42; grade='꽝';   gradeColor='#ef4444'; gradeEmoji='😢'; }
+  else if (roll <= 94)  { ovrMin=51; ovrMax=67; grade='본전'; gradeColor='#f59e0b'; gradeEmoji='😐'; }
+  else if (roll <= 99)  { ovrMin=75; ovrMax=82; grade='대박'; gradeColor='#10b981'; gradeEmoji='🎉'; }
+  else                  { ovrMin=92; ovrMax=100; grade='초대박';gradeColor='#a855f7'; gradeEmoji='🔥'; }
 
   // 선수 생성 — 포지션 카테고리에 따라 결정
   const targetOvr = rand(ovrMin, ovrMax);
-  const pGrade = targetOvr >= 70 ? 'S' : targetOvr >= 60 ? 'A' : targetOvr >= 50 ? 'B' : targetOvr >= 40 ? 'C' : 'D';
+  const pGrade = targetOvr >= 84 ? 'S' : targetOvr >= 67 ? 'A' : targetOvr >= 51 ? 'B' : targetOvr >= 34 ? 'C' : 'D';
   let pos, isBat;
   if(posCategory==='if')       { isBat=true;  pos=pick(['1B','2B','3B','SS']); }
   else if(posCategory==='of')  { isBat=true;  pos=pick(['LF','CF','RF']); }
@@ -81,7 +81,7 @@ function executeScoutCamp(posCategory) {
   while (Math.abs(currentOvr - targetOvr) > 3 && attempts < 20) {
     const diff = targetOvr - currentOvr;
     const s = pick(stats);
-    p[s] = clamp(p[s] + Math.round(diff * 0.4), 20, 80);
+    p[s] = clamp(p[s] + Math.round(diff * 0.4), STAT_MIN, STAT_MAX);
     currentOvr = ovr(p);
     attempts++;
   }
@@ -94,7 +94,7 @@ function executeScoutCamp(posCategory) {
   p.name = genLatinName();  // 남미 선수 이름
   p.isForeign = true;
   p._serviceTime = rand(7, 10);
-  p._contractYears = targetOvr >= 65 ? rand(2, 4) : rand(1, 2);
+  p._contractYears = targetOvr >= 75 ? rand(2, 4) : rand(1, 2);
   p.salary = _calcSalary(ovr(p), p._serviceTime);
   p.age = rand(22, 30);
   p._seasonsPlayed = p.age - 18;

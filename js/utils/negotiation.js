@@ -26,7 +26,7 @@ function evaluateOffer(p,offerSalary,offerYears){
 // FA 경쟁 페널티: 거절 시 AI가 빼앗을 확률
 function _faSnatchProb(p){
   const o=ovr(p);
-  if(o>=70)return 60;if(o>=65)return 50;if(o>=60)return 40;if(o>=55)return 30;return 20;
+  if(o>=84)return 60;if(o>=75)return 50;if(o>=67)return 40;if(o>=59)return 30;return 20;
 }
 
 // 공통 협상 모달

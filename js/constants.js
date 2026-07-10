@@ -213,8 +213,8 @@ const RETIRE_PROB_PER_SEASON=12;  // 초과 시즌당 추가 확률 (%)
 // ===================== STAT SCALE (MLB 20-80) =====================
 // NOTE: v2 설계는 내부 1~100 스케일. P1에서 STAT_MIN/STAT_MAX만 바꾸면
 //       clamp(x,STAT_MIN,STAT_MAX) 전 사용처가 자동 반영되도록 중앙화됨.
-const STAT_MIN=20;
-const STAT_MAX=80;
+const STAT_MIN=1;
+const STAT_MAX=100;
 
 // ===================== MATCH RULES =====================
 const SP_WIN_MIN_OUTS=15;         // 선발 승리 자격 최소 아웃(=5이닝)
