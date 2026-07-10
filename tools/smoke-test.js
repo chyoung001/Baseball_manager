@@ -140,7 +140,13 @@ check('전 팀 예산 유한값', g('G.teams.every(t=>Number.isFinite(t.budget))
 check('H4 회귀: 테스트 선수 강두기 부재', g(`G.teams.every(t=>t.roster.every(p=>p.name!=='강두기'))`));
 check('H4 회귀: testMode 기본 false', g('G.testMode') === false);
 check('H5 회귀: 세이버스 baseBudget=160', g('TEAMS_DATA[1].baseBudget') === 160);
-check('전 선수 OVR 유한값(20~99)', g('G.teams.every(t=>t.roster.every(p=>{const o=ovr(p);return Number.isFinite(o)&&o>=20&&o<100;}))'));
+check('전 선수 OVR 유한값(1~100)', g('G.teams.every(t=>t.roster.every(p=>{const o=ovr(p);return Number.isFinite(o)&&o>=1&&o<=100;}))'));
+// P1b 스케일 회귀: 스탯·OVR이 1~100 전 구간 사용 (구 20-80 압축 아님)
+check('P1b: 스탯 원값 1~100 범위', g(`(function(){const v=G.teams.flatMap(t=>t.roster.flatMap(p=>p.isPitcher?[p.stuff,p.control,p.velocity]:[p.contact,p.power,p.speed]));return Math.min(...v)>=1&&Math.max(...v)<=100;})()`));
+check('P1b: OVR 분포 확장 (S급 84+ & 하위 <34 공존)', g(`(function(){const o=G.teams.flatMap(t=>t.roster.map(p=>ovr(p)));return o.some(x=>x>=84)&&o.some(x=>x<34);})()`));
+// ② 재보정: 1군(active) OVR 중앙값 ~50 (farm 제외). 유저가 기용하는 선수 평균이 50 근처
+const activeMed = g(`(function(){const o=G.teams.flatMap(t=>t.roster).filter(p=>(p.status||'active')==='active').map(p=>ovr(p)).sort((a,b)=>a-b);return o[o.length>>1];})()`);
+check(`② 1군 OVR 중앙값 ~50 (48~55): ${activeMed}`, activeMed >= 48 && activeMed <= 55);
 
 // ── T3. 정규시즌 전체 자동 시뮬 ─────────────────────────────
 section(`T3. 정규시즌 ${g('TOTAL_REGULAR')}경기 자동 시뮬`);
@@ -231,6 +237,17 @@ check('전 팀 예산 유한값 유지', g('G.teams.every(t=>Number.isFinite(t.b
 check('시즌 스탯 NaN 없음', g(`G.teams.every(t=>t.roster.every(p=>{const s=p.ss||{};return Object.values(s).every(v=>typeof v!=='number'||Number.isFinite(v));}))`));
 const lgAvg = g(`(function(){let h=0,ab=0;G.teams.forEach(t=>t.roster.forEach(p=>{if(!p.isPitcher&&p.ss){h+=p.ss.h||0;ab+=p.ss.ab||0;}}));return ab>0?h/ab:0;})()`);
 check(`리그 타율 온건 범위(0.15~0.40): ${lgAvg.toFixed(3)}`, lgAvg > 0.15 && lgAvg < 0.40);
+// ① 개인 성적 현실성 가드 — 스프레드 확대 후에도 비현실 값(타율 0.5·홈런 폭주) 방지
+const realism = g(`(function(){
+  const all=G.teams.flatMap(t=>t.roster);
+  const qual=all.filter(p=>!p.isPitcher&&p.ss&&(p.ss.ab||0)>=100);
+  const avg=p=>(p.ss.h||0)/(p.ss.ab||1);
+  const maxAVG=qual.length?Math.max(...qual.map(avg)):0;
+  const maxHR=Math.max(0,...all.map(p=>(p.ss&&p.ss.hr)||0));
+  return {maxAVG,maxHR,nQual:qual.length};
+})()`);
+check(`① 개인 최고타율 현실성(<0.430): ${realism.maxAVG.toFixed(3)} (100타수+ ${realism.nQual}명)`, realism.maxAVG < 0.430);
+check(`① 개인 최다홈런 현실성(${g('TOTAL_REGULAR')}경기 <38): ${realism.maxHR}`, realism.maxHR < 38);
 
 // ── T3b. 시리즈 구조 (3연전 상대 고정) ──────────────────────
 section('T3b. 시리즈 구조 — 21시리즈 × 3연전');
@@ -328,6 +345,55 @@ check('_stoveSettledSeason 지속 (H2 세이브 회귀)', g('G._stoveSettledSeas
 check('seasonModifiers 지속 (GM 회의 룰 세이브)', g('G.seasonModifiers && G.seasonModifiers.luxuryLineBonus') === 20);
 check('내 팀 승수 복원', g('G.myTeam.wins') === beforeSave.wins);
 check('로스터 인원 복원', g('G.myTeam.roster.length') === beforeSave.rosterN, `${g('G.myTeam.roster.length')} vs ${beforeSave.rosterN}`);
+
+// ── T7. P1b 스케일 마이그레이션 (구 v3 20-80 세이브 → 1~100 자동 변환) ──
+section('T7. P1b 스케일 마이그레이션 — 구세이브(v3) 20-80→1~100');
+vm.runInContext('saveGame()', ctx);
+const migProbe = vm.runInContext(`
+  (function(){
+    const d=JSON.parse(localStorage.getItem(SAVE_KEY));
+    d._v=3;                                   // 구버전 세이브로 위장
+    const c=d.teams[0].roster[0];
+    c.contact=50; c.power=80; c.eye=20;       // 구 20-80 스탯 주입 (50→51,80→100,20→1 기대)
+    localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+    G.teams=[]; G.myTeam=null;
+    const ok=loadGame();
+    const p=G.teams[0].roster[0];
+    return {ok, contact:p.contact, power:p.power, eye:p.eye};
+  })()
+`, ctx);
+check('구세이브(v3) 로드 성공', migProbe.ok === true);
+check('스탯 변환 50→51 (선형 매핑 중앙)', migProbe.contact === 51, `contact=${migProbe.contact}`);
+check('스탯 변환 80→100 (상한)', migProbe.power === 100, `power=${migProbe.power}`);
+check('스탯 변환 20→1 (하한)', migProbe.eye === 1, `eye=${migProbe.eye}`);
+
+// ── T8. 1b-3 표시 스케일 포그오브워 (L0~L3) ──────────────────
+section('T8. 표시 스케일 — 프론트오피스 레벨별 4단계 (L0~L3)');
+const fog = g(`(function(){
+  const tiers=[_displayTier(0),_displayTier(19),_displayTier(20),_displayTier(39),_displayTier(40),_displayTier(59),_displayTier(60),_displayTier(100)];
+  return {
+    tierMap: JSON.stringify(tiers),
+    tierOk: tiers.join(',')==='0,0,1,1,2,2,3,3',
+    gradeOk: _statGrade(84)==='S'&&_statGrade(67)==='A'&&_statGrade(51)==='B'&&_statGrade(34)==='C'&&_statGrade(10)==='D',
+    l0: fmtStatFog(84,0), l1: fmtStatFog(84,1), l2: fmtStatFog(84,2), l3: fmtStatFog(84,3),
+  };
+})()`);
+check('레벨→티어 매핑 (20/40/60 경계)', fog.tierOk, fog.tierMap);
+check('스탯→등급문자 (84=S..10=D)', fog.gradeOk);
+check(`L0 등급표시: ${fog.l0}`, fog.l0==='S');
+check(`L1 5단위 버킷: ${fog.l1}`, fog.l1==='80~84');
+check(`L2 ±추정: ${fog.l2}`, fog.l2==='81~87');
+check(`L3 정확: ${fog.l3}`, fog.l3==='84');
+// market 렌더 무결성 — 각 티어에서 예외 없이 렌더
+const marketRender = g(`(function(){
+  if(typeof generateMarket==='function')generateMarket();
+  if(typeof renderMarket!=='function')return {skip:true};
+  let ok=true, err='';
+  for(const lv of [0,25,45,65]){ G.myTeam.analyticsLevel=lv; try{ renderMarket(); }catch(e){ ok=false; err=lv+':'+e.message; break; } }
+  G.myTeam.analyticsLevel=0;
+  return {ok, err};
+})()`);
+check('market 전 티어 렌더 무예외', marketRender.skip || marketRender.ok, marketRender.err);
 
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
