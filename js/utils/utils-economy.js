@@ -169,8 +169,8 @@ function calcTradeValueForAI(p,aiTeam){
     // FA 1년 남은 렌탈: 리빌딩은 0.4배, 윈나우는 유지
     if(rank>=6) tv=Math.round(tv*0.4);
   }
-  // 장기 염가 계약: 서비스 1~PRE_ARB년, 최저연봉, OVR 55+
-  if(st>=1&&st<=PRE_ARB_MAX_SERVICE&&(p.salary||0)<=SALARY_MIN&&pOvr>=59){
+  // 장기 염가 계약: 프리Arb 단계 + 슬롯/최저 연봉(≤1.5억), OVR 59+ (신인 슬롯 도입 반영)
+  if(getContractPhase(p)==='pre'&&st>=0.5&&(p.salary||0)<=1.5&&pOvr>=59){
     tv=Math.round(tv*1.5);
   }
 

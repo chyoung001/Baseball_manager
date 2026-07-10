@@ -382,9 +382,9 @@ function _calcNewSalary(p){
   }else if(phase==='arb'){
     // P2-3 연봉조정 (Arbitration): 연차별 설계 인상률
     // Arb1 = 성적 기반 베이스라인 / Arb2 = 전년 120~180% / Arb3+ = 전년 110~150%
-    const fy=Math.floor(st);
-    const arbStart=(p._super2&&fy<ARB_MIN_SERVICE)?2:ARB_MIN_SERVICE;
-    const arbYear=Math.max(1,fy-arbStart+1);
+    // 연차는 명시적 카운터(_arbYears, 호출부에서 시즌당 1회 증가) — floor(서비스타임) 파생 시
+    // 슈퍼2 진입 기준이 뒤바뀌거나 부분 출전으로 연차가 정체되는 버그가 있어 교체
+    const arbYear=Math.max(1,p._arbYears||1);
     if(arbYear<=1||oldSalary<=PRE_ARB_SALARY*1.5){
       newSalary=_calcSalary(pOvr,ARB_MIN_SERVICE,p._super2); // 베이스라인 (전년 연봉 무관)
     }else if(arbYear===2){
@@ -431,6 +431,8 @@ function _showSalaryNegotiation(){
     }
     // 프리아브/연봉조정 자동 조정은 시즌당 1회만 — 재진입 시 복리 인상 방지
     if(p._salaryAdjSeason===G.season)return;
+    // P2-3 Arb 연차 누적 (슈퍼2 조기 진입 포함, 서비스타임과 독립)
+    if(getContractPhase(p)==='arb')p._arbYears=(p._arbYears||0)+1;
     const oldSalary=p.salary||0;
     const newSalary=_calcNewSalary(p);
     if(newSalary!==oldSalary){
@@ -554,7 +556,7 @@ function _aiPlayerValue(p){
   else if(age<=27) val+=8;
   else if(age<=31) val+=0;
   else if(age<=33) val-=10;
-  else val-=25-(age-34)*5; // 34세: -25, 35세: -30, 36세: -35...
+  else val-=25+(age-34)*5; // 34세: -25, 35세: -30, 36세: -35... (부호 오류 수정)
   // 잠재력 가산
   val+=((p._potential||50)-50)*0.4;
   // 연봉 효율 페널티: 고액+저능력 → 가치 급감
@@ -614,7 +616,8 @@ function _aiOptimizeRoster(team){
   }
 
   // ── 3. 고액 연봉 정리: 페이롤 > 하드캡 90% 시 비효율 선수 방출 ──
-  const capThreshold=getHardCap()*0.9;
+  // P2-4: AI 정리 임계는 소프트캡(사치세 라인) 기준 — 하드캡 상향(280) 후 세금 구간 방치 방지
+  const capThreshold=getLuxuryTaxLine()*1.05;
   if(getPayroll(team)>capThreshold){
     const expensive=team.roster
       .filter(p=>(p.salary||0)>5&&_aiPlayerValue(p)<80)
@@ -668,9 +671,9 @@ function _runAIFreeAgentBidding(){
       const need=teamNeed(t);
       const posMatch=fa.isPitcher?need.needPit:need.needBat;
       const canAfford=need.budget>(marketSalary*contractYears+transferFee);
-      // 샐러리캡 90% 초과 시 추가 영입 중단
+      // P2-4: 소프트캡(사치세 라인) 근접 시 추가 영입 중단 — AI가 모르고 세금 구간에 눌러앉는 것 방지
       const payroll=getPayroll(t);
-      if(payroll+marketSalary>getHardCap()*0.9) return false;
+      if(payroll+marketSalary>getLuxuryTaxLine()*1.05) return false;
       // 높은 OVR → 더 많은 팀이 관심 (랜덤 경쟁)
       const interest=pOvr>=84?60:pOvr>=75?45:pOvr>=67?30:20;
       return canAfford&&(posMatch||rand(1,100)<=interest);

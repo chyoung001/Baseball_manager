@@ -25,8 +25,9 @@ function getPosGroup(pos, player) {
 // 반환: % 페널티 (수비 스탯 적용) / 0=페널티 없음 / null=전환 불가(→C)
 // ═══════════════════════════════════════════════════════
 function _posSwitchBase(from,to){
-  if(from===to||to==='DH'||from==='DH') return 0; // DH는 포지션이 아닌 라인업 슬롯
-  if(to==='C') return null; // 어디든→C 불가 (포수는 전문 훈련 없이 전환 안 됨)
+  if(from===to||to==='DH') return 0; // DH로 이동은 라인업 슬롯 (무페널티)
+  if(to==='C') return null; // 어디든→C 불가 (포수는 전문 훈련 없이 전환 안 됨) — DH 출신 포함
+  if(from==='DH') return 22; // 본 포지션 DH(지명타자 전문)의 수비 전환은 어려움
   const key=from+'>'+to;
   if(['2B>SS','SS>2B','LF>RF','RF>LF','LF>1B','RF>1B','3B>1B'].includes(key)) return 5;  // 쉬움 -5%
   if(['SS>3B','CF>LF','CF>RF','2B>3B'].includes(key)) return 12;                          // 보통 -10~15%

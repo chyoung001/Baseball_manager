@@ -18,9 +18,11 @@ function _contractHiddenMod(p,context){
 }
 
 // 선수의 기대 계약 조건 (내부값)
+// (기존 Math.max(1,Math.floor(...))는 1억 미만 연봉을 전부 1억으로 부풀려 최저연봉급
+//  선수의 요구액을 최대 3.3배 인플레시켰음 — 소수 그대로 유지, 슈퍼2도 전달)
 function getExpectedContract(p,context){
   const pOvr=ovr(p);
-  const base=Math.max(1,Math.floor(_calcSalary(pOvr,p._serviceTime||0)));
+  const base=Math.max(SALARY_MIN,+_calcSalary(pOvr,p._serviceTime||0,p._super2).toFixed(1));
   const salary=Math.max(SALARY_MIN,+(base*_contractHiddenMod(p,context)).toFixed(1));
   const years=_calcContractYears(pOvr);
   return {salary,years,totalValue:+(salary*years).toFixed(1)};

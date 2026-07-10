@@ -30,11 +30,11 @@ function _optionDots(p){
   return dots;
 }
 
-// 계약 단계 라벨
+// 계약 단계 라벨 (P2-3: 소수 서비스타임·슈퍼2 반영 — getContractPhase 일원화)
 function _contractPhaseLabel(p){
-  const st=p._serviceTime||0;
-  if(st<=PRE_ARB_MAX_SERVICE) return '<span style="color:#67e8f9;">최저연봉</span>';
-  if(st<=ARB_MAX_SERVICE) return '<span style="color:#f59e0b;">연봉조정</span>';
+  const ph=getContractPhase(p);
+  if(ph==='pre') return '<span style="color:#67e8f9;">최저연봉</span>';
+  if(ph==='arb') return '<span style="color:#f59e0b;">연봉조정</span>';
   return '<span style="color:#10b981;">FA자격</span>';
 }
 
@@ -61,7 +61,7 @@ function _getFilteredContracts(){
       case 'ovr': return ovr(p);
       case 'salary': return p.salary||0;
       case 'service': return p._serviceTime||0;
-      case 'phase': return (p._serviceTime||0)<=PRE_ARB_MAX_SERVICE?0:(p._serviceTime||0)<=ARB_MAX_SERVICE?1:2;
+      case 'phase': {const ph=getContractPhase(p);return ph==='pre'?0:ph==='arb'?1:2;}
       case 'contract': return p._contractYears||1;
       case 'tenure': return p._teamTenure||0;
       case 'option': return MAX_OPTION_YEARS-(p._optionYearsUsed||0);

@@ -58,6 +58,7 @@ function saveGame(){
       awards:G.awards,
       teams:G.teams.map(_compressTeam),
       marketPlayers:G.marketPlayers.map(_compressPlayer),
+      _lastSeasonRev:G._lastSeasonRev||null, // 스토브 결산 스냅샷 (재로드 시 표시 정합)
     };
     localStorage.setItem(SAVE_KEY,JSON.stringify(snap));
   }catch(e){
@@ -92,6 +93,7 @@ function _restoreFromData(d){
   // Phase & new fields 복원
   G.phase=d.phase||'preseason';
   G._stoveSettledSeason=d._stoveSettledSeason||0;
+  G._lastSeasonRev=d._lastSeasonRev||null; // 미보유 세이브 로드 시 이전 게임 잔재도 초기화
   G.previousSeasonStandings=d.previousSeasonStandings||[];
   G.postseasonBracket=d.postseasonBracket||null;
   G.seasonModifiers=d.seasonModifiers||{};
@@ -165,6 +167,10 @@ function _restoreFromData(d){
       if(p._naturalPos==null&&p.pos!=='DH')p._naturalPos=p.pos;
       if(p._subPos===undefined)p._subPos=_rollSubPos(p._naturalPos||p.pos);
     }
+    // P2-3 서비스타임 경기 카운터 백필: 구세이브 중간 로드 시 이미 치른 경기만큼 크레딧
+    // (미백필 시 로드 시점부터만 적립되어 마이그레이션 시즌 서비스타임이 리그 전체 과소 계상)
+    if(p._svcGames===undefined)
+      p._svcGames=((p.status||'active')==='active'&&p.role!=='overseas')?(G.gameNum||0):0;
   }));
   // 팀 필드 마이그레이션
   G.teams.forEach(t=>{
@@ -189,7 +195,7 @@ function clearSave(){localStorage.removeItem(SAVE_KEY);sessionStorage.removeItem
 function exportGame(){
   try{
     const snap={
-      _v:4, _exportDate:new Date().toISOString(),
+      _v:5, _exportDate:new Date().toISOString(),
       season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
       teamIdx:G.teamIdx, trainingCooldown:G.trainingCooldown||0, matchSpeed:G.matchSpeed,
       currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,

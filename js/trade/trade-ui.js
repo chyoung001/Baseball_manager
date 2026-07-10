@@ -67,9 +67,9 @@ function _renderTradeBoard(){
   function playerRow(p, rosterIdx, side){
     const selected=side==='my'?_tradeState.myOffer.includes(rosterIdx):_tradeState.theirOffer.includes(rosterIdx);
     const tv=calcTradeValueForAI(p,tt);
-    const st=p._serviceTime||0;
-    const phase=st<=PRE_ARB_MAX_SERVICE?'Pre':st<=ARB_MAX_SERVICE?'Arb':'FA';
-    const phColor=phase==='Pre'?'#67e8f9':phase==='Arb'?'#f59e0b':'#10b981';
+    const ph=getContractPhase(p); // P2-3: 소수 서비스타임·슈퍼2 반영
+    const phase=ph==='pre'?'Pre':ph==='arb'?'Arb':'FA';
+    const phColor=getPhaseColor(p);
     const o=ovr(p);
     return `<tr style="cursor:pointer;background:${selected?'rgba(245,158,11,0.1)':'transparent'};border-left:3px solid ${selected?'var(--accent)':'transparent'};" onclick="_toggleTradePlayer('${side}',${rosterIdx})">
       <td><span class="pos-badge${p.isPitcher?' pitcher':''}" style="font-size:0.5rem;padding:1px 3px;">${p.pos}</span></td>

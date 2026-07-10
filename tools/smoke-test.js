@@ -415,11 +415,13 @@ const zProbe = g(`(function(){
   const all=G.teams.flatMap(t=>t.roster);
   const splitOk=all.every(p=>Number.isFinite(ovrRaw(p))&&Number.isFinite(ovr(p)))&&all.some(p=>ovrRaw(p)!==ovr(p));
   // 다재다능 세금: _subPos 1개 → −1, 2개 → −2
-  const t0=all.find(p=>ovr(p)>=30&&ovr(p)<=70);
-  const base=ovr(t0);
+  // (플레이크 방지: 샘플 선수가 이미 서브 보유 시 base에 세금이 선반영되므로 비우고 측정, 원복)
+  const t0=all.find(p=>!p.isPitcher&&ovr(p)>=30&&ovr(p)<=70)||all[0];
+  const savedSub=t0._subPos;
+  t0._subPos=[];const base=ovr(t0);
   t0._subPos=['2B'];const tax1=base-ovr(t0);
   t0._subPos=['2B','3B'];const tax2=base-ovr(t0);
-  delete t0._subPos;
+  t0._subPos=savedSub;
   return {means:JSON.stringify(means),allOk,splitOk,tax1,tax2};
 })()`);
 check(`전 그룹 1군 평균 OVR ≈50 (46~54): ${zProbe.means}`, zProbe.allOk);
@@ -515,16 +517,19 @@ const penProbe = g(`(function(){
   const toDH=getPosSwitchPenalty(mk('SS',50),'DH');
   const subHalf=getPosSwitchPenalty(mk('2B',50,['SS']),'SS');
   const versCut=getPosSwitchPenalty(mk('2B',100),'SS');
+  const dhOut=getPosSwitchPenalty(mk('DH',50),'SS');  // 본 포지션 DH → 수비 전환 어려움 22
+  const dhToC=getPosSwitchPenalty(mk('DH',50),'C');   // DH 출신도 →C 불가
   const pe=mk('2B',50); pe.pos='SS';
   const eff=effFielding(pe); // 80×0.95=76
   const pSim=mk('2B',50);
   const simC=simulatePosOvr(pSim,'C');
   const simSS=simulatePosOvr(pSim,'SS');
   const pure=pSim.pos==='2B'&&pSim.fielding===80&&pSim.arm===60;
-  return {base5,base12,base22,toC,toDH,subHalf,versCut,eff,simC,simSSOk:Number.isFinite(simSS),pure};
+  return {base5,base12,base22,toC,toDH,subHalf,versCut,dhOut,dhToC,eff,simC,simSSOk:Number.isFinite(simSS),pure};
 })()`);
 check(`전환 페널티 테이블 (쉬움5/보통12/어려움22): ${penProbe.base5}/${penProbe.base12}/${penProbe.base22}`, penProbe.base5 === 5 && penProbe.base12 === 12 && penProbe.base22 === 22);
 check('→C 전환 불가(null) · →DH 무페널티(0)', penProbe.toC === null && penProbe.toDH === 0);
+check(`본 포지션 DH: 수비 전환 22% · →C 불가 (${penProbe.dhOut}/${penProbe.dhToC})`, penProbe.dhOut === 22 && penProbe.dhToC === null);
 check(`서브 경험 → 절반(${penProbe.subHalf}) · 다재다능 100 → 절반(${penProbe.versCut})`, penProbe.subHalf === 2.5 && penProbe.versCut === 2.5);
 check(`유효 수비 반영: 2B→SS 수비80 → ${penProbe.eff} (기대 76)`, penProbe.eff === 76);
 check('L3 전환 시뮬: C는 null · 타 포지션 유한 · 원본 무변이', penProbe.simC === null && penProbe.simSSOk && penProbe.pure);
@@ -612,13 +617,18 @@ check(`시리즈 비례 적립 (63경기→${svcProbe.g63} / 45→${svcProbe.g45
 check(`신인 슬롯 연봉 (전체1→${svcProbe.slot1} / 8→${svcProbe.slot8} / 9→${svcProbe.slot9} / 16→${svcProbe.slot16} / 48→${svcProbe.slot48})`,
   svcProbe.slot1 === 1.5 && svcProbe.slot2 === 1.2 && svcProbe.slot8 === 0.8 && svcProbe.slot9 === 0.7 && svcProbe.slot16 === 0.5 && svcProbe.slot48 === 0.3);
 const arbProbe = g(`(function(){
-  const mk=(st,sal)=>{const p={_serviceTime:st,salary:sal,isPitcher:false,pos:'1B',contact:60,power:60,eye:60,speed:60,fielding:60,arm:60};initSeasonStats(p);return p;};
+  // _arbYears 명시 카운터 기반 (floor(서비스타임) 파생의 슈퍼2 플립·소수 정체 버그 수정 반영)
+  const mk=(st,sal,ay)=>{const p={_serviceTime:st,salary:sal,_arbYears:ay,isPitcher:false,pos:'1B',contact:60,power:60,eye:60,speed:60,fielding:60,arm:60};initSeasonStats(p);return p;};
   const a2=[],a3=[];
-  for(let i=0;i<30;i++){a2.push(_calcNewSalary(mk(4,3)));a3.push(_calcNewSalary(mk(5,3)));}
-  return {a2min:Math.min(...a2),a2max:Math.max(...a2),a3min:Math.min(...a3),a3max:Math.max(...a3)};
+  for(let i=0;i<30;i++){a2.push(_calcNewSalary(mk(4,3,2)));a3.push(_calcNewSalary(mk(5,3,3)));}
+  // 슈퍼2 수정 검증: st=3(과거 arbStart 플립 지점)이라도 카운터가 2면 인상률 경로 (베이스라인 재롤 아님)
+  const s2=[];for(let i=0;i<20;i++){const p=mk(3,6,2);p._super2=true;s2.push(_calcNewSalary(p));}
+  return {a2min:Math.min(...a2),a2max:Math.max(...a2),a3min:Math.min(...a3),a3max:Math.max(...a3),
+    s2min:Math.min(...s2),s2max:Math.max(...s2)};
 })()`);
 check(`Arb 2년차 인상률 120~180% (3억 → ${arbProbe.a2min}~${arbProbe.a2max})`, arbProbe.a2min >= 3.5 && arbProbe.a2max <= 5.8);
 check(`Arb 3년차 인상률 110~150% (3억 → ${arbProbe.a3min}~${arbProbe.a3max})`, arbProbe.a3min >= 3.2 && arbProbe.a3max <= 4.8);
+check(`슈퍼2 fy=3 Arb2 인상 보장 (6억 → ${arbProbe.s2min}~${arbProbe.s2max}, 삭감 없음)`, arbProbe.s2min >= 7.0);
 
 // ── T14. P2-5 특수 시설 4레벨 — 비용 · 유지비 · 업그레이드 · 백필 ──
 section('T14. P2-5 특수 시설 4레벨 — 슬럼프케어·멘탈코칭');
