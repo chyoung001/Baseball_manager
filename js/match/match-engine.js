@@ -55,7 +55,7 @@ function _ttoSimAB(adjPow, adjCon, adjEye, effStuff, effControl, effMovement, av
 
 // ── 투구수 한계 산정 (스태미나 스탯 기반) ──
 function getMaxPitches(pitcher){
-  const base=pitcher.stamina||50;
+  const base=statEff(pitcher,'stamina');
   if(pitcher.role==='rotation') return Math.floor(base+40); // stamina 50→90구, 80→120구
   const bonus=pitcher.pos==='LR'?15:0;
   return Math.floor(base/2+10+bonus); // 불펜 50→35구, LR 50→50구

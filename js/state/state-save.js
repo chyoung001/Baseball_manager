@@ -186,6 +186,9 @@ function _restoreFromData(d){
     if(t.slumpCareLevel===undefined) t.slumpCareLevel=0;   // P2-5 백필
     if(t.mentalCoachLevel===undefined) t.mentalCoachLevel=0;
   });
+  // OVR Z-score 보정 캐시 무효화 — 로드/마이그레이션으로 스탯이 변해도
+  // 캐시 키(시즌:경기:인원합)가 동일하면 낡은 보정치를 쓰는 문제 방지
+  invalidateOvrCalib();
   return true;
 }
 

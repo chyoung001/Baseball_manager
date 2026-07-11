@@ -649,6 +649,31 @@ check('설계 상수 (비용 5/12/25/40억 · 완화 50% · 증폭 50%)', facPro
 check(`4레벨 유지비 L3+L4 = +${facProbe.diff} (기대 8.5 = 25×10% + 40×15%)`, facProbe.diff === 8.5);
 check('업그레이드 2회: Lv.2 도달 + 17억(5+12) 차감', facProbe.lvOk);
 
+// ── T15. P3-1 3-Tier 스탯 계층 — pass-through · 소프트캡 압축 · 매치엔진 전환 ──
+section('T15. P3-1 3-Tier 스탯 — Raw/Roster/Effective 계층');
+const tierProbe = g(`(function(){
+  const p={contact:80};
+  const passOk=statRaw(p,'contact')===80&&statRoster(p,'contact')===80&&statEff(p,'contact')===80;
+  const fbOk=statRaw(p,'power')===50; // 미보유 스탯 폴백 50 (리그 평균)
+  const c120=_tier3Compress(120), c125=_tier3Compress(125);
+  const c126=+_tier3Compress(126).toFixed(1); // 평탄부 회귀 가드: 125+log10(2) ≈ 125.3 (구식은 125로 붕괴)
+  const c130=+_tier3Compress(130).toFixed(1); // 125+log10(6) ≈ 125.8
+  const mono=_tier3Compress(125.5)>125&&_tier3Compress(126)>_tier3Compress(125.5); // 순단조
+  // 특성 보정 훅 주입 시 소프트캡 경유 확인 (P3-2 선행 검증) — try/finally로 전역 복원 보장
+  const orig=_traitBonus;
+  let capped;
+  try{
+    _traitBonus=function(){return 30;};
+    capped=+statEff({contact:100},'contact').toFixed(1); // 100+30 → 125+log10(6) ≈ 125.8
+  }finally{
+    _traitBonus=orig;
+  }
+  return {passOk,fbOk,c120,c125,c126,c130,mono,capped};
+})()`);
+check('Tier1=2=3 pass-through (팀 DNA·특성 미도입 상태) + 폴백 50', tierProbe.passOk && tierProbe.fbOk);
+check(`소프트캡 125 log₁₀(1+over) 압축 (120→${tierProbe.c120} / 125→${tierProbe.c125} / 126→${tierProbe.c126} / 130→${tierProbe.c130}) + 순단조`, tierProbe.c120 === 120 && tierProbe.c125 === 125 && tierProbe.c126 === 125.3 && tierProbe.c130 === 125.8 && tierProbe.mono);
+check(`특성 보정 훅 → 압축 경유 (100+30 → ${tierProbe.capped})`, tierProbe.capped === 125.8);
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
