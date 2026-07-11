@@ -12,7 +12,7 @@
 
 | 항목 | 내용 |
 |------|------|
-| **규모** | ~8,000+ 줄 (JS 54개 모듈 + `index.html` + `style.css`) |
+| **규모** | ~9,000+ 줄 (JS 57개 모듈 + `index.html` + `style.css`) |
 | **기술 스택** | Vanilla JavaScript (ES6+), HTML5, CSS3 |
 | **빌드 도구** | **없음** — `<script>` 로딩 순서로 의존성 관리, 브라우저 직접 실행 |
 | **외부 의존성** | 없음 (Google Fonts CDN만 사용) |
@@ -76,14 +76,15 @@ Baseball_Manager/
 ├── image/                  # 이미지 에셋 (경기장 배경, 팀 로고)
 ├── tools/
 │   └── smoke-test.js       # 헤드리스 회귀 테스트 하네스
-└── js/                     # 게임 로직 (54개 모듈)
+└── js/                     # 게임 로직 (57개 모듈)
     ├── constants.js        # 게임 상수, 팀 데이터(TEAMS_DATA), 밸런스 값
-    ├── ui.js · dashboard.js · standings.js · training.js · facility.js · market.js · title.js
-    ├── utils/              # utils-core / utils-stats / utils-scout / utils-economy / negotiation
-    ├── players/            # player-core / player-stats / player-factory / player-pools
+    ├── ui.js · dashboard.js · standings.js · training.js · market.js · title.js
+    ├── utils/              # utils-core / utils-stats / utils-scout / utils-economy
+    ├── contracts/          # contracts-negotiation / contracts-salary / contracts-fa
+    ├── players/            # player-core / player-stats / player-traits / player-factory / player-pools
     ├── state/              # state-core / state-save / state-init / state-validation
     ├── roster/             # roster-logic / roster-field / roster-active / roster-reserve
-    ├── match/              # match-state / match-engine / match-flow / match-ui / match
+    ├── match/              # match-state / match-engine / match-ui / match-postgame / match-flow / match-sim / match
     ├── trade/              # trade-logic / trade-ui / trade
     ├── analysis/           # analysis-batters / -pitchers / -scout / -contracts / analysis
     ├── season/             # season-core / -finance / -postseason / -awards / -flow / -gm
@@ -233,8 +234,8 @@ Baseball_Manager/
 빌드 없이 `<script>` 순서로 의존성을 보장하므로 순서 변경 시 오류가 발생한다.
 
 ```
-constants → utils/* → players/* → state/* → ui · dashboard
-→ roster/* → match/* → training · facility · market → trade/*
+constants → utils/* → contracts/* → players/* → state/* → ui · dashboard
+→ roster/* → match/* → training · market → trade/*
 → standings → analysis/* → season/* → invest/* → draft/* → title
 ```
 
