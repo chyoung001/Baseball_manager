@@ -1,4 +1,34 @@
 // ===================== UTILS-STATS (Sabermetrics & OVR Engine) =====================
+// ═══════════════════════════════════════════════════════
+// P3-1: 3-Tier 스탯 계층 (설계: 스탯 페이지 "3-Tier 스탯 시스템")
+// Tier1 Raw → Tier2 Roster(팀 맥락) → Tier3 Effective(매치엔진 전용)
+// 시스템별 입력: OVR·TV·성장/노화 = Tier1 / UI 표시·AI 라인업 = Tier2 / 매치엔진 확률 = Tier3
+// 상황 보정(파크팩터·클러치·라이벌·PS)은 Tier에 섞지 않고 확률 변환 후 곱셈 (P4)
+// ═══════════════════════════════════════════════════════
+
+// Tier 1 — Raw: 순수 내재 능력 (1~100). 성장/노화/훈련만 작용. 폴백 50=리그 평균.
+function statRaw(p,key){const v=p[key];return (v===undefined||v===null)?50:v;}
+
+// Tier 2 — Roster: Tier1 + 팀 DNA + 시즌 포커스. 트레이드 시 재계산되는 "팀에서의 폼".
+// TODO P6(팀 컨셉): DNA/포커스 가산 + 1~100 초과분 50% 연관 스탯 분산 룰. 현재 pass-through.
+function statRoster(p,key){return statRaw(p,key);}
+
+// 특성 보정 훅 — P3-2 특성 엔진에서 구현.
+// 스택 상한(엔진 책임): 인공 특성 동일 스탯 합 +10, 자연+인공 합 +12.
+function _traitBonus(p,key){return 0;}
+
+// Tier 3 소프트캡 125: 초과분 log₁₀(1+over) 압축 — 경계 연속·순단조 보장
+// (설계 예시 130→125.7은 log₁₀(over) 기준값. 그 식은 125~126 구간이 전부 125로 붕괴하는
+//  평탄부가 생겨 1+over로 보정 — 130→125.78로 편차 +0.08, 압축 취지 동일)
+function _tier3Compress(v){return v>125?125+Math.log10(1+(v-125)):v;}
+
+// Tier 3 — Effective: Tier2 + 특성. 매치엔진 확률 산출 전용, UI 비노출.
+// 사기/컨디션·피로 배율은 엔진에서 곱셈 1회 적용 (기존 condFactor/stamFactor 유지).
+function statEff(p,key){return _tier3Compress(statRoster(p,key)+_traitBonus(p,key));}
+
+// 부상 위험 곡선 (내구성 1~100 → 0~19.8) — 단일 소스.
+// 부상 롤(match-flow._injuryThreshold, 최소 2 플로어)과 트레이드 가치 리스크가 공유.
+function injuryRisk(dur){return (100-(dur||50))/5;}
 // ── P2-1 OVR 엔진: 역할별 가중 raw + 포지션 그룹별 Z-score 상대평가 ──
 // ovrRaw(p)  = 절대 점수 (역할별 가중 평균, 1~100). 생성·성장캡·에이징 등 "물리적 스탯" 맥락 전용.
 // ovr(p)     = 상대 OVR (1군 리그 분포 대비 Z-score, 50=리그평균·σ=15) + 다재다능 세금. 표시·연봉·FA·트레이드 평가 등 "가치" 맥락 전용.
@@ -37,6 +67,8 @@ function _ovrCalibGroup(p){
 }
 // 리그 보정치 캐시 (1군 active 기준 — "1군 리그 평균 대비" 상대평가). gameNum/로스터 변동 시 재계산.
 let _ovrCalibCache=null, _ovrCalibKey='';
+// 캐시 강제 무효화 — 키(시즌:경기:인원합)가 못 보는 리그 전체 스탯 변동(세이브 로드·마이그레이션) 시 호출
+function invalidateOvrCalib(){_ovrCalibCache=null;_ovrCalibKey='';}
 function _getOvrCalib(){
   if(typeof G==='undefined'||!G.teams||G.teams.length===0) return null;
   const key=G.season+':'+G.gameNum+':'+G.teams.reduce((s,t)=>s+(t.roster?t.roster.length:0),0);

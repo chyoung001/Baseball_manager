@@ -40,27 +40,29 @@ function getPosSwitchPenalty(p,to){
   const from=p._naturalPos||p.pos;
   let pen=_posSwitchBase(from,to);
   if(pen===null||pen===0) return pen;
-  // 서브 포지션 실전 경험 → 절반, 단 최소 '쉬움'(5%) 수준 보장
-  // (예: 1B의 서브 LF는 기본 22 → 5 — 서브 경험자가 자연 인접 전환보다 불리하지 않도록)
+  // 서브 포지션 실전 경험 → '쉬움' 등급(base 5)과 동등 취급: min(절반, 5)
+  // 이후 다재다능 배율(×0.5~1.5)은 자연 전환과 공통 적용 — 절대 상한이 아니라 등급 동등성 보장
+  // (저다재다능이면 서브 경험이어도 최대 7.5% — 자연 '쉬움' 전환도 동일하게 7.5%)
   if(Array.isArray(p._subPos)&&p._subPos.includes(to)) pen=Math.min(pen*0.5,5);
   const vers=p._versatility||50; // 다재다능 히든: 높으면 최대 -50%, 낮으면 최대 +50%
   pen*=clamp(1-(vers-50)/100,0.5,1.5);
   return Math.round(pen*10)/10;
 }
-// 유효 수비 스탯 — 현재 포지션 기준 전환 페널티 반영 (매치 엔진용)
-function effFielding(p){const pen=p.isPitcher?0:(getPosSwitchPenalty(p,p.pos)||0);return Math.round((p.fielding||50)*(1-pen/100));}
-function effArm(p){const pen=p.isPitcher?0:(getPosSwitchPenalty(p,p.pos)||0);return Math.round((p.arm||50)*(1-pen/100));}
+// 유효 수비 스탯 — Tier3(statEff) 기준 + 현재 포지션 전환 페널티 반영 (매치 엔진용)
+function effFielding(p){const pen=p.isPitcher?0:(getPosSwitchPenalty(p,p.pos)||0);return Math.round(statEff(p,'fielding')*(1-pen/100));}
+function effArm(p){const pen=p.isPitcher?0:(getPosSwitchPenalty(p,p.pos)||0);return Math.round(statEff(p,'arm')*(1-pen/100));}
 // 포지션 전환 OVR 시뮬 (프론트오피스 L3 힌트): 전환 페널티 반영 상대 OVR, 불가 시 null
+// 라이브 객체를 변이하지 않고 얕은 클론으로 계산 (렌더/예외 시 원본 오염 방지)
 function simulatePosOvr(p,to){
   if(p.isPitcher) return null;
   const pen=getPosSwitchPenalty(p,to);
   if(pen===null) return null;
-  const o={pos:p.pos,f:p.fielding,a:p.arm};
-  p.pos=to;
-  if(pen>0){p.fielding=Math.round(o.f*(1-pen/100));p.arm=Math.round(o.a*(1-pen/100));}
-  const v=ovr(p);
-  p.pos=o.pos;p.fielding=o.f;p.arm=o.a;
-  return v;
+  const q=Object.assign({},p,{pos:to});
+  if(pen>0){
+    q.fielding=Math.round((p.fielding||50)*(1-pen/100));
+    q.arm=Math.round((p.arm||50)*(1-pen/100));
+  }
+  return ovr(q);
 }
 
 // 행 클릭 시 포지션 드롭다운 클릭이면 무시

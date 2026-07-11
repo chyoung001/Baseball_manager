@@ -33,7 +33,7 @@ function getScoutReport(p){
   // 드림즈(prospect): 스카우트 정확도 +50% (fuzz 절반)
   const fuzzAmt=G.myTeam.concept==='prospect'?Math.max(5,Math.ceil(baseFuzz*0.5)):baseFuzz;
   // 퍼징값을 1회만 계산하여 등급·텍스트 모두 동일 기준 사용
-  function fuzzVal(key){const raw=p[key]||50;return clamp(raw+rand(-fuzzAmt,fuzzAmt),1,100);}
+  function fuzzVal(key){return clamp(statRaw(p,key)+rand(-fuzzAmt,fuzzAmt),1,100);} // Tier1 단일 경로
 
   const r={};
   _HIDDEN_DESC.forEach(d=>{
@@ -86,14 +86,14 @@ function getDraftScoutInfo(p,scLv){
   }
 
   // 잠재력 (1~100 스케일)
-  const pot=p._potential||50;
+  const pot=statRaw(p,'_potential');
   if(scLv>=80) info.pot=pot;
   else if(scLv>=60) info.potRange=[Math.max(35,pot-10),Math.min(100,pot+10)];
   else if(scLv>=30) info.potHint=pot>=75?'스타 재목':pot>=60?'1군 주전급':pot>=45?'백업 수준':'제한적';
   else info.potHint=null;
 
   // 프로의식 (_workEthic) — 스카우트팀 레벨에 연동
-  const we=p._workEthic||50;
+  const we=statRaw(p,'_workEthic');
   if(scLv>=90) info.workEthic=we;
   else if(scLv>=70) info.workEthicRange=[Math.max(35,we-10),Math.min(100,we+10)];
 
@@ -109,14 +109,14 @@ function getDraftScoutInfo(p,scLv){
 function getAnalyticsHiddenInfo(p,aLv){
   const info={};
   if(aLv>=90){
-    info.durability=p._durability||50;
-    info.consistency=p._consistency||50;
-    info.clutchHidden=p._clutchHidden||50;
+    info.durability=statRaw(p,'_durability');
+    info.consistency=statRaw(p,'_consistency');
+    info.clutchHidden=statRaw(p,'_clutchHidden');
   }else if(aLv>=80){
-    info.durability=p._durability||50;
-    info.consistency=p._consistency||50;
+    info.durability=statRaw(p,'_durability');
+    info.consistency=statRaw(p,'_consistency');
   }else if(aLv>=60){
-    info.durability=p._durability||50;
+    info.durability=statRaw(p,'_durability');
   }
   return info;
 }

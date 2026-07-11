@@ -111,8 +111,8 @@ function calcTradeValue(p){
   else if(sp<=8) skillValue=ca*0.8+paScaled*0.2;       // 전성기
   else           skillValue=ca*Math.max(0.2,1-(sp-8)/12); // 에이징
 
-  // 3단계: 리스크 페널티 (부상 빈도)
-  const injProne=(100-(p._durability||50))/5;
+  // 3단계: 리스크 페널티 (부상 빈도) — 부상 롤과 동일 곡선(injuryRisk) 공유
+  const injProne=injuryRisk(p._durability);
   const riskMod=Math.max(0.5,1.0-injProne/40);
 
   // 4단계: 프로의식 가치 반영 (성장 기대치 + 에이징 리스크)
