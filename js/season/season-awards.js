@@ -57,6 +57,9 @@ function showAwards(){
     }));
   });
 
+  // P3-2 인공 특성 평가 (어워드·타이틀·시즌 기록·통산·올스타 연속·우승 멤버) — 은퇴 처리 전에 수행
+  const traitResults=evaluateSeasonTraits({mvp,cyYoung,rookie,hrKing,pitTriple});
+
   // 은퇴 처리 + 명예의 전당
   const retirees=[];
   G.teams.forEach(t=>{
@@ -79,6 +82,15 @@ function showAwards(){
     <div style="text-align:left;">
       <div style="font-size:0.72rem;color:var(--accent);margin-bottom:8px;">타이틀 홀더</div>
       ${G.awards.map(a=>'<div style="font-size:0.85rem;padding:6px 0;border-bottom:1px solid var(--border);"><span style="color:var(--accent);font-weight:700;">'+a.title+'</span> — '+a.emoji+' <b>'+a.name+'</b> <span style="color:var(--text-dim);">('+a.team+')</span></div>').join('')}
+      ${(()=>{
+        // 은퇴 처리 "후" 잔류 선수만 표시 (은퇴자 특성 획득·소멸 동시 노출 혼선 방지),
+        // 선수 참조 기반 필터 — 동명이인 오귀속 차단
+        const shown=traitResults.filter(r=>G.teams.some(t=>t.roster.includes(r.p)));
+        const mine=shown.filter(r=>G.myTeam.roster.includes(r.p));
+        if(shown.length===0)return '';
+        return `<div style="margin-top:14px;font-size:0.72rem;color:var(--accent2);margin-bottom:6px;">✨ 특성 획득 (리그 ${shown.length}건${mine.length>0?' · 내 팀 '+mine.length+'건':''})</div>`
+          +(mine.length>0?mine:shown.slice(0,5)).map(r=>'<div style="font-size:0.72rem;padding:2px 0;"><b>'+r.name+'</b> — '+r.text+'</div>').join('');
+      })()}
       ${retirees.length>0?`
       <div style="margin-top:14px;font-size:0.72rem;color:var(--text-dim);margin-bottom:6px;">👋 은퇴 선수</div>
       ${retirees.map(r=>'<div style="font-size:0.75rem;padding:3px 0;">'+r.emoji+' '+r.name+' (OVR '+r.ovr+', '+r.seasonsPlayed+'시즌)</div>').join('')}

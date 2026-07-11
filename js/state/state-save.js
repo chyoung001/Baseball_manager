@@ -50,6 +50,7 @@ function saveGame(){
       testMode:G.testMode,
       phase:G.phase,
       _stoveSettledSeason:G._stoveSettledSeason||0,
+      _traitsEvaluatedSeason:G._traitsEvaluatedSeason||0, // P3-2 시상 특성 평가 멱등 가드
       previousSeasonStandings:G.previousSeasonStandings,
       draftPool:(G.draftPool||[]).map(_compressPlayer),
       postseasonBracket:G.postseasonBracket,
@@ -93,6 +94,7 @@ function _restoreFromData(d){
   // Phase & new fields 복원
   G.phase=d.phase||'preseason';
   G._stoveSettledSeason=d._stoveSettledSeason||0;
+  G._traitsEvaluatedSeason=d._traitsEvaluatedSeason||0;
   G._lastSeasonRev=d._lastSeasonRev||null; // 미보유 세이브 로드 시 이전 게임 잔재도 초기화
   G.previousSeasonStandings=d.previousSeasonStandings||[];
   G.postseasonBracket=d.postseasonBracket||null;
@@ -205,6 +207,7 @@ function exportGame(){
       testMode:G.testMode,
       phase:G.phase,
       _stoveSettledSeason:G._stoveSettledSeason||0,
+      _traitsEvaluatedSeason:G._traitsEvaluatedSeason||0, // P3-2 시상 특성 평가 멱등 가드
       previousSeasonStandings:G.previousSeasonStandings,
       draftPool:(G.draftPool||[]).map(_compressPlayer),
       postseasonBracket:G.postseasonBracket,
