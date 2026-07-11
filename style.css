@@ -139,7 +139,8 @@ body { background:var(--bg-dark); color:var(--text); font-family:'Noto Sans KR',
 .bc-scoreboard {
   display:grid; grid-template-columns:auto auto 1fr; gap:0;
   background:linear-gradient(90deg,#1a1020,#0f172a,#101a28); padding:6px 10px;
-  border-bottom:2px solid var(--accent); font-family:'Orbitron',sans-serif;
+  border-bottom:2px solid var(--mode-accent,var(--accent)); font-family:'Orbitron',sans-serif;
+  transition:border-color 0.4s;
 }
 .bc-sb-left { display:flex; flex-direction:column; gap:2px; }
 .bc-team-row {
@@ -159,8 +160,8 @@ body { background:var(--bg-dark); color:var(--text); font-family:'Noto Sans KR',
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:0 12px;
 }
 .bc-inning-badge {
-  background:var(--accent); color:#000; font-size:0.62rem; font-weight:900;
-  padding:3px 12px; border-radius:10px; letter-spacing:1px;
+  background:var(--mode-accent,var(--accent)); color:#000; font-size:0.7rem; font-weight:900;
+  padding:3px 12px; border-radius:10px; letter-spacing:1px; transition:background 0.4s;
 }
 .bc-outs-row { display:flex; gap:5px; }
 .bc-out-dot {
@@ -257,14 +258,14 @@ body { background:var(--bg-dark); color:var(--text); font-family:'Noto Sans KR',
   max-height:500px;
 }
 .bc-log-title {
-  padding:6px 10px; font-family:'Orbitron',sans-serif; font-size:0.55rem;
+  padding:6px 10px; font-family:'Orbitron',sans-serif; font-size:0.62rem;
   font-weight:700; color:var(--text-dim); letter-spacing:2px;
   border-bottom:1px solid var(--border); background:rgba(0,0,0,0.3);
 }
-.play-log { flex:1; overflow-y:auto; font-size:0.68rem; padding:6px 8px; min-height:0; }
+.play-log { flex:1; overflow-y:auto; font-size:0.7rem; padding:6px 8px; min-height:0; }
 .play-log::-webkit-scrollbar { width:3px; }
 .play-log::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
-.log-entry { padding:4px 8px; border-left:3px solid var(--border); margin-bottom:4px; color:var(--text-dim); animation:fadeIn 0.25s; font-size:0.65rem; }
+.log-entry { padding:4px 8px; border-left:3px solid var(--border); margin-bottom:4px; color:var(--text-dim); animation:fadeIn 0.25s; font-size:0.7rem; }
 .log-entry.hit { border-left-color:var(--accent2); color:var(--accent2); }
 .log-entry.out { border-left-color:var(--accent3); }
 .log-entry.run { border-left-color:var(--accent); color:var(--accent); font-weight:700; }
@@ -276,7 +277,8 @@ body { background:var(--bg-dark); color:var(--text); font-family:'Noto Sans KR',
 /* ── ③ 하단 3분할 대시보드 ── */
 .bc-dashboard {
   display:grid; grid-template-columns:1fr 1fr 1fr; gap:0;
-  border-top:2px solid var(--accent); font-family:'JetBrains Mono',monospace;
+  border-top:2px solid var(--mode-accent,var(--accent)); font-family:'JetBrains Mono',monospace;
+  transition:border-color 0.4s;
 }
 .bc-panel {
   padding:8px 10px; background:#0d1117; border-right:1px solid var(--border);
@@ -284,28 +286,28 @@ body { background:var(--bg-dark); color:var(--text); font-family:'Noto Sans KR',
 }
 .bc-panel:last-child { border-right:none; }
 .bc-panel-title {
-  font-family:'Orbitron',sans-serif; font-size:0.5rem; font-weight:700;
+  font-family:'Orbitron',sans-serif; font-size:0.62rem; font-weight:700;
   color:var(--text-dim); letter-spacing:2px; margin-bottom:6px;
   padding-bottom:4px; border-bottom:1px solid var(--border);
 }
 
 /* 라인업 테이블 */
 .lineup-table { width:100%; border-collapse:collapse; }
-.lineup-table th { font-size:0.48rem; color:var(--text-dim); text-align:left; padding:2px 3px; font-weight:600; }
-.lineup-table td { padding:2px 3px; font-size:0.58rem; color:var(--text); border-bottom:1px solid rgba(255,255,255,0.03); }
+.lineup-table th { font-size:0.56rem; color:var(--text-dim); text-align:left; padding:3px 3px; font-weight:600; }
+.lineup-table td { padding:3px 3px; font-size:0.66rem; color:var(--text); border-bottom:1px solid rgba(255,255,255,0.03); }
 .lineup-table tr.lu-active { background:rgba(245,158,11,0.12); }
 .lineup-table tr.lu-active td { color:var(--accent); font-weight:700; }
 .lineup-table tr.lu-onbase td:first-child { border-left:2px solid var(--accent2); }
 .lineup-table .lu-num { color:var(--text-dim); width:16px; }
 .lineup-table .lu-pos { color:var(--accent4); width:24px; }
-.lineup-table .lu-name { max-width:70px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lineup-table .lu-name { max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lineup-table .lu-today { color:var(--accent2); }
 
 /* 투수 상세 패널 */
 .pitcher-detail { text-align:center; }
 .pitcher-detail .pd-name { font-size:0.85rem; font-weight:900; color:var(--text-bright); font-family:'Orbitron',sans-serif; }
-.pitcher-detail .pd-role { font-size:0.5rem; color:#60a5fa; letter-spacing:1px; margin-bottom:4px; }
-.pitcher-detail .pd-season { font-size:0.55rem; color:var(--text-dim); margin-bottom:6px; }
+.pitcher-detail .pd-role { font-size:0.6rem; color:#60a5fa; letter-spacing:1px; margin-bottom:4px; }
+.pitcher-detail .pd-season { font-size:0.62rem; color:var(--text-dim); margin-bottom:6px; }
 .pitcher-detail .pd-today { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:8px; }
 .pitcher-detail .pd-stat-box {
   background:rgba(59,130,246,0.1); border:1px solid rgba(59,130,246,0.2);
@@ -315,7 +317,7 @@ body { background:var(--bg-dark); color:var(--text); font-family:'Noto Sans KR',
 .pitcher-detail .pd-stat-val { font-size:0.78rem; font-weight:900; color:var(--text-bright); }
 /* 체력 바 */
 .stamina-bar-wrap { margin-top:6px; }
-.stamina-bar-label { font-size:0.48rem; color:var(--text-dim); margin-bottom:2px; }
+.stamina-bar-label { font-size:0.58rem; color:var(--text-dim); margin-bottom:2px; }
 .stamina-bar-bg { height:8px; background:#1f2937; border-radius:4px; overflow:hidden; }
 .stamina-bar-fill { height:100%; border-radius:4px; transition:width 0.4s,background 0.4s; }
 .stamina-bar-fill.stam-high { background:linear-gradient(90deg,#10b981,#34d399); }
@@ -325,8 +327,8 @@ body { background:var(--bg-dark); color:var(--text); font-family:'Noto Sans KR',
 /* 타자 상세 패널 */
 .batter-detail { text-align:center; }
 .batter-detail .bd-name { font-size:0.85rem; font-weight:900; color:var(--text-bright); font-family:'Orbitron',sans-serif; }
-.batter-detail .bd-pos { font-size:0.5rem; color:var(--accent); letter-spacing:1px; margin-bottom:4px; }
-.batter-detail .bd-season { font-size:0.55rem; color:var(--text-dim); margin-bottom:6px; }
+.batter-detail .bd-pos { font-size:0.6rem; color:var(--accent); letter-spacing:1px; margin-bottom:4px; }
+.batter-detail .bd-season { font-size:0.62rem; color:var(--text-dim); margin-bottom:6px; }
 .batter-detail .bd-today { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; }
 .batter-detail .bd-stat-box {
   background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2);
@@ -512,6 +514,34 @@ tr.drag-row.drag-over { outline: 2px solid var(--accent); background: rgba(245,1
 .scout-grade.s-low   { color:#f97316; }
 .scout-grade.s-bad   { color:#ef4444; }
 .scout-desc { font-size:0.68rem; color:var(--text-dim); line-height:1.4; }
+
+/* ── Player Detail 리포트 (sr-) — 선수 상세 모달 공통 위계 ── */
+.sr-header {
+  display:flex; align-items:center; gap:12px; padding:14px; border-radius:12px; margin-bottom:10px;
+  background:linear-gradient(135deg,#1a1f35 0%,#0f1729 100%); border:1px solid var(--border);
+}
+.sr-id { flex:1; min-width:0; }
+.sr-name {
+  font-size:1.05rem; font-weight:800; color:var(--text-bright); margin-bottom:6px;
+  display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+}
+.sr-chips { display:flex; gap:5px; flex-wrap:wrap; }
+.sr-chip {
+  padding:2px 8px; border-radius:10px; background:rgba(255,255,255,0.04);
+  border:1px solid var(--border); font-size:0.62rem; color:var(--text-dim); white-space:nowrap;
+}
+.sr-chip b { color:var(--text); font-weight:700; }
+.sr-ovr { text-align:center; padding-left:14px; border-left:1px solid var(--border); flex-shrink:0; }
+.sr-ovr-num { font-size:1.9rem; font-weight:900; font-family:'JetBrains Mono',monospace; line-height:1; }
+.sr-ovr-label { font-size:0.55rem; color:var(--text-dim); letter-spacing:2px; margin-top:2px; }
+.sr-ovr-cap { font-size:0.6rem; margin-top:3px; }
+.sr-section { background:var(--bg-card-hover); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px; }
+.sr-section-title { font-family:'Orbitron',sans-serif; font-size:0.62rem; color:var(--accent); letter-spacing:1.5px; margin-bottom:8px; }
+.sr-traits { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }
+
+/* 특성 뱃지 (풀/축약형) — 색상은 랭크별 인라인 지정 */
+.trait-badge { display:inline-block; font-size:0.62rem; padding:2px 8px; border-radius:4px; border:1px solid; cursor:help; line-height:1.5; }
+.trait-mini { font-size:0.6rem; font-weight:800; margin-left:4px; letter-spacing:0.5px; cursor:help; vertical-align:middle; }
 
 /* ── Minor League System ─────────────────────────────────── */
 .minor-badge {

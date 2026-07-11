@@ -241,6 +241,16 @@ function traitBadges(p,revealFx){
     const fxText=revealFx?' ['+Object.keys(t.fx).map(k=>{
       const v=t.fx[k];return `${STAT_KN[k]||k} ${v>0?'+':''}${v}`;
     }).join(', ')+']':'';
-    return `<span title="${t.desc}${fxText} — 경기력·협상 반응에 반영 (OVR·TV·연봉 공식 무영향)" style="background:${color}22;color:${color};border:1px solid ${color}55;font-size:0.6rem;padding:1px 6px;border-radius:3px;margin-right:4px;cursor:help;">${t.kind==='nat'?'★':''}${label}</span>`;
+    return `<span class="trait-badge" title="${t.desc}${fxText} — 경기력·협상 반응에 반영 (OVR·TV·연봉 공식 무영향)" style="background:${color}22;color:${color};border-color:${color}55;">${t.kind==='nat'?'★':''}${label}</span>`;
+  }).join('');
+}
+
+// 축약형 특성 마커 — 목록/테이블 행용 (자연 ★ / 인공 랭크 문자, 툴팁에 특성명)
+function traitMini(p){
+  if(!Array.isArray(p._traits)||p._traits.length===0)return '';
+  return p._traits.map(e=>{
+    const t=TRAITS[e.id];if(!t)return '';
+    const color=t.kind==='nat'?'#67e8f9':_RANK_COLOR[t.rank];
+    return `<span class="trait-mini" title="${t.kind==='nat'?'★ ':''}${t.name}${t.kind==='nat'?'':' ('+t.rank+'랭크)'} — ${t.desc}" style="color:${color};">${t.kind==='nat'?'★':t.rank}</span>`;
   }).join('');
 }

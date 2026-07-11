@@ -108,7 +108,7 @@ function renderMarket(){
           const phColor=getPhaseColor(p);
           return `<tr>
             <td><span class="pos-badge${p.isPitcher?' pitcher':''}" style="font-size:0.5rem;padding:1px 3px;">${p.pos}</span></td>
-            <td style="text-align:left;font-size:0.7rem;">${p.name}</td>
+            <td style="text-align:left;font-size:0.7rem;">${p.name}${traitMini(p)}</td>
             <td style="color:var(--text-dim);">${p.age||22}</td>
             <td>${dots(p)}</td>
             <td>${ovrDisp(p)}</td>
