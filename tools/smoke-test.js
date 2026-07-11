@@ -674,6 +674,66 @@ check('Tier1=2=3 pass-through (팀 DNA·특성 미도입 상태) + 폴백 50', t
 check(`소프트캡 125 log₁₀(1+over) 압축 (120→${tierProbe.c120} / 125→${tierProbe.c125} / 126→${tierProbe.c126} / 130→${tierProbe.c130}) + 순단조`, tierProbe.c120 === 120 && tierProbe.c125 === 125 && tierProbe.c126 === 125.3 && tierProbe.c130 === 125.8 && tierProbe.mono);
 check(`특성 보정 훅 → 압축 경유 (100+30 → ${tierProbe.capped})`, tierProbe.capped === 125.8);
 
+// ── T16. P3-2 특성 엔진 — 자연 롤 · 스택 상한 · 교체 플로우 · Tier3 반영 ──
+section('T16. P3-2 특성 엔진 — 자연/인공 특성');
+const traitProbe = g(`(function(){
+  const all=G.teams.flatMap(t=>t.roster);
+  // ① 자연 특성 보유율 ≈15% + 카탈로그 유효성
+  let natN=0, valid=true;
+  all.forEach(p=>{
+    if(!Array.isArray(p._traits))return;
+    p._traits.forEach(e=>{if(!TRAITS[e.id])valid=false;});
+    if(p._traits.some(e=>e.slot===1))natN++;
+  });
+  const natPct=Math.round(natN/all.length*100);
+  // ② 스택 상한 (합성 특성 주입 후 제거)
+  TRAITS._tA={kind:'art',rank:'S',prio:8,who:'all',name:'tA',fx:{power:7}};
+  TRAITS._tB={kind:'art',rank:'S',prio:9,who:'all',name:'tB',fx:{power:6}};
+  TRAITS._tN={kind:'nat',cat:'pos',who:'all',name:'tN',fx:{power:6}};
+  let artCap,fullCap,eff,ovrSame;
+  try{
+    const pArt={power:80,_traits:[{id:'_tA',slot:2},{id:'_tB',slot:3}]};
+    artCap=_traitBonus(pArt,'power');                    // 7+6=13 → 10
+    const pFull={power:80,pos:'1B',isPitcher:false,contact:50,eye:50,speed:50,fielding:50,arm:50,
+      _traits:[{id:'_tN',slot:1},{id:'_tA',slot:2},{id:'_tB',slot:3}]};
+    fullCap=_traitBonus(pFull,'power');                  // 6+10=16 → 12
+    eff=statEff(pFull,'power');                          // 80+12=92
+    ovrSame=ovrRaw(pFull)===ovrRaw(Object.assign({},pFull,{_traits:[]})); // 특성은 OVR 무영향
+  }finally{
+    delete TRAITS._tA; delete TRAITS._tB; delete TRAITS._tN;
+  }
+  // ③ 교체 플로우 (설계 케이스: 빈슬롯→C+C에 B 진입→낮은 우선순위 거부→중복 방지)
+  const q={isPitcher:false,_traits:[]};
+  awardTrait(q,'asBat'); awardTrait(q,'hrKingT');
+  const r1=awardTrait(q,'club2020');                     // B가 최저 C(올스타,prio1) 교체
+  const r2=awardTrait(q,'asBat');                        // C(prio1) vs 최저 C(홈런왕,prio4) → 거부
+  const r3=awardTrait(q,'club2020');                     // 중복 → 거부
+  // ④ hiddenEff: 철인 → 부상 임계 감소
+  const pIron={_durability:60,_traits:[{id:'iron',slot:1}]};
+  const durEff=hiddenEff(pIron,'_durability');           // 68
+  const thrRaw=_injuryThreshold(statRaw(pIron,'_durability')), thrEff=_injuryThreshold(durEff);
+  // ⑤ 시상 평가 통합 실행 — 실제 브래킷 형태(champion이 .results 안)로 우승 특성 발동 + 재호출 멱등
+  let evalOk=true,evalN=0,champOk=false,idemOk=false;
+  const savedBracket=G.postseasonBracket, savedFlag=G._traitsEvaluatedSeason;
+  try{
+    G._traitsEvaluatedSeason=0;
+    G.postseasonBracket={teams:[],round:99,results:[{round:'챔피언십',winner:G.teams[0].name,champion:true}]};
+    evalN=evaluateSeasonTraits({mvp:null,cyYoung:null,rookie:null,hrKing:null,pitTriple:null}).length;
+    champOk=G.teams[0].roster.some(p=>Array.isArray(p._traits)&&p._traits.some(e=>e.id==='champBat'||e.id==='champPit'));
+    idemOk=evaluateSeasonTraits({mvp:null,cyYoung:null,rookie:null,hrKing:null,pitTriple:null}).length===0;
+  }catch(e){evalOk=false;}
+  finally{G.postseasonBracket=savedBracket;G._traitsEvaluatedSeason=savedFlag;}
+  return {natPct,valid,artCap,fullCap,eff,ovrSame,
+    r1ok:!!(r1&&r1.replaced==='올스타'), r2ok:r2===null, r3ok:r3===null,
+    durEff,thrRaw,thrEff,evalOk,evalN,champOk,idemOk};
+})()`);
+check(`자연 특성 보유율 ≈15% (관측 ${traitProbe.natPct}%, 허용 8~22) + 카탈로그 유효`, traitProbe.natPct >= 8 && traitProbe.natPct <= 22 && traitProbe.valid);
+check(`스택 상한 — 인공 동일 스탯 13→${traitProbe.artCap} (max 10), 자연+인공 16→${traitProbe.fullCap} (max 12)`, traitProbe.artCap === 10 && traitProbe.fullCap === 12);
+check(`Tier3 반영 (statEff 80→${traitProbe.eff}) + OVR 무영향`, traitProbe.eff === 92 && traitProbe.ovrSame);
+check('교체 플로우 (B가 최저 C 대체 / 낮은 우선순위 거부 / 중복 방지)', traitProbe.r1ok && traitProbe.r2ok && traitProbe.r3ok);
+check(`철인 특성 → 부상 임계 감소 (내구 60→유효 ${traitProbe.durEff}, 임계 ${traitProbe.thrRaw}→${traitProbe.thrEff})`, traitProbe.durEff === 68 && traitProbe.thrEff < traitProbe.thrRaw);
+check(`시상 특성 평가 무예외 (리그 ${traitProbe.evalN}건) + 우승 멤버 발동(.results 경로) + 재호출 멱등`, traitProbe.evalOk && traitProbe.champOk && traitProbe.idemOk);
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');

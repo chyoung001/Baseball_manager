@@ -13,9 +13,29 @@ function statRaw(p,key){const v=p[key];return (v===undefined||v===null)?50:v;}
 // TODO P6(팀 컨셉): DNA/포커스 가산 + 1~100 초과분 50% 연관 스탯 분산 룰. 현재 pass-through.
 function statRoster(p,key){return statRaw(p,key);}
 
-// 특성 보정 훅 — P3-2 특성 엔진에서 구현.
-// 스택 상한(엔진 책임): 인공 특성 동일 스탯 합 +10, 자연+인공 합 +12.
-function _traitBonus(p,key){return 0;}
+// 특성 보정 (P3-2) — 카탈로그는 players/player-traits.js(TRAITS). 런타임 호출이라 로드 순서 무관.
+// 스택 상한(설계): 인공 특성 동일 스탯 합 최대 +10, 자연+인공 합 최대 +12 — 초과분 생략.
+function _traitBonus(p,key){
+  const ts=p._traits;
+  if(!Array.isArray(ts)||ts.length===0)return 0;
+  if(typeof TRAITS==='undefined')return 0; // 카탈로그 로드 전 (부팅 극초기 방어)
+  let nat=0,art=0;
+  for(let i=0;i<ts.length;i++){
+    const t=TRAITS[ts[i].id];
+    if(!t)continue;
+    const v=t.fx[key];
+    if(!v)continue;
+    if(ts[i].slot===1)nat+=v;else art+=v;
+  }
+  if(art>10)art=10;
+  let total=nat+art;
+  if(total>12)total=12;
+  return total;
+}
+
+// 히든 스탯 런타임 유효값 — 특성 보정 반영 (부상·슬럼프·클러치·협상·성장 등 소비처 전용).
+// 표시·OVR·TV·스카우트는 raw(statRaw) 유지 (설계: 특성은 Tier3 전용).
+function hiddenEff(p,key){return clamp(statRaw(p,key)+_traitBonus(p,key),1,100);}
 
 // Tier 3 소프트캡 125: 초과분 log₁₀(1+over) 압축 — 경계 연속·순단조 보장
 // (설계 예시 130→125.7은 log₁₀(over) 기준값. 그 식은 125~126 구간이 전부 125로 붕괴하는

@@ -230,11 +230,11 @@ function simulatePlay(){
   // ── [4] 히든 스탯 반영 ──
   const hasRISP=!!(matchState.bases[1]||matchState.bases[2]);
   const clutchAdd=hasRISP?((statEff(pitcher,'clutch'))*0.05):0;
-  const batCon=batter._consistency||50; // 1~100 스케일
+  const batCon=hiddenEff(batter,'_consistency'); // 1~100 스케일
   const batInSlump=(batter._slumpGames||0)>0;
   const batSwingBase=Math.round((100-batCon)/5);
   const batSwing=batInSlump?rand(-batSwingBase,Math.floor(batSwingBase*0.3)):rand(-batSwingBase,batSwingBase);
-  const pitCon=pitcher._consistency||50;
+  const pitCon=hiddenEff(pitcher,'_consistency');
   const pitSwingBase=Math.round((100-pitCon)/5);
   const pitSwing=rand(-pitSwingBase,pitSwingBase);
   const aTotal=matchState.score.away.reduce((a,b)=>a+b,0);
@@ -247,8 +247,8 @@ function simulatePlay(){
   // P2-5 멘탈 코칭 룸: 클러치 보정 증폭 (설계: 시설 7 — 자연 확장, 독립 레이어 아님)
   const _mcBat=1+(MENTAL_COACH_AMP[batTeam.mentalCoachLevel||0]||0);
   const _mcPit=1+(MENTAL_COACH_AMP[fldTeam.mentalCoachLevel||0]||0);
-  const batBigGame=isHighLeverage?((batter._clutchHidden||50)-50)*0.12*_mcBat:0;
-  const pitBigGame=isHighLeverage?((pitcher._clutchHidden||50)-50)*0.12*_mcPit:0;
+  const batBigGame=isHighLeverage?((hiddenEff(batter,'_clutchHidden'))-50)*0.12*_mcBat:0;
+  const pitBigGame=isHighLeverage?((hiddenEff(pitcher,'_clutchHidden'))-50)*0.12*_mcPit:0;
 
   // ── [5] 유효 투수 스탯 (피로도 커브 반영) ──
   const effStuff=((statEff(pitcher,'stuff'))+pitchBonus+clutchAdd+pitSwing+pitBigGame)*velMult*stamFactor*condFactor;
@@ -553,8 +553,8 @@ function _recordResult(team,didWin){
 function _injuryThreshold(dur){return Math.max(2,Math.round(injuryRisk(dur)));}
 // 미등판/휴식 회복 보너스: 내구성 + (투수) 연투회복 히든
 function _restRecoveryBonus(p){
-  const durBonus=Math.round(((p._durability||50)-50)/25);
-  const recBonus=p.isPitcher?Math.round(((p._recovery||50)-50)/25):0;
+  const durBonus=Math.round(((hiddenEff(p,'_durability'))-50)/25);
+  const recBonus=p.isPitcher?Math.round(((hiddenEff(p,'_recovery'))-50)/25):0;
   return durBonus+recBonus;
 }
 // P2-3 서비스타임 적립 (전 구단, 게임일당 1회) — 반드시 그날의 부상 롤 "이전"에 호출
@@ -565,7 +565,7 @@ function _accrueServiceDay(){
 // 슬럼프 발동 롤: 성공 시 지속 경기 수, 아니면 0 (P2-5 슬럼프 완화 시설 반영)
 function _rollSlumpOnset(p,team){
   const scLv=(team&&team.slumpCareLevel)||0;
-  const prob=Math.max(1,Math.round((15-Math.round((p._consistency||50)/5))*(1-(SLUMP_CARE_RELIEF[scLv]||0))));
+  const prob=Math.max(1,Math.round((15-Math.round((hiddenEff(p,'_consistency'))/5))*(1-(SLUMP_CARE_RELIEF[scLv]||0))));
   if(rand(1,100)>prob)return 0;
   return Math.max(1,rand(3,7)-(scLv>=3?1:0));
 }
@@ -628,7 +628,7 @@ function endMatch(){
   const dropMin=Math.max(1,2-medReduction),dropMax=Math.max(dropMin,5-medReduction);
   // _durability 히든 스탯 반영 (1~100): 점진적 컨디션 보정 + 부상 확률
   getStartingBatters(G.myTeam).forEach(p=>{
-    const dur=p._durability||50;
+    const dur=hiddenEff(p,'_durability');
     const durMod=Math.round((dur-50)/15); // -3~+3: 높으면 하락 감소, 낮으면 추가 하락
     p.condition=clamp(p.condition-rand(Math.max(1,dropMin-durMod),Math.max(1,dropMax-durMod)),30,100);
     // 부상: 내구성에 비례한 점진적 확률 (최소 0.67% 보장, 재부상 위험 반영)
@@ -662,7 +662,7 @@ function endMatch(){
   (s.relieversUsed.away||[]).forEach(p=>_pitchedSet.add(p));
 
   G.myTeam.roster.filter(p=>p.isPitcher&&p.role!=='overseas'&&(p.status||'active')==='active').forEach(p=>{
-    const dur=p._durability||50;
+    const dur=hiddenEff(p,'_durability');
     const didPitch=_pitchedSet.has(p);
 
     if(didPitch){
@@ -1252,7 +1252,7 @@ function _simMyGame(){
   const medReduction=Math.floor((G.myTeam.medicalLevel||0)/20);
   const dropMin=Math.max(1,2-medReduction),dropMax=Math.max(dropMin,5-medReduction);
   getStartingBatters(G.myTeam).forEach(p=>{
-    const dur=p._durability||50;
+    const dur=hiddenEff(p,'_durability');
     const durMod=Math.round((dur-50)/15);
     p.condition=clamp(p.condition-rand(Math.max(1,dropMin-durMod),Math.max(1,dropMax-durMod)),30,100);
     const _injMult=(p._recentILReturn||0)>0?1.5:1.0; // 복귀 직후 재부상 위험 (실경기와 동일)
@@ -1269,7 +1269,7 @@ function _simMyGame(){
   const pitchedToday=new Set();
   pitchedToday.add(homeSP);pitchedToday.add(awaySP);
   G.myTeam.roster.filter(p=>p.isPitcher&&p.role!=='overseas'&&(p.status||'active')==='active').forEach(p=>{
-    const dur=p._durability||50;
+    const dur=hiddenEff(p,'_durability');
     const didPitch=pitchedToday.has(p)||(p._simNP>0);
     if(didPitch){
       const np=p._simNP||0;

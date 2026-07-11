@@ -6,10 +6,10 @@
 // 야망(상황 C): 기대 연봉 ±10% 공격성. 충성심(상황 B): 재계약+재적 3년+ 시 홈타운 디스카운트,
 // 야망이 충성심보다 크면 차이 × 0.5%p 만큼 할인 상쇄. (o = (히든-50)/5 : 구 스케일 오프셋)
 function _contractHiddenMod(p,context){
-  const oAmb=((p._ambition||50)-50)/5;
+  const oAmb=((hiddenEff(p,'_ambition'))-50)/5;
   let mult=1+oAmb*0.01; // 야망 -10~+10 → ×0.90~1.10
   if(context==='renewal'&&(p._teamTenure||0)>=3){
-    const oLoy=((p._loyalty||50)-50)/5;
+    const oLoy=((hiddenEff(p,'_loyalty'))-50)/5;
     let disc=Math.max(0,oLoy*1.25); // 충성심 만점 → 12.5% 할인
     if(oAmb>oLoy)disc=Math.max(0,disc-(oAmb-oLoy)*0.5);
     mult*=1-disc/100;
@@ -62,7 +62,7 @@ function showNegotiationModal(p, context, onAccept, onFail, extraData){
   const hintYears=aLv>=60?exp.years:aLv>=30?clamp(exp.years+rand(-1,1),1,6):clamp(exp.years+rand(-2,2),1,6);
 
   // 참을성(상황 C): 협상 인내 — 높으면 역제안 기회 4회, 낮으면 2회
-  const tem=p._temperament||50;
+  const tem=hiddenEff(p,'_temperament');
   const maxAttempts=tem>=65?4:tem<40?2:3;
   _negoState={p,context,onAccept,onFail,extraData,attemptsLeft:maxAttempts,maxAttempts,exp};
 

@@ -53,6 +53,9 @@ function genBatter(pos, gradeOrTier, concept, team){
   // 4단계: 컨셉 보정
   _applyConceptBatter(p, concept);
 
+  // P3-2 자연 특성 롤 (15%, 슬롯 1 영구)
+  rollNaturalTrait(p);
+
   // 스탯 스케일 상한(STAT_MAX) 보장
   const stats=['contact','power','eye','speed','fielding','arm'];
   stats.forEach(s=>{ p[s]=clamp(p[s], STAT_MIN, STAT_MAX); });
@@ -120,6 +123,9 @@ function genPitcher(role, gradeOrTier, concept, team){
 
   // 4단계: 컨셉 보정
   _applyConceptPitcher(p, concept, role);
+
+  // P3-2 자연 특성 롤 (15%, 슬롯 1 영구)
+  rollNaturalTrait(p);
 
   // 스탯 스케일 상한(STAT_MAX) 보장
   const stats=['stuff','control','velocity','movement','stamina','clutch'];

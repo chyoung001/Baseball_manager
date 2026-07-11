@@ -112,6 +112,9 @@ function showScoutReport(idx){
         <span style="font-size:0.65rem;color:var(--text-dim);margin-left:auto;">정확도: ${accuracy}</span>
       </div>
 
+      <!-- P3-2 특성 뱃지 (정확 보정 수치는 분석팀 Lv.60+ / 테스트 모드에서만 — 히든 게이팅 정합) -->
+      ${Array.isArray(p._traits)&&p._traits.length?`<div style="margin-bottom:10px;">${traitBadges(p,tm||rdLv>=60)}</div>`:''}
+
       <!-- 프로필 카드 -->
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px;">
         <div style="background:var(--bg-card-hover);border-radius:6px;padding:8px;text-align:center;">

@@ -44,7 +44,7 @@ function getPosSwitchPenalty(p,to){
   // 이후 다재다능 배율(×0.5~1.5)은 자연 전환과 공통 적용 — 절대 상한이 아니라 등급 동등성 보장
   // (저다재다능이면 서브 경험이어도 최대 7.5% — 자연 '쉬움' 전환도 동일하게 7.5%)
   if(Array.isArray(p._subPos)&&p._subPos.includes(to)) pen=Math.min(pen*0.5,5);
-  const vers=p._versatility||50; // 다재다능 히든: 높으면 최대 -50%, 낮으면 최대 +50%
+  const vers=hiddenEff(p,'_versatility'); // 다재다능 히든: 높으면 최대 -50%, 낮으면 최대 +50%
   pen*=clamp(1-(vers-50)/100,0.5,1.5);
   return Math.round(pen*10)/10;
 }

@@ -124,6 +124,9 @@ function applyRookieContract(p, round, pickInRound){
   p._contractYears=3;      // 신인 계약 3년 고정 (인상 없음, 옵션 없음)
   p._serviceTime=0;
   p._svcGames=0;
+  // P3-2 드래프트 인공 특성 (전체 1순위 B / 1라운드 C)
+  if(overall===1)awardTrait(p,'no1Pick');
+  else if(round===1)awardTrait(p,'rd1Pick');
 }
 
 // FA 계약 기간
