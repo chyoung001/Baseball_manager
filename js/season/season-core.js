@@ -137,12 +137,18 @@ function showPreseason(){
 }
 
 function _confirmPreseason(){
-  const check=validateActiveRoster(G.myTeam);
+  let check=validateActiveRoster(G.myTeam);
   if(!check.ok){
-    alert('⚠️ 로스터 규정 위반!\n\n'+check.violations.join('\n')+'\n\n로스터 탭에서 수정하세요.');
-    $('seasonModal').classList.remove('active');
-    switchTab('roster');
-    return;
+    // 자동 배치 제안 — 수락 시 콜업·보직·포지션 자동 재구성 후 재검
+    if(confirm('⚠️ 로스터 규정 위반!\n\n'+check.violations.join('\n')+'\n\n⚡ 자동 배치로 해소하고 시즌을 시작할까요?')){
+      check=autoArrangeRoster();
+    }
+    if(!check.ok){
+      alert('로스터 규정 위반이 남아 있습니다:\n\n'+check.violations.join('\n')+'\n\n로스터 탭에서 수정하거나 2군/FA로 보강하세요.');
+      $('seasonModal').classList.remove('active');
+      switchTab('roster');
+      return;
+    }
   }
   $('seasonModal').classList.remove('active');
   G.phase='first_half';

@@ -90,8 +90,8 @@ function showScoutReport(idx){
       }).join('');
       simHTML=`<div style="font-size:0.62rem;color:var(--text-dim);margin:6px 0 4px;">포지션 전환 시 OVR (전환 페널티 반영):</div><div style="display:flex;gap:4px;flex-wrap:wrap;">${sims}</div>`;
     }
-    weightHTML=`<div style="background:var(--bg-card-hover);border-radius:8px;padding:10px;margin-bottom:12px;">
-      <div style="font-size:0.68rem;color:var(--accent);margin-bottom:6px;">📐 포지션 가중치 ${subPosBadge}</div>
+    weightHTML=`<div class="sr-section">
+      <div class="sr-section-title">📐 포지션 가중치 ${subPosBadge}</div>
       ${body}${simHTML}
     </div>`;
   }else if(subPosBadge){
@@ -103,54 +103,35 @@ function showScoutReport(idx){
     <div style="text-align:left;">
       ${tm?'<div style="background:#a855f722;border:1px solid #a855f7;border-radius:6px;padding:6px 10px;margin-bottom:10px;font-size:0.68rem;color:#a855f7;">🔧 테스트 모드 — 히든 스탯 숫자 공개 중</div>':''}
 
-      <!-- 상단: 선수 프로필 -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <span class="pos-badge${p.isPitcher?' pitcher':''}" style="font-size:0.8rem;padding:4px 12px;">${ALL_POS_NAMES[p.pos]||p.pos}</span>
-        <span style="color:${statColor(o)};font-weight:700;font-family:'JetBrains Mono',monospace;font-size:1.2rem;">${o}</span>
-        <span style="font-size:0.7rem;color:var(--text-dim);">OVR</span>
-        ${foreignBadge}
-        <span style="font-size:0.65rem;color:var(--text-dim);margin-left:auto;">정확도: ${accuracy}</span>
+      <!-- 상단: 아이덴티티 배너 (sr-header) — 이름·칩·대형 OVR·성장 천장 -->
+      <div class="sr-header">
+        <div class="sr-id">
+          <div class="sr-name">
+            <span class="pos-badge${p.isPitcher?' pitcher':''}" style="font-size:0.72rem;padding:3px 10px;">${ALL_POS_NAMES[p.pos]||p.pos}</span>
+            ${p.name}${foreignBadge}
+            <span style="font-size:0.6rem;color:var(--text-dim);font-weight:400;margin-left:auto;">정확도 ${accuracy}</span>
+          </div>
+          <div class="sr-chips">
+            <span class="sr-chip">나이 <b>${p.age||22}세</b></span>
+            <span class="sr-chip" style="border-color:${phColor}55;"><b style="color:${phColor};">${phase}</b> ${st}yr</span>
+            <span class="sr-chip">연봉 <b style="color:var(--accent);">${won(p.salary||0)}</b></span>
+            <span class="sr-chip">계약 <b style="color:${contractLeft<=1?'#ef4444':'var(--text)'};">${contractLeft}년</b> · 재적 ${p._teamTenure||0}년</span>
+            <span class="sr-chip">컨디션 <b style="color:${(p.condition||100)<40?'#ef4444':(p.condition||100)<60?'#f59e0b':'#10b981'};">${p.condition||100}%</b></span>
+          </div>
+        </div>
+        <div class="sr-ovr">
+          <div class="sr-ovr-num" style="color:${statColor(o)};">${o}</div>
+          <div class="sr-ovr-label">OVR</div>
+          <div class="sr-ovr-cap" style="color:${growthRoom>0?'#10b981':'var(--text-dim)'};">천장 ${potCap}${growthRoom>0?' (+'+growthRoom+')':' 도달'}</div>
+        </div>
       </div>
 
       <!-- P3-2 특성 뱃지 (정확 보정 수치는 분석팀 Lv.60+ / 테스트 모드에서만 — 히든 게이팅 정합) -->
-      ${Array.isArray(p._traits)&&p._traits.length?`<div style="margin-bottom:10px;">${traitBadges(p,tm||rdLv>=60)}</div>`:''}
-
-      <!-- 프로필 카드 -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:12px;">
-        <div style="background:var(--bg-card-hover);border-radius:6px;padding:8px;text-align:center;">
-          <div style="font-size:0.6rem;color:var(--text-dim);">나이</div>
-          <div style="font-size:0.85rem;font-weight:700;">${p.age||22}세</div>
-        </div>
-        <div style="background:var(--bg-card-hover);border-radius:6px;padding:8px;text-align:center;">
-          <div style="font-size:0.6rem;color:var(--text-dim);">연봉</div>
-          <div style="font-size:0.85rem;font-weight:700;color:var(--accent);">${won(p.salary||0)}</div>
-        </div>
-        <div style="background:var(--bg-card-hover);border-radius:6px;padding:8px;text-align:center;">
-          <div style="font-size:0.6rem;color:var(--text-dim);">컨디션</div>
-          <div style="font-size:0.85rem;font-weight:700;color:${(p.condition||100)<40?'#ef4444':(p.condition||100)<60?'#f59e0b':'#10b981'};">${p.condition||100}%</div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px;">
-        <div style="background:var(--bg-card-hover);border-radius:6px;padding:8px;text-align:center;">
-          <div style="font-size:0.6rem;color:var(--text-dim);">서비스타임</div>
-          <div style="font-size:0.78rem;font-weight:700;">${st}년</div>
-          <div style="font-size:0.58rem;color:${phColor};">${phase}</div>
-        </div>
-        <div style="background:var(--bg-card-hover);border-radius:6px;padding:8px;text-align:center;">
-          <div style="font-size:0.6rem;color:var(--text-dim);">남은 계약</div>
-          <div style="font-size:0.78rem;font-weight:700;color:${contractLeft<=1?'#ef4444':'var(--text)'};">${contractLeft}년</div>
-          <div style="font-size:0.58rem;color:var(--text-dim);">팀재적 ${p._teamTenure||0}년</div>
-        </div>
-        <div style="background:var(--bg-card-hover);border-radius:6px;padding:8px;text-align:center;">
-          <div style="font-size:0.6rem;color:var(--text-dim);">성장 천장</div>
-          <div style="font-size:0.78rem;font-weight:700;color:${growthRoom>0?'#10b981':'var(--text-dim)'};">${potCap}</div>
-          <div style="font-size:0.58rem;color:${growthRoom>0?'#10b981':'#ef4444'};">${growthRoom>0?'+'+growthRoom+' 여유':'한계 도달'}</div>
-        </div>
-      </div>
+      ${Array.isArray(p._traits)&&p._traits.length?`<div class="sr-traits">${traitBadges(p,tm||rdLv>=60)}</div>`:''}
 
       <!-- 능력치 바 -->
-      <div style="background:var(--bg-card-hover);border-radius:8px;padding:10px;margin-bottom:12px;">
-        <div style="font-size:0.68rem;color:var(--accent);margin-bottom:6px;">📊 능력치</div>
+      <div class="sr-section">
+        <div class="sr-section-title">📊 능력치</div>
         ${statsHTML}
       </div>
 
@@ -158,8 +139,8 @@ function showScoutReport(idx){
       ${weightHTML}
 
       <!-- 시즌 성적 -->
-      <div style="background:var(--bg-card-hover);border-radius:8px;padding:10px;margin-bottom:12px;">
-        <div style="font-size:0.68rem;color:var(--accent);margin-bottom:6px;">📈 시즌 ${G.season} 성적</div>
+      <div class="sr-section">
+        <div class="sr-section-title">📈 시즌 ${G.season} 성적</div>
         ${(s.ab||0)+(s.ip||0)>0?seasonHTML:'<div style="font-size:0.68rem;color:var(--text-dim);text-align:center;">기록 없음</div>'}
       </div>
 
@@ -378,7 +359,7 @@ function renderRoster(){
       ondrop="_rosterDrop(event,${idx},'starting')"
       onclick="moveToBench(${idx},event)">
       <td style="color:var(--accent);font-weight:700;cursor:grab;">${lineupNum+1}</td>
-      <td><span class="player-name">${p.name}</span>${p.condition<40?'<span style="color:#ef4444;font-size:0.55rem;"> 🥶</span>':''}<span class="scout-btn" onclick="showScoutReport(${idx});event.stopPropagation();" title="스카우트 리포트">📋</span></td>
+      <td><span class="player-name">${p.name}</span>${traitMini(p)}${p.condition<40?'<span style="color:#ef4444;font-size:0.55rem;"> 🥶</span>':''}<span class="scout-btn" onclick="showScoutReport(${idx});event.stopPropagation();" title="스카우트 리포트">📋</span></td>
       <td>${posChangerHTML(p, idx)}</td>
       <td style="color:var(--text-dim);font-size:0.72rem;">${p.age||22}</td>
       ${sc(p.contact)}${sc(p.power)}${sc(p.eye)}${sc(p.speed)}${sc(p.fielding)}${sc(p.arm)}
@@ -395,7 +376,7 @@ function renderRoster(){
     const full = allStarters.length >= 9;
     const o=ovrBatter(p);
     return `<tr style="cursor:pointer;${full?'opacity:0.5;':''}" onclick="${full?'':'moveToStarting('+idx+',event)'}">
-      <td><span class="player-name">${p.name}</span>${p.condition<40?'<span style="color:#ef4444;font-size:0.55rem;"> 🥶</span>':''}<span class="scout-btn" onclick="showScoutReport(${idx});event.stopPropagation();" title="스카우트 리포트">📋</span></td>
+      <td><span class="player-name">${p.name}</span>${traitMini(p)}${p.condition<40?'<span style="color:#ef4444;font-size:0.55rem;"> 🥶</span>':''}<span class="scout-btn" onclick="showScoutReport(${idx});event.stopPropagation();" title="스카우트 리포트">📋</span></td>
       <td>${posChangerHTML(p, idx)}</td>
       <td style="color:var(--text-dim);font-size:0.72rem;">${p.age||22}</td>
       ${sc(p.contact)}${sc(p.power)}${sc(p.eye)}${sc(p.speed)}${sc(p.fielding)}${sc(p.arm)}
@@ -421,7 +402,7 @@ function renderRoster(){
       ondrop="_rosterDrop(event,${idx},'rotation')"
       style="${nextGame?'background:rgba(245,158,11,0.08);':''}">
       <td style="color:var(--accent);font-weight:700;cursor:grab;">⠿ ${i+1}${nextGame?' 🔜':''}</td>
-      <td><span class="player-name">${p.name}</span><span class="scout-btn" onclick="showScoutReport(${idx});event.stopPropagation();" title="선수 분석">📋</span></td>
+      <td><span class="player-name">${p.name}</span>${traitMini(p)}<span class="scout-btn" onclick="showScoutReport(${idx});event.stopPropagation();" title="선수 분석">📋</span></td>
       <td>${posChangerHTML(p, idx)}</td>
       <td style="color:var(--text-dim);font-size:0.72rem;">${p.age||22}</td>
       <td>${p.stuff}<div class="stat-bar"><div class="stat-bar-fill" style="width:${statPct(p.stuff)}%;background:${statColor(p.stuff)}"></div></div></td>
@@ -463,7 +444,7 @@ function renderRoster(){
       ondragover="_rosterDragOver(event,${idx},'bullpenBody')"
       ondrop="_rosterDrop(event,${idx},'bullpen')">
       <td style="cursor:grab;">⠿ <span style="color:${txt};font-weight:700;font-size:0.65rem;">${gi+1}</span></td>
-      <td><span class="player-name">${p.name}</span><span class="scout-btn" onclick="showScoutReport(${idx});event.stopPropagation();" title="선수 분석">📋</span></td>
+      <td><span class="player-name">${p.name}</span>${traitMini(p)}<span class="scout-btn" onclick="showScoutReport(${idx});event.stopPropagation();" title="선수 분석">📋</span></td>
       <td>${posChangerHTML(p, idx)}</td>
       <td style="color:var(--text-dim);font-size:0.72rem;">${p.age||22}</td>
       <td>${p.stuff}<div class="stat-bar"><div class="stat-bar-fill" style="width:${statPct(p.stuff)}%;background:${statColor(p.stuff)}"></div></div></td>

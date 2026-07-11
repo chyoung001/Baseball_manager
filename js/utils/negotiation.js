@@ -127,7 +127,7 @@ function _renderNegotiationUI(hintSalary,hintYears){
             <span class="pos-badge${p.isPitcher?' pitcher':''}" style="font-size:0.82rem;padding:5px 14px;">${ALL_POS_NAMES[p.pos]||p.pos}</span>
           </div>
           <div style="flex:1;">
-            <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:2px;">${p.name}</div>
+            <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:2px;">${p.name}${traitMini(p)}</div>
             <div style="display:flex;gap:8px;font-size:0.68rem;color:var(--text-dim);">
               <span>${p.age||22}세</span>
               <span style="color:${phColor};">${phase} (${st}yr)</span>

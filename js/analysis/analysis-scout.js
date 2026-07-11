@@ -74,7 +74,7 @@ function renderAnalysisScout() {
             const phase = getPhaseLabel(p);
             const phColor = getPhaseColor(p);
             return `<tr>
-              <td style="text-align:left;"><span class="player-name" style="font-size:0.72rem;">${p.name}</span><span class="scout-btn" onclick="showScoutReport(${G.myTeam.roster.indexOf(p)});event.stopPropagation();" title="선수 분석">📋</span></td>
+              <td style="text-align:left;"><span class="player-name" style="font-size:0.72rem;">${p.name}</span>${traitMini(p)}<span class="scout-btn" onclick="showScoutReport(${G.myTeam.roster.indexOf(p)});event.stopPropagation();" title="선수 분석">📋</span></td>
               <td><span class="pos-badge${p.isPitcher ? ' pitcher' : ''}" style="font-size:0.55rem;padding:1px 4px;">${ALL_POS_NAMES[p.pos] || p.pos}</span></td>
               <td style="color:var(--text-dim);font-size:0.72rem;">${p.age||'??'}</td>
               <td style="color:${statColor(o)};font-weight:700;">${o}</td>

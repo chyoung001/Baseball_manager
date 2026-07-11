@@ -177,6 +177,125 @@ function emergencyILReturn(idx) {
 }
 
 // ═══════════════════════════════════════════════════════
+// 로스터 자동 배치 — 규정 위반 자동 해소 (내 팀 전용)
+// 순서: ① 최소 인원 콜업(제약 준수) → ② 투수 보직(로테 5·불펜 최소)
+//       → ③ 타선 9명 포지션 배치(전환 페널티 가중 greedy, 희소 포지션 우선) → ④ 잔여 벤치
+// ═══════════════════════════════════════════════════════
+function autoArrangeRoster(){
+  const t=G.myTeam;
+  if(G.matchInProgress){showToast('🚫 경기 중에는 자동 배치를 할 수 없습니다');return {ok:false,violations:['경기 중']};}
+  let called=0;
+
+  const activeOf=pred=>t.roster.filter(p=>(p.status||'active')==='active'&&p.role!=='overseas'&&pred(p));
+  // ① 콜업 후보: 데뷔 가능·쿨다운/재활 없음·외국인 한도 준수, OVR 내림차순
+  const callable=pred=>t.roster.filter(p=>(p.status==='futures'||p.status==='developmental')
+    &&pred(p)&&(p.cooldown||0)<=0&&(p.rehabGamesLeft||0)<=0&&canPlayerDebut(p)
+    &&(!p.isForeign||canAddForeign(t))).sort((a,b)=>ovr(b)-ovr(a));
+  const callUpOne=pred=>{
+    const c=callable(pred)[0];if(!c)return false;
+    if(!canCallUp(t)){
+      // 1군 정원 초과 → 동일 유형(투수/타자) 최저 OVR 잉여 자원을 강등해 자리 확보
+      // (마이너 옵션 소진자 제외 · 주전/로테이션 제외 · 최소 정원 그룹(포수/내야/외야) 보호
+      //  · 강등자는 쿨다운으로 재콜업 차단)
+      const d=activeOf(p=>p.isPitcher===c.isPitcher
+          &&(p._optionYearsUsed||0)<MAX_OPTION_YEARS
+          &&p.role!=='rotation'&&p.role!=='starting'
+          &&!(!p.isPitcher&&(p._naturalPos||p.pos)==='C'&&countActiveCatchers(t)<=ACTIVE_MIN_CATCHERS)
+          &&!(!p.isPitcher&&['LF','CF','RF'].includes(p.pos)&&countActiveOF(t)<=ACTIVE_MIN_OF)
+          &&!(!p.isPitcher&&['C','1B','2B','3B','SS'].includes(p.pos)&&countActiveIF(t)<=ACTIVE_MIN_IF))
+        .sort((a,b)=>ovr(a)-ovr(b))[0];
+      if(!d)return false;
+      d.status='futures';d.cooldown=CALLUP_COOLDOWN;
+      d._optionYearsUsed=(d._optionYearsUsed||0)+1;
+      d.role=d.isPitcher?'bullpen':'bench';
+    }
+    c.status='active';c.role=c.isPitcher?'bullpen':'bench';called++;return true;
+  };
+  const runCallups=()=>{
+    let guard=0;
+    [ [()=>countActiveCatchers(t)<ACTIVE_MIN_CATCHERS, p=>!p.isPitcher&&p.pos==='C'],
+      [()=>countActiveIF(t)<ACTIVE_MIN_IF,             p=>!p.isPitcher&&['C','1B','2B','3B','SS'].includes(p.pos)],
+      [()=>countActiveOF(t)<ACTIVE_MIN_OF,             p=>!p.isPitcher&&['LF','CF','RF'].includes(p.pos)],
+      [()=>countActivePitchers(t)<ACTIVE_MIN_PITCHERS, p=>p.isPitcher],
+      [()=>countActiveBatters(t)<ACTIVE_MIN_BATTERS,   p=>!p.isPitcher],
+      [()=>getActiveCount(t)<ACTIVE_MIN_TOTAL,         ()=>true],
+    ].forEach(([need,pred])=>{while(need()&&guard++<40){if(!callUpOne(pred))break;}});
+  };
+  runCallups();
+
+  // ② 투수 보직: 로테이션 정원 맞추기 (초과분 OVR 낮은 순 불펜行, 부족분 SP 적성·스태미나순 승격)
+  const pits=()=>activeOf(p=>p.isPitcher);
+  guard=0;
+  while(pits().filter(p=>p.role==='rotation').length>ACTIVE_MIN_SP&&guard++<20){
+    const worst=pits().filter(p=>p.role==='rotation').sort((a,b)=>ovr(a)-ovr(b))[0];
+    if(!worst)break;worst.role='bullpen';
+  }
+  guard=0;
+  while(pits().filter(p=>p.role==='rotation').length<ACTIVE_MIN_SP&&guard++<20){
+    const cand=pits().filter(p=>p.role!=='rotation')
+      .sort((a,b)=>((b.pos==='SP')-(a.pos==='SP'))||((b.stamina||0)-(a.stamina||0))||(ovr(b)-ovr(a)))[0];
+    if(cand){cand.role='rotation';}
+    else if(!callUpOne(p=>p.isPitcher))break;
+  }
+  guard=0;
+  while(pits().filter(p=>p.role==='bullpen').length<ACTIVE_MIN_BULLPEN&&guard++<20){
+    if(!callUpOne(p=>p.isPitcher))break;
+  }
+
+  // ③ 타선 9명 — 수비 8포지션 각 1명 + DH. 적합도 = OVR − 전환 페널티×1.5 (서브/다재다능 반영)
+  const bats=activeOf(p=>!p.isPitcher);
+  bats.forEach(p=>{p.role='bench';});
+  const ORDER=['C','SS','CF','2B','3B','RF','LF','1B']; // 희소·수비 중요 포지션 우선
+  const OF_POS=['LF','CF','RF'];
+  const used=new Set();
+  const natPos=p=>(p._naturalPos||p.pos);
+  const isNatC=p=>natPos(p)==='C';
+  const isNatOF=p=>OF_POS.includes(natPos(p));
+  const fitScore=(p,pos)=>{
+    const pen=getPosSwitchPenalty(p,pos);
+    return pen===null?-Infinity:ovr(p)-pen*1.5;
+  };
+  // 외야 최소 정원 보호: 라인업 외야 슬롯은 3개뿐이라 pos 기준 카운트(countActiveOF)가
+  // 정원(ACTIVE_MIN_OF)을 채우려면 벤치에 자연 외야수 예비가 남아야 한다 —
+  // 남은 자연 외야수가 (미충원 외야 슬롯 + 벤치 예비) 이하면 타 슬롯 전용을 막는다
+  const guardOF=(pool,ofSlotsLeft)=>{
+    if(pool.filter(isNatOF).length>ofSlotsLeft+(ACTIVE_MIN_OF-3))return pool;
+    const g=pool.filter(p=>!isNatOF(p));
+    return g.length?g:pool; // 자원 자체가 부족하면 라인업 9명 충원이 우선
+  };
+  ORDER.forEach((pos,i)=>{
+    // 포수 최소 정원 보호: 자연 포수는 C 슬롯 외 전용 금지 (백업 포수 pos 'C' 유지 → 정원 카운트 보존)
+    let pool=bats.filter(p=>!used.has(p)&&(pos==='C'||!isNatC(p)));
+    if(!OF_POS.includes(pos))pool=guardOF(pool,ORDER.slice(i+1).filter(o=>OF_POS.includes(o)).length);
+    const cand=pool.sort((a,b)=>fitScore(b,pos)-fitScore(a,pos))[0];
+    if(cand&&fitScore(cand,pos)>-Infinity){
+      if(cand._naturalPos==null&&cand.pos!=='DH')cand._naturalPos=cand.pos; // 본 포지션 보존
+      cand.pos=pos;cand.role='starting';used.add(cand);
+    }
+  });
+  const dh=guardOF(bats.filter(p=>!used.has(p)&&!isNatC(p)),0).sort((a,b)=>ovr(b)-ovr(a))[0];
+  if(dh){
+    if(dh._naturalPos==null&&dh.pos!=='DH')dh._naturalPos=dh.pos;
+    dh.pos='DH';dh.role='starting';used.add(dh);
+  }
+
+  // ④ 벤치 포지션을 본 포지션으로 복원 (그리디가 외야/내야 자원을 타 그룹 슬롯에 전용해도
+  //    포지션 그룹 최소 정원 카운트가 벤치에서 왜곡되지 않도록) + 정원 재검 콜업
+  bats.filter(p=>!used.has(p)).forEach(p=>{
+    if(p._naturalPos&&p._naturalPos!=='DH')p.pos=p._naturalPos;
+  });
+  runCallups();
+
+  const check=validateActiveRoster(t);
+  showToast(check.ok
+    ?`⚡ 자동 배치 완료 — 콜업 ${called}명 · 타선 ${used.size}명 배치 (규정 충족)`
+    :`⚡ 자동 배치 — 콜업 ${called}명 · 잔여 위반 ${check.violations.length}건 (가용 자원 부족: 2군/시장 보강 필요)`);
+  if(typeof renderRoster==='function')renderRoster();
+  updateHeader();saveGame();
+  return check;
+}
+
+// ═══════════════════════════════════════════════════════
 // AI 라인업 자동 유지 (부상으로 빠진 주전을 벤치/2군에서 보충)
 // 미유지 시 라인업이 시즌 내내 감소 → 잔존 타자에게 타석이 몰려 개인 기록 왜곡
 // ═══════════════════════════════════════════════════════
