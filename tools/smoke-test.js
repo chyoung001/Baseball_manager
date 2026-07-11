@@ -780,6 +780,32 @@ check('파괴 상태 감지(위반) → 자동 배치 후 전 규정 충족', ar
 check(`타선 9명(${arrProbe.lineup}) + 8포지션 커버 + DH 1명`, arrProbe.lineup === 9 && arrProbe.posOk && arrProbe.dhOk);
 check('로테이션·불펜 최소 정원 충족', arrProbe.rotOk && arrProbe.bpOk);
 
+// T18b. 외야 최소 정원 보호 (결정적 회귀) — 자연 외야수가 정확 4명일 때, 그리디가
+// 최고 OVR 외야수를 내야 슬롯에 전용하면 벤치 예비가 사라져 countActiveOF 3/4 위반.
+// 가드: 남은 자연 외야수 ≤ (미충원 외야 슬롯 + 벤치 예비)이면 타 슬롯 전용 금지
+const ofProbe = g(`(function(){
+  const t=G.myTeam;
+  // 기존 타자 전원 강등 + 쿨다운 차단 (외부 충원 경로 봉쇄 → 시나리오 결정성)
+  t.roster.forEach(p=>{if(!p.isPitcher){if((p.status||'active')==='active')p.status='futures';p.cooldown=3;}});
+  // 타자 코프스 16명 주입: 포수 2(B급) + 내야 10(D급) + 외야 4 = S급 스타 1 + D급 3
+  const mk=(pos,gr)=>{const b=genBatter(pos,gr);b.status='active';b.role='bench';b.cooldown=0;
+    b.canDebutYear=null;b._subPos=null;b._traits=[];initSeasonStats(b);t.roster.push(b);return b;};
+  mk('C','B');mk('C','B');
+  ['SS','2B','3B','1B','SS','2B','3B','1B','SS','1B'].forEach(pos=>mk(pos,'D'));
+  const star=mk('CF','S');
+  ['contact','power','eye','speed','fielding','arm'].forEach(k=>{star[k]=80;});
+  star._versatility=99; // 전환 페널티 최소화 → 가드 없으면 SS 슬롯 탈취가 그리디 최적해
+  mk('LF','D');mk('CF','D');mk('RF','D');
+  invalidateOvrCalib();
+  const r=autoArrangeRoster();
+  const benchOF=t.roster.filter(p=>!p.isPitcher&&(p.status||'active')==='active'
+    &&p.role==='bench'&&['LF','CF','RF'].includes(p.pos)).length;
+  return {ok:r.ok, viol:(r.violations||[]).join(';'), ofCount:countActiveOF(t),
+    starPos:star.pos, benchOF};
+})()`);
+check(`외야 4명 희소 시 그리디 전용 차단 → OF 정원 유지(${ofProbe.ofCount}/${4})`, ofProbe.ok === true && ofProbe.ofCount >= 4, ofProbe.viol);
+check(`스타 외야수 외야 슬롯 유지(${ofProbe.starPos}) + 벤치 예비 ${ofProbe.benchOF}명`, ['LF','CF','RF'].includes(ofProbe.starPos) && ofProbe.benchOF >= 1);
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');

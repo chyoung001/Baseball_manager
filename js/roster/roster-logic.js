@@ -195,10 +195,14 @@ function autoArrangeRoster(){
     const c=callable(pred)[0];if(!c)return false;
     if(!canCallUp(t)){
       // 1군 정원 초과 → 동일 유형(투수/타자) 최저 OVR 잉여 자원을 강등해 자리 확보
-      // (마이너 옵션 소진자 제외 · 포수 최소 정원 보호 · 강등자는 쿨다운으로 재콜업 차단)
+      // (마이너 옵션 소진자 제외 · 주전/로테이션 제외 · 최소 정원 그룹(포수/내야/외야) 보호
+      //  · 강등자는 쿨다운으로 재콜업 차단)
       const d=activeOf(p=>p.isPitcher===c.isPitcher
           &&(p._optionYearsUsed||0)<MAX_OPTION_YEARS
-          &&!(!p.isPitcher&&(p._naturalPos||p.pos)==='C'&&countActiveCatchers(t)<=ACTIVE_MIN_CATCHERS))
+          &&p.role!=='rotation'&&p.role!=='starting'
+          &&!(!p.isPitcher&&(p._naturalPos||p.pos)==='C'&&countActiveCatchers(t)<=ACTIVE_MIN_CATCHERS)
+          &&!(!p.isPitcher&&['LF','CF','RF'].includes(p.pos)&&countActiveOF(t)<=ACTIVE_MIN_OF)
+          &&!(!p.isPitcher&&['C','1B','2B','3B','SS'].includes(p.pos)&&countActiveIF(t)<=ACTIVE_MIN_IF))
         .sort((a,b)=>ovr(a)-ovr(b))[0];
       if(!d)return false;
       d.status='futures';d.cooldown=CALLUP_COOLDOWN;
@@ -242,22 +246,34 @@ function autoArrangeRoster(){
   const bats=activeOf(p=>!p.isPitcher);
   bats.forEach(p=>{p.role='bench';});
   const ORDER=['C','SS','CF','2B','3B','RF','LF','1B']; // 희소·수비 중요 포지션 우선
+  const OF_POS=['LF','CF','RF'];
   const used=new Set();
-  const isNatC=p=>(p._naturalPos||p.pos)==='C';
+  const natPos=p=>(p._naturalPos||p.pos);
+  const isNatC=p=>natPos(p)==='C';
+  const isNatOF=p=>OF_POS.includes(natPos(p));
   const fitScore=(p,pos)=>{
     const pen=getPosSwitchPenalty(p,pos);
     return pen===null?-Infinity:ovr(p)-pen*1.5;
   };
-  ORDER.forEach(pos=>{
+  // 외야 최소 정원 보호: 라인업 외야 슬롯은 3개뿐이라 pos 기준 카운트(countActiveOF)가
+  // 정원(ACTIVE_MIN_OF)을 채우려면 벤치에 자연 외야수 예비가 남아야 한다 —
+  // 남은 자연 외야수가 (미충원 외야 슬롯 + 벤치 예비) 이하면 타 슬롯 전용을 막는다
+  const guardOF=(pool,ofSlotsLeft)=>{
+    if(pool.filter(isNatOF).length>ofSlotsLeft+(ACTIVE_MIN_OF-3))return pool;
+    const g=pool.filter(p=>!isNatOF(p));
+    return g.length?g:pool; // 자원 자체가 부족하면 라인업 9명 충원이 우선
+  };
+  ORDER.forEach((pos,i)=>{
     // 포수 최소 정원 보호: 자연 포수는 C 슬롯 외 전용 금지 (백업 포수 pos 'C' 유지 → 정원 카운트 보존)
-    const pool=bats.filter(p=>!used.has(p)&&(pos==='C'||!isNatC(p)));
+    let pool=bats.filter(p=>!used.has(p)&&(pos==='C'||!isNatC(p)));
+    if(!OF_POS.includes(pos))pool=guardOF(pool,ORDER.slice(i+1).filter(o=>OF_POS.includes(o)).length);
     const cand=pool.sort((a,b)=>fitScore(b,pos)-fitScore(a,pos))[0];
     if(cand&&fitScore(cand,pos)>-Infinity){
       if(cand._naturalPos==null&&cand.pos!=='DH')cand._naturalPos=cand.pos; // 본 포지션 보존
       cand.pos=pos;cand.role='starting';used.add(cand);
     }
   });
-  const dh=bats.filter(p=>!used.has(p)&&!isNatC(p)).sort((a,b)=>ovr(b)-ovr(a))[0];
+  const dh=guardOF(bats.filter(p=>!used.has(p)&&!isNatC(p)),0).sort((a,b)=>ovr(b)-ovr(a))[0];
   if(dh){
     if(dh._naturalPos==null&&dh.pos!=='DH')dh._naturalPos=dh.pos;
     dh.pos='DH';dh.role='starting';used.add(dh);
