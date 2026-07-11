@@ -9,7 +9,7 @@
 <body>
 
 <div id="titleScreen" class="screen active">
-  <div class="title-screen">
+  <div class="title-screen">6
     <div class="title-emoji">⚾</div>
     <div class="title-logo">DUGOUT</div>
     <div class="title-sub">Baseball Manager Simulator</div>
@@ -86,7 +86,10 @@
     <div class="roster-tab" onclick="switchRosterTab('developmental')">⭐ 육성 <span id="devCountBadge" style="font-size:0.65rem;color:var(--text-dim);"></span></div>
     <div class="roster-tab" onclick="switchRosterTab('il')">🏥 IL <span id="ilCountBadge" style="font-size:0.65rem;color:#ef4444;"></span></div>
   </div>
-  <div style="font-size:0.68rem;color:var(--text-dim);margin-bottom:8px;font-family:'JetBrains Mono',monospace;" id="activeRosterInfo"></div>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+    <div style="font-size:0.68rem;color:var(--text-dim);font-family:'JetBrains Mono',monospace;flex:1;" id="activeRosterInfo"></div>
+    <button class="btn btn-sm btn-secondary" onclick="if(confirm('현재 타선·투수 보직을 규정에 맞춰 자동 재구성합니다. 진행할까요?'))autoArrangeRoster()" title="규정 위반 자동 해소 — 콜업·보직·포지션 배치">⚡ 자동 배치</button>
+  </div>
 
   <div class="roster-section active" id="rosterBatters">
     <div class="roster-ootp-layout">
