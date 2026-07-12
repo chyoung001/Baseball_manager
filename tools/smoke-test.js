@@ -1101,6 +1101,62 @@ const boundProbe = g(`(function(){
 })()`);
 check(`유계 인베리언트: 예산 2000억 폭등 → 정산 후 감소·유한·비음수 (max ${boundProbe.max})`, boundProbe.finite && boundProbe.reduced && boundProbe.noNeg, JSON.stringify(boundProbe));
 
+// ── T26. P6 구단주 신임도 — 목표 제시 · 증감 공식 · clamp · 경질 · 영속 ──
+section('T26. P6 구단주 신임도 — 목표·증감·경질·세이브');
+const apConstProbe = g(`(function(){
+  const goal=_proposeSeasonGoal();
+  return {start:APPROVAL_START, warn:APPROVAL_WARN, dismiss:APPROVAL_DISMISS, goal, goalOk:goal>=1&&goal<=G.teams.length};
+})()`);
+check(`신임도 상수 (시작 ${apConstProbe.start} / 경고 ${apConstProbe.warn} / 경질 ${apConstProbe.dismiss})`, apConstProbe.start===50 && apConstProbe.warn===20 && apConstProbe.dismiss===0);
+check(`구단주 목표 순위 자동 제시 유효 (1~${g('G.teams.length')}): ${apConstProbe.goal}`, apConstProbe.goalOk);
+
+const apDeltaProbe = g(`(function(){
+  const mk=(goal,ap)=>({_seasonGoalRank:goal,approval:ap});
+  const d=(t,rank,champ,net)=>{_applyApprovalDelta(t,rank,champ,net);return t.approval;};
+  return {
+    over:  d(mk(4,50),1,false,100),  // (4-1)*4=12 +포스트5 = +17 → 67
+    under: d(mk(4,50),8,false,100),  // (4-8)*4=-16 → 34
+    champ: d(mk(4,50),1,true,100),   // (4-1)*4=12 +우승15(포스트 배타) → 77
+    fin:   d(mk(4,50),4,false,-10),  // 0 +포스트5 -적자3 = +2 → 52
+    clampLo:d(mk(1,5),8,false,-10),  // -31 → clamp 0
+    clampHi:d(mk(8,98),1,true,100),  // +43 → clamp 100
+  };
+})()`);
+check(`증감 공식: 목표상회 +17(${apDeltaProbe.over}) / 미달 -16(${apDeltaProbe.under}) / 우승 +15(${apDeltaProbe.champ}) / 적자 -3(${apDeltaProbe.fin})`,
+  apDeltaProbe.over===67 && apDeltaProbe.under===34 && apDeltaProbe.champ===77 && apDeltaProbe.fin===52, JSON.stringify(apDeltaProbe));
+check(`신임도 clamp 0~100 (하한 ${apDeltaProbe.clampLo} / 상한 ${apDeltaProbe.clampHi})`, apDeltaProbe.clampLo===0 && apDeltaProbe.clampHi===100);
+
+const apDismissProbe = g(`(function(){
+  const saved=G.myTeam.approval;
+  G.myTeam.approval=0;  const fired=checkApprovalDismissal();
+  G.myTeam.approval=50; const notFired=checkApprovalDismissal();
+  G.myTeam.approval=saved; const nb=document.getElementById('btnNavAdvance'); if(nb)nb.disabled=false;
+  return {fired, notFired};
+})()`);
+check('경질 판정: 신임도 0 → 게임오버 발동 / >0 → 미발동', apDismissProbe.fired===true && apDismissProbe.notFired===false, JSON.stringify(apDismissProbe));
+
+const apPersistProbe = g(`(function(){
+  try{
+    G.myTeam.approval=37; G.myTeam._seasonGoalRank=5; G._goalSetSeason=G.season; G._approvalEvalSeason=G.season;
+    saveGame();
+    G.myTeam.approval=99; G.myTeam._seasonGoalRank=1; G._goalSetSeason=0;
+    loadGame();
+    return {ap:G.myTeam.approval, goal:G.myTeam._seasonGoalRank, guard:G._goalSetSeason===G.season, allInit:G.teams.every(t=>typeof t.approval==='number'), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check('save→load 신임도·목표·멱등가드 보존 + 전 팀 approval 수치', apPersistProbe.ap===37 && apPersistProbe.goal===5 && apPersistProbe.guard===true && apPersistProbe.allInit===true, JSON.stringify(apPersistProbe));
+
+const apPreseasonProbe = g(`(function(){
+  try{
+    G._goalSetSeason=0; G.myTeam._seasonGoalRank=null;
+    showPreseason(); // 실제 프리시즌 구동 → 구단주 목표 자동 설정
+    const first=G.myTeam._seasonGoalRank;
+    showPreseason(); // 재진입 — 멱등 가드로 목표 불변
+    return {goal:first, set:G._goalSetSeason===G.season, valid:first>=1&&first<=G.teams.length, idem:G.myTeam._seasonGoalRank===first, err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check('프리시즌: 구단주 목표 자동 설정 + 멱등(재진입 불변)', apPreseasonProbe.set && apPreseasonProbe.valid && apPreseasonProbe.idem, JSON.stringify(apPreseasonProbe));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
