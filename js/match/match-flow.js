@@ -300,8 +300,8 @@ function simulatePlay(){
   const doubleRate=xbhRate-tripleRate;
 
   // ── Stats references ──
-  const bs=batter.ss||(batter.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
-  const ps=pitcher.ss||(pitcher.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
+  const bs=batter.ss||(initSeasonStats(batter),batter.ss);
+  const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
   const bt=batter.today||(batter.today={ab:0,h:0,hr:0,rbi:0,bb:0,k:0,r:0});
   const pt=pitcher.today||(pitcher.today={ip:0,outs:0,h:0,er:0,bb:0,k:0,np:0});
 

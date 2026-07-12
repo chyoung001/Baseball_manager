@@ -64,8 +64,8 @@ function _simAIGame(teamA,teamB){
 
     while(outs<3&&pa<50){
       const b=batters[ord.i%batters.length];ord.i++;pa++;
-      const bs=b.ss||(b.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
-      const ps=pitcher.ss||(pitcher.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
+      const bs=b.ss||(initSeasonStats(b),b.ss);
+      const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
 
       // 슬럼프 보정
       const isSlumping=(b.condition||100)<SLUMP_CONDITION_THRESHOLD;
@@ -302,8 +302,8 @@ function _simMyGame(){
         if(emgPick){pitcher=emgPick;pitcher._simNP=0;}
       }
       const b=batters[ord.i%batters.length];ord.i++;pa++;
-      const bs=b.ss||(b.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
-      const ps=pitcher.ss||(pitcher.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
+      const bs=b.ss||(initSeasonStats(b),b.ss);
+      const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
 
       // 슬럼프/재활 보정
       const isSlumping=(b.condition||100)<SLUMP_CONDITION_THRESHOLD;
