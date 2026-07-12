@@ -24,6 +24,51 @@ function checkBankruptcy(){
   return true;
 }
 
+// ── 구단주 신임도 (P6 '경영 압박') ──
+// 구단주 자동 목표 순위 제시: 전년 순위 + 페이롤(전력 기대) 평균에서 1 상향(늘 조금 더 원함).
+function _proposeSeasonGoal(){
+  const N=G.teams.length;
+  let prevRank=Math.ceil(N/2); // 전년 기록 없으면 중위
+  const ps=G.previousSeasonStandings;
+  if(ps&&ps.length){ const r=ps.indexOf(G.teams.indexOf(G.myTeam)); if(r>=0)prevRank=r+1; }
+  const myPay=getPayroll(G.myTeam);
+  const payRank=G.teams.filter(t=>getPayroll(t)>myPay).length+1; // 1=최고 페이롤
+  return clamp(Math.round((prevRank+payRank)/2)-1,1,N);
+}
+// 시즌 성적·우승·재정으로 신임도 증감 (시상식 시점). 목표 상회 +, 미달 −.
+function _applyApprovalDelta(team,rank,isChamp,net){
+  const goal=team._seasonGoalRank||Math.ceil(G.teams.length/2);
+  let delta=(goal-rank)*APPROVAL_RANK_WEIGHT;
+  if(isChamp)delta+=APPROVAL_CHAMP_BONUS;
+  else if(rank<=POSTSEASON_TEAMS)delta+=APPROVAL_POSTSEASON_BONUS;
+  if(net<0)delta+=APPROVAL_FINANCE_PENALTY;
+  delta=Math.round(delta);
+  const before=team.approval!=null?team.approval:APPROVAL_START;
+  team.approval=clamp(before+delta,0,100);
+  if(team===G.myTeam){G._lastApprovalDelta=delta;G._lastApprovalGoal=goal;G._lastApprovalRank=rank;}
+  return delta;
+}
+// 경질 게임오버 판정 (파산과 병렬) — 신임도 ≤ 0이면 경질 통보·게임 진행 차단.
+function checkApprovalDismissal(){
+  if(!G.myTeam||(G.myTeam.approval!=null?G.myTeam.approval:APPROVAL_START)>APPROVAL_DISMISS)return false;
+  $('modalTitle').textContent='📋 구단주 경질 통보';
+  $('modalBody').innerHTML=`
+    <div style="text-align:center;padding:24px 0;">
+      <div style="font-size:3rem;margin-bottom:12px;">📉</div>
+      <div style="font-size:1rem;color:#ef4444;font-weight:700;margin-bottom:8px;">신임도 상실 — 단장직 경질</div>
+      <div style="font-size:0.8rem;color:var(--text-dim);line-height:1.8;margin-bottom:20px;">
+        구단주 신임도가 <b style="color:#ef4444;">0</b>으로 떨어졌습니다.<br>
+        구단주가 성적 부진을 이유로 당신을 경질했습니다.<br>
+        <span style="font-size:0.7rem;color:#6b7280;">시즌 ${G.season} · ${G.myTeam.wins}승 ${G.myTeam.losses}패 · 목표 ${G._lastApprovalGoal||'-'}위 / 실제 ${G._lastApprovalRank||'-'}위</span>
+      </div>
+      <button class="btn btn-primary" onclick="newGame();" style="width:100%;background:#ef4444;border-color:#ef4444;">🔄 새 게임 시작</button>
+    </div>`;
+  $('seasonModal').classList.add('active');
+  const nb=$('btnNavAdvance');if(nb)nb.disabled=true;
+  const pb=$('btnPlayMatch');if(pb)pb.disabled=true;
+  return true;
+}
+
 // ===================== PHASE 7: STOVE LEAGUE =====================
 function showStoveLeague(){
   const t=G.myTeam;

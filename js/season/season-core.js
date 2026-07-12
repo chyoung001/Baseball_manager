@@ -26,6 +26,12 @@ function showPreseason(){
   const t=G.myTeam;
   const isFirstYear=(G.season===1);
 
+  // P6 구단주 신임도 — 이번 시즌 목표 순위 제시 (멱등: 재진입 시 유지)
+  if(G._goalSetSeason!==G.season){
+    G.myTeam._seasonGoalRank=_proposeSeasonGoal();
+    G._goalSetSeason=G.season;
+  }
+
   if(!isFirstYear){
     // 대규모 스탯 업데이트 (에이징 + 프로의식 기반, 잠재력은 천장 역할만)
     G.teams.forEach(team=>{
@@ -129,6 +135,10 @@ function showPreseason(){
             ${_getTopChanges(t).map(c=>'<div style="font-size:0.75rem;padding:2px 0;color:'+(c.delta>0?'#10b981':'#ef4444')+';">'+c.name+': '+c.stat+' '+(c.delta>0?'+':'')+c.delta+'</div>').join('')||'<div style="color:var(--text-dim);font-size:0.72rem;">큰 변동 없음</div>'}
           </div>`
       }
+      <div class="card" style="background:rgba(245,158,11,0.06);border:1px solid #f59e0b44;padding:10px;margin-bottom:12px;">
+        <div style="font-size:0.72rem;color:#f59e0b;margin-bottom:4px;">🏛️ 구단주 시즌 목표</div>
+        <div style="font-size:0.82rem;color:var(--text);"><b>${G.myTeam._seasonGoalRank}위</b> 이내 <span style="font-size:0.7rem;color:var(--text-dim);">— 달성 시 신임도↑, 크게 미달 지속 시 경질 위험 (현재 신임도 ${G.myTeam.approval!=null?G.myTeam.approval:APPROVAL_START}/100)</span></div>
+      </div>
       <button class="btn btn-primary" onclick="_confirmPreseason();" style="width:100%;">
         ✅ 개막 로스터 확정 & 시즌 시작
       </button>

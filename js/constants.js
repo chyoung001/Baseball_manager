@@ -199,6 +199,17 @@ const FINAL_WINS_NEEDED=4;        // 챔피언십 7전 4선승
 const CHAMPIONSHIP_BONUS=50;      // 우승 상금 (억)
 const RETIRE_MIN_AGE_PROXY=8;     // 시즌 수 기준 은퇴 가능 (생성 후 N시즌)
 
+// ===================== 구단주 신임도 (P6 '경영 압박' — 성적 기반 2번째 게임오버 축) =====================
+// 매 시즌 프리시즌에 구단주가 목표 순위를 제시하고, 시상식에서 실제 성적·우승·재정으로 신임도를 증감.
+// 20↓ 경고 / 0↓ 경질(파산과 병렬인 게임오버). 표준 난이도(사용자 확정).
+const APPROVAL_START=50;             // 신임도 시작값 (0~100)
+const APPROVAL_WARN=20;              // 경고 임계 (이하 시 대시보드·헤더 경고색)
+const APPROVAL_DISMISS=0;            // 경질 임계 (이하 시 게임오버)
+const APPROVAL_RANK_WEIGHT=4;        // (목표순위 − 실제순위) × 가중 → 목표 상회 +, 미달 −
+const APPROVAL_CHAMP_BONUS=15;       // 우승 보너스
+const APPROVAL_POSTSEASON_BONUS=5;   // 포스트시즌 진출(≤4위) 보너스 (우승과 배타)
+const APPROVAL_FINANCE_PENALTY=-3;   // 시즌 순수익 적자 페널티
+
 // ===================== DRAFT CONSTANTS =====================
 const DRAFT_ROUNDS=6;             // 드래프트 라운드 수 (6라운드 × 8팀 = 48명)
 const DRAFT_POOL_SIZE=32;         // 드래프트 풀 크기 (4라운드 × 8팀)
