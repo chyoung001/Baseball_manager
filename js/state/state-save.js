@@ -62,6 +62,9 @@ function _buildSnapshot(){
     marketPlayers:G.marketPlayers.map(_compressPlayer),
     _lastSeasonRev:G._lastSeasonRev||null, // 스토브 결산 스냅샷 (재로드 시 표시 정합)
     _lastReserveDrain:G._lastReserveDrain||0, // 준비금 감가 스냅샷 (결산 화면 재로드 정합)
+    _approvalEvalSeason:G._approvalEvalSeason||0, // P6 신임도 평가 멱등 가드
+    _goalSetSeason:G._goalSetSeason||0,           // P6 시즌 목표 설정 멱등 가드
+    _lastApprovalDelta:G._lastApprovalDelta||0, _lastApprovalGoal:G._lastApprovalGoal||0, _lastApprovalRank:G._lastApprovalRank||0, // 시상식 신임도 표시 스냅샷
   };
 }
 
@@ -103,6 +106,8 @@ function _restoreFromData(d){
   G._traitsEvaluatedSeason=d._traitsEvaluatedSeason||0;
   G._lastSeasonRev=d._lastSeasonRev||null; // 미보유 세이브 로드 시 이전 게임 잔재도 초기화
   G._lastReserveDrain=d._lastReserveDrain||0; // 준비금 감가 스냅샷 복원 (미보유 세이브는 0)
+  G._approvalEvalSeason=d._approvalEvalSeason||0; G._goalSetSeason=d._goalSetSeason||0; // P6 멱등 가드 복원
+  G._lastApprovalDelta=d._lastApprovalDelta||0; G._lastApprovalGoal=d._lastApprovalGoal||0; G._lastApprovalRank=d._lastApprovalRank||0;
   G.previousSeasonStandings=d.previousSeasonStandings||[];
   G.postseasonBracket=d.postseasonBracket||null;
   G.seasonModifiers=d.seasonModifiers||{};
@@ -194,6 +199,8 @@ function _restoreFromData(d){
     if(t.analyticsLevel===undefined) t.analyticsLevel=0;
     if(t.slumpCareLevel===undefined) t.slumpCareLevel=0;   // P2-5 백필
     if(t.mentalCoachLevel===undefined) t.mentalCoachLevel=0;
+    if(t.approval===undefined) t.approval=APPROVAL_START;  // P6 구단주 신임도 백필 (구세이브)
+    if(t._seasonGoalRank===undefined) t._seasonGoalRank=null;
   });
   // OVR Z-score 보정 캐시 무효화 — 로드/마이그레이션으로 스탯이 변해도
   // 캐시 키(시즌:경기:인원합)가 동일하면 낡은 보정치를 쓰는 문제 방지
