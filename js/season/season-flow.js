@@ -436,7 +436,3 @@ function _startNextSeason(){
   advancePhase(); // → preseason
   saveGame();
 }
-
-// ── showSeasonEnd (하위 호환 — 기존 코드 참조용) ─────────────────
-function showSeasonEnd(){showStoveLeague();}
-function nextSeason(){_startNextSeason();}
