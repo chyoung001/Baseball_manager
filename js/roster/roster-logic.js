@@ -213,7 +213,9 @@ function autoArrangeRoster(){
   };
   const runCallups=()=>{
     let guard=0;
-    [ [()=>countActiveCatchers(t)<ACTIVE_MIN_CATCHERS, p=>!p.isPitcher&&p.pos==='C'],
+    // 포수: natPos 기준 콜업 — 포지션 전환된 자연 포수(natPos='C'·pos≠'C')도 불러와야 greedy가 C 슬롯을 채운다
+    // (규정 카운트 countActiveCatchers는 pos 기준이나, 콜업된 자연 포수는 greedy/④에서 pos='C'로 복원됨)
+    [ [()=>getActiveRoster(t).filter(p=>!p.isPitcher&&(p._naturalPos||p.pos)==='C').length<ACTIVE_MIN_CATCHERS, p=>!p.isPitcher&&(p._naturalPos||p.pos)==='C'],
       [()=>countActiveIF(t)<ACTIVE_MIN_IF,             p=>!p.isPitcher&&['C','1B','2B','3B','SS'].includes(p.pos)],
       [()=>countActiveOF(t)<ACTIVE_MIN_OF,             p=>!p.isPitcher&&['LF','CF','RF'].includes(p.pos)],
       [()=>countActivePitchers(t)<ACTIVE_MIN_PITCHERS, p=>p.isPitcher],

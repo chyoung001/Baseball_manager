@@ -756,11 +756,13 @@ check('협상 모달 렌더 무예외 (특성 마커 포함)', uiProbe.nego, uiP
 section('T18. 로스터 자동 배치 — 규정 위반 자동 해소');
 const arrProbe = g(`(function(){
   const t=G.myTeam;
-  // 자원 보장: 시즌 경과로 "가용" 포수(1군 또는 즉시 콜업 가능)가 고갈됐을 수 있음(IL 등재 등) —
-  // 기능 검증이 목적이므로 2군에 주입 (실게임의 자원 부족은 잔여 위반 메시지 경로가 정상 동작)
+  // 자원 보장: 이 테스트는 "자원이 있을 때 autoArrange가 편성하는가"를 검증한다. 시즌 시뮬로 누적된
+  // 부상(IL·시즌아웃)을 치유해 org를 완전 가용 상태로 되돌린다 — 실게임의 자원 부족은 autoArrange가
+  // 잔여 위반을 보고하는 정상 동작이며, 그 시나리오는 이 기능 테스트의 대상이 아님(부상 심도 통일 후 결정성 확보).
+  t.roster.forEach(p=>{ if(p.status==='il'){p.status='futures';p.isOnIL=false;p.ilGamesLeft=0;} p.cooldown=0;p.rehabGamesLeft=0;p._recentILReturn=0; });
+  // 가용 자연 포수(1군 또는 즉시 콜업 가능)가 부족하면 2군에 주입 — natPos 콜업 수정으로 이 콜업 경로가 결정적으로 동작
   const usableC=()=>t.roster.filter(p=>!p.isPitcher&&(p._naturalPos||p.pos)==='C'
-    &&(((p.status||'active')==='active')
-      ||((p.status==='futures'||p.status==='developmental')&&(p.cooldown||0)<=0&&(p.rehabGamesLeft||0)<=0))).length;
+    &&(((p.status||'active')==='active')||((p.status==='futures'||p.status==='developmental')&&(p.cooldown||0)<=0&&(p.rehabGamesLeft||0)<=0))).length;
   while(usableC()<2){
     const c=genBatter('C','B');c.status='futures';c.canDebutYear=null;c.cooldown=0;c.rehabGamesLeft=0;initSeasonStats(c);t.roster.push(c);
   }
@@ -805,6 +807,159 @@ const ofProbe = g(`(function(){
 })()`);
 check(`외야 4명 희소 시 그리디 전용 차단 → OF 정원 유지(${ofProbe.ofCount}/${4})`, ofProbe.ok === true && ofProbe.ofCount >= 4, ofProbe.viol);
 check(`스타 외야수 외야 슬롯 유지(${ofProbe.starPos}) + 벤치 예비 ${ofProbe.benchOF}명`, ['LF','CF','RF'].includes(ofProbe.starPos) && ofProbe.benchOF >= 1);
+
+// T18c. 포지션 전환된 자연 포수 콜업 (결정적 회귀) — natPos='C'·pos≠'C' 자연 포수만 2군에 있고 활성 포수 0일 때,
+// runCallups가 natPos 기준으로 콜업해야 greedy가 C 슬롯을 채운다(구버전 pos 기준 콜업은 실패 → "포수 없음").
+const catchProbe = g(`(function(){
+  G.teamIdx=0; initTeams(0); invalidateOvrCalib();
+  const t=G.myTeam;
+  // 자연 포수 전원을 pos='1B'로 전환(natPos='C' 유지) + 2군行 → 활성 포수 0, 2군에 natPos-C만 존재
+  t.roster.filter(p=>!p.isPitcher&&(p._naturalPos||p.pos)==='C').forEach(p=>{
+    p._naturalPos='C'; p.pos='1B'; p.status='futures'; p.role='bench'; p.cooldown=0; p.rehabGamesLeft=0; p.canDebutYear=null;
+  });
+  const activeCBefore=t.roster.filter(p=>!p.isPitcher&&(p.status||'active')==='active'&&p.pos==='C').length;
+  const natCFutures=t.roster.filter(p=>!p.isPitcher&&p.status==='futures'&&(p._naturalPos||p.pos)==='C').length;
+  t.roster.forEach(p=>{if((p.status||'active')==='active')p.role=p.isPitcher?'bullpen':'bench';}); // 파괴
+  const r=autoArrangeRoster();
+  const st=getStartingBatters(t);
+  return { activeCBefore, natCFutures, ok:r.ok, cInLineup:st.filter(p=>p.pos==='C').length,
+    activeCAfter:t.roster.filter(p=>!p.isPitcher&&(p.status||'active')==='active'&&p.pos==='C').length,
+    viol:(r.violations||[]).join(';') };
+})()`);
+check('T18c: 시나리오 성립(활성 C=0 · 2군 natPos-C≥2)', catchProbe.activeCBefore===0 && catchProbe.natCFutures>=2, JSON.stringify(catchProbe));
+check('T18c: natPos 콜업 → C 슬롯 배치 + 규정 충족', catchProbe.cInLineup===1 && catchProbe.activeCAfter>=2 && catchProbe.ok===true, JSON.stringify(catchProbe));
+
+// ── T19. 실사용 버그 묶음 회귀 (A 드래프트 팀컬럼 · B AI IL 회복 · C IL 진행바 · D 서브탭 · E 확대엔트리 토스트) ──
+section('T19. 실사용 버그 묶음 회귀 (A~E)');
+// 앞선 T18b가 myTeam 로스터를 훼손하므로 깨끗한 상태로 재초기화
+vm.runInContext(`G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0; G.phase='second_half'; invalidateOvrCalib();`, ctx);
+
+// A. 드래프트 결과 "팀" 컬럼이 팀명(r.team)을 쓴다 (선수명 아님)
+const bugA = g(`(function(){
+  G._draftResult=[{round:1,pick:1,team:'검증팀',emoji:'🦁',name:'검증선수',pos:'SS',ovr:70,isPitcher:false}];
+  try{ renderDraftResult(); }catch(e){ return {err:e.message}; }
+  const html=document.getElementById('draftContent').innerHTML||'';
+  return { teamCell: html.includes('🦁 검증팀'), player: html.includes('검증선수') };
+})()`);
+check('A: 드래프트 "팀" 컬럼에 팀명 표시(🦁 검증팀)', bugA.teamCell===true, JSON.stringify(bugA));
+check('A: "선수" 컬럼 선수명 유지', bugA.player===true, JSON.stringify(bugA));
+
+// B. AI 팀 IL 카운트다운 — _aiILCountdown 3회 → 복귀(futures) + simulateOtherGames 배선
+const bugB = g(`(function(){
+  const t=G.teams.find(x=>x!==G.myTeam);
+  const p=t.roster.find(x=>(x.status||'active')==='active');
+  p.status='il'; p.isOnIL=true; p.ilGamesLeft=3;
+  _aiILCountdown(t); const after1=p.ilGamesLeft;
+  _aiILCountdown(t); _aiILCountdown(t);
+  return { after1, status:p.status, il:p.ilGamesLeft, isOnIL:p.isOnIL,
+           wired: simulateOtherGames.toString().includes('_aiILCountdown') };
+})()`);
+check('B: AI IL 매 경기 1씩 감소(3→2)', bugB.after1===2, JSON.stringify(bugB));
+check('B: 3경기 후 IL 복귀(futures)+isOnIL 해제', bugB.status==='futures' && bugB.isOnIL===false, JSON.stringify(bugB));
+check('B: simulateOtherGames가 _aiILCountdown 배선', bugB.wired===true);
+
+// C. IL 진행바 — 장기부상(63경기 시즌아웃)에서도 음수 width 없음
+const bugC = g(`(function(){
+  const p=G.myTeam.roster.find(x=>(x.status||'active')==='active');
+  p.status='il'; p.isOnIL=true; p.ilGamesLeft=63;
+  let html='';
+  try{ renderFutures(); html=document.getElementById('rosterFutures').innerHTML||''; }catch(e){ return {err:e.message}; }
+  return { neg: html.includes('width:-'), rendered: html.length>0 };
+})()`);
+check('C: 장기부상 IL 진행바 음수 width 없음', bugC.err?false:(bugC.neg===false && bugC.rendered===true), JSON.stringify(bugC));
+
+// D. 서브탭 복원 tabMap 라벨이 실제 탭 텍스트('2군','IL')와 일치 (소스 회귀 가드)
+const bugD = g(`(function(){
+  const s=_restoreRosterTab.toString();
+  return { futures:s.includes("futures:'2군'"), il:s.includes("il:'IL'"),
+           noStale: !s.includes("'퓨처스'") && !s.includes("il:'부상'") };
+})()`);
+check("D: tabMap futures→'2군' · il→'IL' (구 라벨 제거)", bugD.futures && bugD.il && bugD.noStale, JSON.stringify(bugD));
+
+// E. 확대 엔트리 토스트 — 경로 무관 시즌당 정확히 1회 (멱등 가드)
+const bugE = g(`(function(){
+  G.phase='second_half'; G.expandedEntryNotified=false;
+  let c=0; const orig=showToast;
+  showToast=function(m){ if((''+m).indexOf('확대 엔트리')>=0) c++; };
+  try{
+    G.gameNum=42; processPostGame(); const c42=c;
+    G.gameNum=43; processPostGame(); const c43=c;
+    G.gameNum=44; processPostGame(); const c44=c;
+    return { c42, c43, c44, flag:G.expandedEntryNotified };
+  }catch(e){ return {err:e.message}; }
+  finally{ showToast=orig; }
+})()`);
+check('E: 확대엔트리 gameNum<43 미발화', bugE.err?false:(bugE.c42===0), JSON.stringify(bugE));
+check('E: gameNum>=43 최초 1회 발화 + 멱등(재발화 없음)', bugE.err?false:(bugE.c43===1 && bugE.c44===1 && bugE.flag===true), JSON.stringify(bugE));
+
+// ── T20. 엔진 비대칭/밸런스 수정 회귀 (F erMod · G condFactor · H stamina · I 부상심도 · J 재정렬) ──
+section('T20. 엔진 비대칭 수정 회귀 (F~J)');
+
+// F. erMod — 저ERA 자격 투수에 1.20, 그 외 1.0 (엔진) + 3경로 배선(관전·AI·자동)
+const bugF = g(`(function(){
+  const bat=G.myTeam.roster.find(p=>!p.isPitcher)||{ss:null};
+  const mk=(role,outs,er)=>({role,ss:{outs,er,ab:0,h:0}});
+  return {
+    low: _calcRegression(bat, mk('rotation',60,2)).erMod,    // era=0.90<1.80 → 1.20
+    high: _calcRegression(bat, mk('rotation',60,10)).erMod,   // era=4.50 → 1.0
+    fewIP: _calcRegression(bat, mk('rotation',10,0)).erMod,   // outs<45 → 1.0
+    wiredWatch: simulatePlay.toString().includes('regression.erMod'),
+    wiredAI: _simAIGame.toString().includes('reg.erMod'),
+    wiredMy: _simMyGame.toString().includes('reg.erMod'),
+  };
+})()`);
+check('F: 저ERA 자격 투수 erMod=1.20', bugF.low===1.20, JSON.stringify(bugF));
+check('F: 정상 ERA·IP 미달 erMod=1.0', bugF.high===1.0 && bugF.fewIP===1.0, JSON.stringify(bugF));
+check('F: erMod 3경로 배선(관전·AI·자동)', bugF.wiredWatch && bugF.wiredAI && bugF.wiredMy, JSON.stringify(bugF));
+
+// G. condFactor — 간이 2경로(simHalf/simHalfFull)에 condF 반영 (소스 가드)
+const bugG = g(`(function(){
+  const ai=_simAIGame.toString(), my=_simMyGame.toString();
+  return { aiCond:(ai.match(/condF/g)||[]).length, myCond:(my.match(/condF/g)||[]).length,
+           watch: simulatePlay.toString().includes('condFactor') };
+})()`);
+check('G: 간이 2경로에 condF 반영(정의+stuff+control)', bugG.aiCond>=3 && bugG.myCond>=3, JSON.stringify(bugG));
+check('G: 관전 경로 condFactor 유지', bugG.watch===true);
+
+// H. currentStamina 초기화 통일 — 세 경로 =100, 구 statEff 초기화 제거 (소스 가드)
+const bugH = g(`(function(){
+  const my=_simMyGame.toString(), ai=_simAIGame.toString(), watch=startMatch.toString();
+  return {
+    all100: my.includes('p.currentStamina=100') && ai.includes('p.currentStamina=100') && watch.includes('p.currentStamina=100'),
+    noStale: !my.includes("statEff(p,'stamina')+rand(0,10)") && !ai.includes("statEff(p,'stamina')+rand(0,10)"),
+  };
+})()`);
+check('H: 관전·AI·자동 초기화 currentStamina=100', bugH.all100===true, JSON.stringify(bugH));
+check('H: 구 statEff 스태미나 초기화 제거', bugH.noStale===true, JSON.stringify(bugH));
+
+// I. 부상 심도 — 자동 경로가 rollInjuryDuration 사용(중증·시즌아웃 도달 가능)
+const bugI = g(`(function(){
+  let over15=0, seasonOut=0; const types={};
+  for(let i=0;i<4000;i++){ const r=rollInjuryDuration(); if(r.games>15)over15++; if(r.games===TOTAL_REGULAR)seasonOut++; types[r.type]=1; }
+  return { over15, seasonOut, typeCount:Object.keys(types).length,
+           wired:_simMyGame.toString().includes('rollInjuryDuration') && !_simMyGame.toString().includes('rand(5,15)') };
+})()`);
+check('I: rollInjuryDuration 중증(>15경기) 발생', bugI.over15>0, JSON.stringify({over15:bugI.over15}));
+check('I: 시즌아웃(=TOTAL_REGULAR) 발생 + 4종 심도', bugI.seasonOut>0 && bugI.typeCount>=4, JSON.stringify(bugI));
+check('I: 자동 경로 rollInjuryDuration 배선(rand(5,15) 제거)', bugI.wired===true);
+
+// J. 부상 교체가 피로/계수 계산 前에 확정 (소스 순서 가드)
+const bugJ = g(`(function(){
+  const s=simulatePlay.toString();
+  return { swap:s.indexOf('pitcher=bpEmg[0]'), fatigue:s.indexOf('const stamFactor=') };
+})()`);
+check('J: 부상 교체(pitcher=bpEmg[0])가 피로 계수(stamFactor) 계산보다 앞섬',
+  bugJ.swap>=0 && bugJ.fatigue>=0 && bugJ.swap<bugJ.fatigue, JSON.stringify(bugJ));
+
+// T21. 트레이드 데드라인 재확정 (#2) — 설계 v2 후반기 G39 (구 84경기 산식 56 잔재 제거)
+const dl = g(`(function(){
+  G.phase='second_half';
+  G.gameNum=39; const at39=isTradeWindowOpen();
+  G.gameNum=40; const at40=isTradeWindowOpen();
+  return { val:TRADE_DEADLINE_GAME, at39, at40 };
+})()`);
+check('T21: TRADE_DEADLINE_GAME=39 (설계 v2 G39)', dl.val===39, JSON.stringify(dl));
+check('T21: 트레이드 창 G39 열림 · G40 닫힘', dl.at39===true && dl.at40===false, JSON.stringify(dl));
 
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {

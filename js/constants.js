@@ -211,7 +211,7 @@ const POS_CONTRACT_GROUP={
 const MAX_OPTION_YEARS=3;           // 마이너 옵션 최대 횟수
 
 // ===================== TRADE CONSTANTS =====================
-const TRADE_DEADLINE_GAME=56;       // 트레이드 데드라인 (84경기의 2/3)
+const TRADE_DEADLINE_GAME=39;       // 트레이드 데드라인 (설계 v2: 후반기 G39 마감 — 63경기 기준)
 const TRADE_MAX_PLAYERS=3;          // 한쪽 최대 교환 인원
 const TRADE_AI_ACCEPT_RATIO=0.85;   // AI 수락 기본 임계값 (85%)
 const TRADE_CONTENDER_BONUS=1.3;    // 윈나우 AI 즉전력 프리미엄
