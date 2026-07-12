@@ -34,10 +34,6 @@ function startMatch(){
   if(G.phase==='first_half'&&G.gameNum>=FIRST_HALF_END){
     G.phase='allstar';advancePhase();return;
   }
-  // 확대 엔트리 알림 (페이즈 변경 없이 toast만)
-  if(G.phase==='second_half'&&G.gameNum===EXPANDED_ENTRY_START){
-    showToast('📋 9월 확대 엔트리! 1군 최대 32명');
-  }
   // ── 최소 로스터 규정 체크 ──
   const rosterCheck=validateActiveRoster(G.myTeam);
   if(!rosterCheck.ok){
@@ -61,9 +57,7 @@ function startMatch(){
 
   // Reset stamina & NP for game
   [homeTeam,awayTeam].forEach(t=>getPitchers(t).forEach(p=>{
-    const base=statEff(p,'stamina')+rand(0,10); // Tier3 — 투구 한계(getMaxPitches)와 동일 티어
-    const bonus=(t.concept==='bullpen'&&p.role==='bullpen')?Math.round(base*0.2):0;
-    p.currentStamina=Math.min(100,base+bonus);
+    p.currentStamina=100; // 경기 시작=풀(%). NP식 100*(1-np/maxNP)·시즌 리셋과 동일 스케일
     p._simNP=0;p._pitchedThisGame=false;
   }));
 
@@ -182,27 +176,10 @@ function simulatePlay(){
     }
   }
 
-  // === TTO + BABIP 기반 타석 판정 (84경기 최적화) ===
+  // === TTO + BABIP 기반 타석 판정 (63경기 최적화) ===
 
-  // ── [1] 팀 컨셉 보너스 ──
-  let batBonus=0,pitchBonus=0;
-  if(batTeam.concept==='contact_hit') batBonus+=4;
-  if(batTeam.concept==='speed')       batBonus+=3;
-  if(batTeam.concept==='sabermetrics')batBonus+=3;
-  if(batTeam.concept==='prospect')    batBonus+=2;  // 육성팀: 젊은 타자 기량 발전 중
-  if(fldTeam.concept==='power_hit')   pitchBonus+=5;
-  if(fldTeam.concept==='defense')     pitchBonus+=4;
-  if(fldTeam.concept==='pitching')    pitchBonus+=4;
-  if(fldTeam.concept==='bullpen'&&pitcher.role==='bullpen') pitchBonus+=5;
-
-  // ── [2] 투수 피로도 (스태미나 + 투구수 커브) ──
-  const fatigue=_fatigueDebuff((pitcher.today&&pitcher.today.np)||0);
-  const stamFactor=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
-  const condFactor=Math.min(1.0,(pitcher.condition||100)/100);
-  const adjVelocity=Math.max(1,(statEff(pitcher,'velocity'))+fatigue.vel);
-  const velMult=1+adjVelocity/400;
-
-  // ── [3] 실시간 부상 확률 (투구수 가중 + 돌발 부상 포함) ──
+  // ── [1] 실시간 부상 확률 (투구수 가중 + 돌발 부상) — 피로/계수 계산 前 교체 확정 ──
+  // 부상 교체가 이 아래 컨셉 보너스·피로 계수보다 먼저 일어나야 전부 최종 투수 기준으로 계산됨.
   if(pitcher.status!=='il'){
     let injuryChance;
     const _pitNP=(pitcher.today&&pitcher.today.np)||0;
@@ -218,7 +195,7 @@ function simulatePlay(){
       const _inj=rollInjuryDuration();
       pitcher.status='il';pitcher.isOnIL=true;pitcher.ilGamesLeft=_inj.games;
       addLog(`🤕 ${pitcher.name} 투구 중 ${_inj.label}! IL ${_inj.games}경기`,'out');
-      showToast(`🤕 ${pitcher.name} 마운드에서 ���상! (${_inj.label})`);
+      showToast(`🤕 ${pitcher.name} 마운드에서 부상! (${_inj.label})`);
       const bpEmg=getBullpen(fldTeam).filter(p=>p.currentStamina>15&&(p.condition||100)>=30&&!matchState.relieversUsed[fldKey].includes(p));
       if(bpEmg.length>0){
         pitcher=bpEmg[0];matchState.currentPitcher[fldKey]=pitcher;matchState.relieversUsed[fldKey].push(pitcher);
@@ -226,6 +203,24 @@ function simulatePlay(){
       }
     }
   }
+
+  // ── [2] 팀 컨셉 보너스 ──
+  let batBonus=0,pitchBonus=0;
+  if(batTeam.concept==='contact_hit') batBonus+=4;
+  if(batTeam.concept==='speed')       batBonus+=3;
+  if(batTeam.concept==='sabermetrics')batBonus+=3;
+  if(batTeam.concept==='prospect')    batBonus+=2;  // 육성팀: 젊은 타자 기량 발전 중
+  if(fldTeam.concept==='power_hit')   pitchBonus+=5;
+  if(fldTeam.concept==='defense')     pitchBonus+=4;
+  if(fldTeam.concept==='pitching')    pitchBonus+=4;
+  if(fldTeam.concept==='bullpen'&&pitcher.role==='bullpen') pitchBonus+=5;
+
+  // ── [3] 투수 피로도 (스태미나 + 투구수 커브) — 최종(교체 후) 투수 기준 ──
+  const fatigue=_fatigueDebuff((pitcher.today&&pitcher.today.np)||0);
+  const stamFactor=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
+  const condFactor=Math.min(1.0,(pitcher.condition||100)/100);
+  const adjVelocity=Math.max(1,(statEff(pitcher,'velocity'))+fatigue.vel);
+  const velMult=1+adjVelocity/400;
 
   // ── [4] 히든 스탯 반영 ──
   const hasRISP=!!(matchState.bases[1]||matchState.bases[2]);
@@ -291,7 +286,7 @@ function simulatePlay(){
   // ── [10] BABIP (인플레이 안타 확률) ──
   const contactMod=1+(adjContact-50)/330;
   const defMod=1-(avgFielding-50)/412;
-  const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*regression.hitMod, 0.200, 0.380);
+  const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*regression.hitMod*regression.erMod, 0.200, 0.380);
 
   // ── [11] 인플레이 세부 확률 ──
   const pError=clamp(0.02-(avgFielding-50)/3300, 0.005, 0.04);

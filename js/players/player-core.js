@@ -4,7 +4,7 @@
 // 1단계: 등급(Grade) 확률 분포 + 나이 생성
 // ═══════════════════════════════════════════════════════
 
-// 등급 뽑기: S(2%), A(13%), B(35%), C(35%), D(15%)
+// 등급 뽑기: S(3%), A(15%), B(42%), C(30%), D(10%)
 function _rollGrade(){
   const r=rand(1,100);
   if(r<=3)  return 'S';   // 3%
@@ -151,7 +151,7 @@ function _posEventMod(pos){
 function _applySpecialContract(p, pOvr, team){
   const mod=_posEventMod(p.pos);
 
-  // 1. 프랜차이즈 스타: FA + OVR 65+ → 기본 15% + 포지션 보정
+  // 1. 프랜차이즈 스타: FA + OVR 75+ → 기본 15% + 포지션 보정
   const franchiseProb=clamp(15+mod.franchiseMod, 0, 30);
   if(pOvr>=75 && rand(1,100)<=franchiseProb){
     p._contractYears=rand(4,6);

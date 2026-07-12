@@ -78,5 +78,10 @@ function processPostGame() {
   });
   // 7. Futures mini-game
   runFuturesMiniGame(t);
+  // 8. 9월 확대 엔트리 안내 — 경로(관전/자동) 무관 시즌당 1회 (멱등 가드)
+  if(G.phase==='second_half'&&G.gameNum>=EXPANDED_ENTRY_START&&!G.expandedEntryNotified){
+    showToast('📋 9월 확대 엔트리! 1군 최대 32명');
+    G.expandedEntryNotified=true;
+  }
 }
 

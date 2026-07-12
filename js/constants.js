@@ -110,7 +110,7 @@ const IL_COOLDOWN_ON_RETURN = 5; // IL 복귀 후 콜업 쿨타임
 // ── 규정타석/규정이닝 (리더보드 최소 기준) ──
 const QUALIFY_PA_PER_GAME   = 2.0;  // 규정타석 계수 (PA/경기)
 const QUALIFY_OUTS_PER_GAME = 1.0;  // 규정이닝 계수 (outs/경기)
-const QUALIFY_RATIO_LEAGUE  = 0.50; // 리그 리�� (규정의 50%)
+const QUALIFY_RATIO_LEAGUE  = 0.50; // 리그 리더보드 (규정의 50%)
 const QUALIFY_RATIO_AWARDS  = 0.70; // 시상 (규정의 70%)
 const QUALIFY_RATIO_DASH    = 0.30; // 대시보드 (규정의 30%)
 
@@ -211,7 +211,7 @@ const POS_CONTRACT_GROUP={
 const MAX_OPTION_YEARS=3;           // 마이너 옵션 최대 횟수
 
 // ===================== TRADE CONSTANTS =====================
-const TRADE_DEADLINE_GAME=56;       // 트레이드 데드라인 (84경기의 2/3)
+const TRADE_DEADLINE_GAME=39;       // 트레이드 데드라인 (설계 v2: 후반기 G39 마감 — 63경기 기준)
 const TRADE_MAX_PLAYERS=3;          // 한쪽 최대 교환 인원
 const TRADE_AI_ACCEPT_RATIO=0.85;   // AI 수락 기본 임계값 (85%)
 const TRADE_CONTENDER_BONUS=1.3;    // 윈나우 AI 즉전력 프리미엄
@@ -229,7 +229,7 @@ const POS_WEIGHT={
 const RETIRE_BASE_PROB=10;        // 은퇴 기본 확률 (%)
 const RETIRE_PROB_PER_SEASON=12;  // 초과 시즌당 추가 확률 (%)
 
-// ===================== STAT SCALE (MLB 20-80) =====================
+// ===================== STAT SCALE (1~100) =====================
 // NOTE: v2 설계는 내부 1~100 스케일. P1에서 STAT_MIN/STAT_MAX만 바꾸면
 //       clamp(x,STAT_MIN,STAT_MAX) 전 사용처가 자동 반영되도록 중앙화됨.
 const STAT_MIN=1;

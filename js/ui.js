@@ -81,7 +81,7 @@ function switchRosterTab(tab){
 // ===================== ROSTER TAB RESTORE =====================
 function _restoreRosterTab(){
   if(_currentRosterTab==='batters')return;
-  const tabMap={pitchers:'투수',futures:'퓨처스',developmental:'육성',il:'부상'};
+  const tabMap={pitchers:'투수',futures:'2군',developmental:'육성',il:'IL'};
   document.querySelectorAll('#rosterScreen .roster-tab').forEach(t=>{
     const match=tabMap[_currentRosterTab];
     t.classList.toggle('active',match&&t.textContent.includes(match));
