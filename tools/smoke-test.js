@@ -242,6 +242,27 @@ check('전 팀 예산 유한값 유지', g('G.teams.every(t=>Number.isFinite(t.b
 check('시즌 스탯 NaN 없음', g(`G.teams.every(t=>t.roster.every(p=>{const s=p.ss||{};return Object.values(s).every(v=>typeof v!=='number'||Number.isFinite(v));}))`));
 const lgAvg = g(`(function(){let h=0,ab=0;G.teams.forEach(t=>t.roster.forEach(p=>{if(!p.isPitcher&&p.ss){h+=p.ss.h||0;ab+=p.ss.ab||0;}}));return ab>0?h/ab:0;})()`);
 check(`리그 타율 온건 범위(0.15~0.40): ${lgAvg.toFixed(3)}`, lgAvg > 0.15 && lgAvg < 0.40);
+// ── 매치엔진 리그 총합 앵커 (P4 1단계) — 시즌 시뮬 후 리그 rate를 실측 베이스라인 밴드로 가드.
+// MLB2024 앵커(K22.6/BB8.2/HR-PA3.0/BABIP.298/OPS.711/ERA4.08) 델타는 비실패 정보로 인쇄.
+// 엔진이 HOT(AVG~.276·ERA~5.1)이라 밴드는 현행 실측 기준 — 다음 Logit/Softmax PR에서 MLB 앵커로 재타겟.
+const anchor = g(`(function(){
+  let AB=0,H=0,HR=0,BB=0,K=0,XBH=0,OUTS=0,ER=0;
+  G.teams.forEach(t=>t.roster.forEach(p=>{const s=p.ss;if(!s)return;
+    if(!p.isPitcher){AB+=s.ab||0;H+=s.h||0;HR+=s.hr||0;BB+=s.bb||0;K+=s.k||0;XBH+=s.xbh||0;}
+    if(p.isPitcher){OUTS+=s.outs||0;ER+=s.er||0;}}));
+  const PA=AB+BB, b1=H-XBH-HR, TB=b1+2*(XBH*0.85)+3*(XBH*0.15)+4*HR;
+  return {Kpct:K/PA, BBpct:BB/PA, HRpa:HR/PA, BABIP:(H-HR)/(AB-K-HR),
+          OPS:((H+BB)/PA)+(TB/AB), ERA:OUTS>0?ER*27/OUTS:0, PA};
+})()`);
+const _MLB={Kpct:0.226,BBpct:0.082,HRpa:0.030,BABIP:0.298,OPS:0.711,ERA:4.08};
+const _dp=(a,b)=>((a-b)*100).toFixed(1); // %p 델타
+console.log(`  [앵커 MLB2024 델타] K%${_dp(anchor.Kpct,_MLB.Kpct)}p · BB%${_dp(anchor.BBpct,_MLB.BBpct)}p · HR/PA${_dp(anchor.HRpa,_MLB.HRpa)}p · BABIP${_dp(anchor.BABIP,_MLB.BABIP)}p · OPS${(anchor.OPS-_MLB.OPS).toFixed(3)} · ERA${(anchor.ERA-_MLB.ERA).toFixed(2)} (PA=${anchor.PA})`);
+check(`리그 K% 베이스라인 밴드 0.15~0.21: ${anchor.Kpct.toFixed(4)}`, anchor.Kpct>=0.15 && anchor.Kpct<=0.21);
+check(`리그 BB% 베이스라인 밴드 0.075~0.115: ${anchor.BBpct.toFixed(4)}`, anchor.BBpct>=0.075 && anchor.BBpct<=0.115);
+check(`리그 HR/PA 베이스라인 밴드 0.018~0.042: ${anchor.HRpa.toFixed(4)}`, anchor.HRpa>=0.018 && anchor.HRpa<=0.042);
+check(`리그 BABIP 베이스라인 밴드 0.295~0.340: ${anchor.BABIP.toFixed(4)}`, anchor.BABIP>=0.295 && anchor.BABIP<=0.340);
+check(`리그 OPS 베이스라인 밴드 0.70~0.86: ${anchor.OPS.toFixed(4)}`, anchor.OPS>=0.70 && anchor.OPS<=0.86);
+check(`리그 ERA 베이스라인 밴드 3.9~6.3: ${anchor.ERA.toFixed(3)}`, anchor.ERA>=3.9 && anchor.ERA<=6.3);
 // ① 개인 성적 현실성 가드 — 스프레드 확대 후에도 비현실 값(타율 0.5·홈런 폭주) 방지
 const realism = g(`(function(){
   const all=G.teams.flatMap(t=>t.roster);
@@ -899,7 +920,8 @@ check('E: gameNum>=43 최초 1회 발화 + 멱등(재발화 없음)', bugE.err?f
 // ── T20. 엔진 비대칭/밸런스 수정 회귀 (F erMod · G condFactor · H stamina · I 부상심도 · J 재정렬) ──
 section('T20. 엔진 비대칭 수정 회귀 (F~J)');
 
-// F. erMod — 저ERA 자격 투수에 1.20, 그 외 1.0 (엔진) + 3경로 배선(관전·AI·자동)
+// F. erMod — 저ERA 자격 투수에 1.20, 그 외 1.0 (엔진) + 3경로 resolvePA 배선(feat/#17 단일화)
+// P4 1단계: erMod·condFactor·stamFactor·피로가 resolvePA 단일 엔진에 있고 3경로가 이를 경유 → 균일 보장.
 const bugF = g(`(function(){
   const bat=G.myTeam.roster.find(p=>!p.isPitcher)||{ss:null};
   const mk=(role,outs,er)=>({role,ss:{outs,er,ab:0,h:0}});
@@ -907,23 +929,36 @@ const bugF = g(`(function(){
     low: _calcRegression(bat, mk('rotation',60,2)).erMod,    // era=0.90<1.80 → 1.20
     high: _calcRegression(bat, mk('rotation',60,10)).erMod,   // era=4.50 → 1.0
     fewIP: _calcRegression(bat, mk('rotation',10,0)).erMod,   // outs<45 → 1.0
-    wiredWatch: simulatePlay.toString().includes('regression.erMod'),
-    wiredAI: _simAIGame.toString().includes('reg.erMod'),
-    wiredMy: _simMyGame.toString().includes('reg.erMod'),
+    engineErMod: resolvePA.toString().includes('regression.erMod'), // 통합 엔진이 erMod 적용
+    wiredWatch: simulatePlay.toString().includes('resolvePA('),
+    wiredAI: _simAIGame.toString().includes('resolvePA('),
+    wiredMy: _simMyGame.toString().includes('resolvePA('),
   };
 })()`);
 check('F: 저ERA 자격 투수 erMod=1.20', bugF.low===1.20, JSON.stringify(bugF));
 check('F: 정상 ERA·IP 미달 erMod=1.0', bugF.high===1.0 && bugF.fewIP===1.0, JSON.stringify(bugF));
-check('F: erMod 3경로 배선(관전·AI·자동)', bugF.wiredWatch && bugF.wiredAI && bugF.wiredMy, JSON.stringify(bugF));
+check('F: erMod 통합 엔진 적용 + 3경로 resolvePA 배선(관전·AI·자동)', bugF.engineErMod && bugF.wiredWatch && bugF.wiredAI && bugF.wiredMy, JSON.stringify(bugF));
 
-// G. condFactor — 간이 2경로(simHalf/simHalfFull)에 condF 반영 (소스 가드)
+// G. condFactor — 통합 엔진 resolvePA가 condFactor를 effStuff·effControl에 반영 (3경로 공통)
 const bugG = g(`(function(){
-  const ai=_simAIGame.toString(), my=_simMyGame.toString();
-  return { aiCond:(ai.match(/condF/g)||[]).length, myCond:(my.match(/condF/g)||[]).length,
-           watch: simulatePlay.toString().includes('condFactor') };
+  const e=resolvePA.toString();
+  return { def:e.includes('condFactor=Math.min'), stuff:/effStuff=.*condFactor/.test(e), ctrl:/effControl=.*condFactor/.test(e) };
 })()`);
-check('G: 간이 2경로에 condF 반영(정의+stuff+control)', bugG.aiCond>=3 && bugG.myCond>=3, JSON.stringify(bugG));
-check('G: 관전 경로 condFactor 유지', bugG.watch===true);
+check('G: 통합 엔진 condFactor 반영(정의+effStuff+effControl)', bugG.def && bugG.stuff && bugG.ctrl, JSON.stringify(bugG));
+
+// F2. resolvePA 통합 엔진 — 필드·확률 범위 유효 + 상황보정(피로 NP) 배선 확인 (공정성 기반)
+const rpaProbe = g(`(function(){
+  const b=G.myTeam.roster.find(p=>!p.isPitcher), p=G.myTeam.roster.find(x=>x.isPitcher);
+  let freshBB=0, tiredBB=0;
+  for(let i=0;i<300;i++){ freshBB+=resolvePA(b,p,{np:0}).pBB; tiredBB+=resolvePA(b,p,{np:110}).pBB; }
+  const r=resolvePA(b,p,{});
+  return {
+    fields:['pHR','pK','pBB','babip','pError','gbRate','xbhRate','tripleRate','batSpeed'].every(k=>typeof r[k]==='number'&&Number.isFinite(r[k])),
+    ranges:r.pHR>=0.005&&r.pHR<=0.08 && r.pK>=0.04&&r.pK<=0.30 && r.pBB>=0.02&&r.pBB<=0.15 && r.babip>=0.20&&r.babip<=0.38,
+    fatigueWired:(tiredBB/300)>(freshBB/300), // 피로 → 제구 저하 → 볼넷 확률 상승
+  };
+})()`);
+check('F2: resolvePA 필드·확률범위 유효 + 피로 상황보정 배선(피로→볼넷↑)', rpaProbe.fields && rpaProbe.ranges && rpaProbe.fatigueWired, JSON.stringify(rpaProbe));
 
 // H. currentStamina 초기화 통일 — 세 경로 =100, 구 statEff 초기화 제거 (소스 가드)
 const bugH = g(`(function(){
@@ -947,13 +982,14 @@ check('I: rollInjuryDuration 중증(>15경기) 발생', bugI.over15>0, JSON.stri
 check('I: 시즌아웃(=TOTAL_REGULAR) 발생 + 4종 심도', bugI.seasonOut>0 && bugI.typeCount>=4, JSON.stringify(bugI));
 check('I: 자동 경로 rollInjuryDuration 배선(rand(5,15) 제거)', bugI.wired===true);
 
-// J. 부상 교체가 피로/계수 계산 前에 확정 (소스 순서 가드)
+// J. 부상 교체가 타석 판정(resolvePA) 前에 확정 (소스 순서 가드 — 교체된 투수로 피로/유효스탯 계산)
+// feat/#17: 피로 계수(stamFactor)가 resolvePA로 이동 → 교체가 resolvePA 호출보다 앞서는지로 검사.
 const bugJ = g(`(function(){
   const s=simulatePlay.toString();
-  return { swap:s.indexOf('pitcher=bpEmg[0]'), fatigue:s.indexOf('const stamFactor=') };
+  return { swap:s.indexOf('pitcher=bpEmg[0]'), resolve:s.indexOf('resolvePA(') };
 })()`);
-check('J: 부상 교체(pitcher=bpEmg[0])가 피로 계수(stamFactor) 계산보다 앞섬',
-  bugJ.swap>=0 && bugJ.fatigue>=0 && bugJ.swap<bugJ.fatigue, JSON.stringify(bugJ));
+check('J: 부상 교체(pitcher=bpEmg[0])가 타석 판정(resolvePA)보다 앞섬',
+  bugJ.swap>=0 && bugJ.resolve>=0 && bugJ.swap<bugJ.resolve, JSON.stringify(bugJ));
 
 // T21. 트레이드 데드라인 재확정 (#2) — 설계 v2 후반기 G39 (구 84경기 산식 56 잔재 제거)
 const dl = g(`(function(){
