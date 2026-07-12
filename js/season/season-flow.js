@@ -83,10 +83,11 @@ function showStoveLeague(){
       if(team===G.myTeam&&share>0)showToast(`🤝 리그 분배금 +${won(share)} (연대 기금+사치세)`);
     });
 
-    // 연간 고정 지출 차감 (모든 팀)
+    // 연간 고정 지출 + 선수 급여 차감 (모든 팀) — 급여는 실지출(현금 차감). 이전엔 가용예산 제약으로만 쓰여
+    // 예산에서 안 빠져 무한 흑자·사치세 사문화를 유발하던 버그 수정.
     G.teams.forEach(team=>{
       const upkeep=calcAnnualUpkeep(team);
-      team.budget=Math.floor(team.budget-upkeep.total);
+      team.budget=Math.floor(team.budget-upkeep.total-getPayroll(team));
     });
     // 파산 체크: 유지비 차감 후 내 팀 예산이 음수면 게임오버
     if(checkBankruptcy()) return;
