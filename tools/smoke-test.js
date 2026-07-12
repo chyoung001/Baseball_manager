@@ -234,6 +234,10 @@ const simMs = Date.now() - t0;
 check(`시즌 시뮬 완주 (${simResult.simmed}경기, 로스터 보수 ${simResult.fixes}회, ${simMs}ms)`, simResult.ok && simResult.gameNum === g('TOTAL_REGULAR'), JSON.stringify(simResult));
 check('내 팀 승+패 = 총경기수', g('G.myTeam.wins+G.myTeam.losses') === g('TOTAL_REGULAR'), `${g('G.myTeam.wins')}승 ${g('G.myTeam.losses')}패`);
 check('리그 총 승수 = 총 패수', g('G.teams.reduce((s,t)=>s+t.wins,0)') === g('G.teams.reduce((s,t)=>s+t.losses,0)'));
+// 투수 기용 회귀: 간이 경로 _simNP=투구수 추정 정합 → 선발 완투 방지, 불펜 이닝 점유 현실 범위
+// (구버전 _simNP=PA면 선발이 maxNp(투구수)에 절대 도달 못해 완투 → 불펜 점유 ~5%로 실패)
+const bpUsage = g(`(function(){let rot=0,bp=0;G.teams.forEach(t=>t.roster.forEach(p=>{if(!p.isPitcher||!p.ss)return;const o=p.ss.outs||0;if(p.role==='rotation')rot+=o;else if(p.role==='bullpen')bp+=o;}));return {rot,bp,share:(rot+bp)>0?bp/(rot+bp):0};})()`);
+check(`불펜 이닝 점유 현실 범위(선발 완투 방지): ${(bpUsage.share*100).toFixed(1)}%`, bpUsage.share>=0.15 && bpUsage.share<=0.60, JSON.stringify(bpUsage));
 check('전 팀 예산 유한값 유지', g('G.teams.every(t=>Number.isFinite(t.budget))'));
 check('시즌 스탯 NaN 없음', g(`G.teams.every(t=>t.roster.every(p=>{const s=p.ss||{};return Object.values(s).every(v=>typeof v!=='number'||Number.isFinite(v));}))`));
 const lgAvg = g(`(function(){let h=0,ab=0;G.teams.forEach(t=>t.roster.forEach(p=>{if(!p.isPitcher&&p.ss){h+=p.ss.h||0;ab+=p.ss.ab||0;}}));return ab>0?h/ab:0;})()`);

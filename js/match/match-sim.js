@@ -138,7 +138,7 @@ function _simAIGame(teamA,teamB){
           }else{outs++;ps.outs=(ps.outs||0)+1;}
         }else{outs++;ps.outs=(ps.outs||0)+1;}
       }
-      pitcher._simNP=(pitcher._simNP||0)+1;
+      pitcher._simNP=(pitcher._simNP||0)+((result==='K'||result==='BB')?rand(4,7):rand(2,4)); // PA당 투구수 추정 — maxNp(투구수)와 단위 정합(간이 경로 강판·피로)
       pitcher.currentStamina=Math.max(0,Math.round(100*(1-pitcher._simNP/getMaxPitches(pitcher))));
       if(walkoffTarget>0&&runs>=walkoffTarget) break;
     }
@@ -379,7 +379,7 @@ function _simMyGame(){
           }else{outs++;ps.outs=(ps.outs||0)+1;}
         }else{outs++;ps.outs=(ps.outs||0)+1;}
       }
-      pitcher._simNP=(pitcher._simNP||0)+1;
+      pitcher._simNP=(pitcher._simNP||0)+((result==='K'||result==='BB')?rand(4,7):rand(2,4)); // PA당 투구수 추정 — maxNp(투구수)와 단위 정합(간이 경로 강판·피로)
       pitcher.currentStamina=Math.max(0,Math.round(100*(1-pitcher._simNP/getMaxPitches(pitcher))));
       if(walkoffTarget>0&&runs>=walkoffTarget) break;
     }
