@@ -1050,6 +1050,57 @@ check('T24-P1: 특성 팝오버 무예외 + 숨은가치 안내', trProbe.popErr
 check(`T24-P2: 특성 도감 렌더 (자연${trProbe.natN}·인공${trProbe.artN}=${trProbe.natN+trProbe.artN} 카드)`, trProbe.codexErr===null && trProbe.codexCount>=trProbe.natN+trProbe.artN, JSON.stringify(trProbe));
 check('T24: 뱃지·마커 클릭 배선(showTraitInfo)', trProbe.miniClickable, JSON.stringify(trProbe));
 
+// ── T25. fix/#14 경제 유계화 회귀 — 준비금 감가 · 급여 실차감 · 유지비 싱크 · 유계 인베리언트 ──
+section('T25. 경제 유계화 (fix/#14) — 준비금 감가·급여 실차감·유지비 싱크');
+const decayProbe = g(`(function(){
+  const R={cap:(typeof RESERVE_SOFT_CAP!=='undefined')?RESERVE_SOFT_CAP:null,
+           rate:(typeof RESERVE_DECAY_RATE!=='undefined')?RESERVE_DECAY_RATE:null};
+  const decay=(b)=> b>R.cap ? b-Math.floor((b-R.cap)*R.rate) : b;
+  R.boundary = decay(R.cap)===R.cap;                          // 경계(=cap): 감가 0
+  R.below    = decay(120)===120;                              // 캡 아래: 무영향
+  R.prop     = decay(R.cap+200)===(R.cap+200)-Math.floor(200*R.rate); // 초과분 비례
+  R.noBankrupt = decay(100000)>R.cap;                         // 결과가 캡 초과 유지 → 감가는 파산 유발 불가
+  return R;
+})()`);
+check(`준비금 감가 상수 (소프트캡 ${decayProbe.cap} / 감가율 ${decayProbe.rate})`, decayProbe.cap===300 && decayProbe.rate===0.30);
+check('감가 공식: 경계=0 · 캡아래 무영향 · 초과분 비례 · 파산 유발 불가', decayProbe.boundary && decayProbe.below && decayProbe.prop && decayProbe.noBankrupt, JSON.stringify(decayProbe));
+
+const sinkProbe = g(`(function(){
+  const mk=()=>({coachStaff:{},stadiumLevel:0,slumpCareLevel:0,mentalCoachLevel:0,medicalLevel:0,devLevel:0,scoutingLevel:0,analyticsLevel:0,facilityLevel:0,roster:[]});
+  const u0=calcAnnualUpkeep(mk()).total;
+  const t=mk(); t.stadiumLevel=5; t.slumpCareLevel=4; t.coachStaff={batting:5};
+  const u1=calcAnnualUpkeep(t).total;
+  return {u0,u1,rise:u1>u0};
+})()`);
+check(`유지비 싱크: 인프라 투자↑ → 연 유지비↑ (${sinkProbe.u0}→${sinkProbe.u1}, AI 재투자 잉여 흡수 근거)`, sinkProbe.rise, JSON.stringify(sinkProbe));
+
+const settleProbe = g(`(function(){
+  try{
+    G.myTeam.budget=Math.max(G.myTeam.budget,500); // 파산 게임오버 회피
+    const sorted=[...G.teams].sort((a,b)=>(b.wins/(b.wins+b.losses||1))-(a.wins/(a.wins+a.losses||1)));
+    const team=sorted[0]; // 1위팀: 하위4 분배·(대개)플로어 벌과금 영향 최소
+    const B=team.budget, rev=calcSeasonRevenue(team,1).net, upkeep=calcAnnualUpkeep(team).total, pay=getPayroll(team);
+    let e=B+rev;                                    // 정산 순서 복제: 수익
+    const sf=+(getSalaryFloor()-pay).toFixed(1); if(sf>0) e=+(e-sf).toFixed(1); // 플로어 벌과금
+    e=Math.floor(e-upkeep-pay);                     // 유지비 + 급여 실차감
+    if(e>RESERVE_SOFT_CAP) e-=Math.floor((e-RESERVE_SOFT_CAP)*RESERVE_DECAY_RATE); // 준비금 감가
+    G._stoveSettledSeason=-1; showStoveLeague();    // 실제 정산 구동
+    return {exp:e, act:team.budget, pay:Math.round(pay), diff:Math.abs(team.budget-e)};
+  }catch(err){return {err:err.message};}
+})()`);
+check(`급여 실차감 정산 공식 정합 (1위팀 예산=수익-유지비-급여-감가, 페이롤 ${settleProbe.pay}억 차감)`, settleProbe.diff!=null && settleProbe.diff<=1, JSON.stringify(settleProbe));
+
+const boundProbe = g(`(function(){
+  try{
+    G.myTeam.budget=Math.max(G.myTeam.budget,500);
+    G.teams.forEach(t=>{t.budget=2000;});          // 전 팀 예산 폭등
+    G._stoveSettledSeason=-1; showStoveLeague();    // 1회 정산
+    const a=G.teams.map(t=>t.budget);
+    return {finite:a.every(Number.isFinite), reduced:a.every(b=>b<2000), noNeg:a.every(b=>b>=0), max:Math.round(Math.max(...a))};
+  }catch(err){return {err:err.message};}
+})()`);
+check(`유계 인베리언트: 예산 2000억 폭등 → 정산 후 감소·유한·비음수 (max ${boundProbe.max})`, boundProbe.finite && boundProbe.reduced && boundProbe.noNeg, JSON.stringify(boundProbe));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
