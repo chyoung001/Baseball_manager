@@ -234,6 +234,10 @@ const simMs = Date.now() - t0;
 check(`시즌 시뮬 완주 (${simResult.simmed}경기, 로스터 보수 ${simResult.fixes}회, ${simMs}ms)`, simResult.ok && simResult.gameNum === g('TOTAL_REGULAR'), JSON.stringify(simResult));
 check('내 팀 승+패 = 총경기수', g('G.myTeam.wins+G.myTeam.losses') === g('TOTAL_REGULAR'), `${g('G.myTeam.wins')}승 ${g('G.myTeam.losses')}패`);
 check('리그 총 승수 = 총 패수', g('G.teams.reduce((s,t)=>s+t.wins,0)') === g('G.teams.reduce((s,t)=>s+t.losses,0)'));
+// 투수 기용 회귀: 간이 경로 _simNP=투구수 추정 정합 → 선발 완투 방지, 불펜 이닝 점유 현실 범위
+// (구버전 _simNP=PA면 선발이 maxNp(투구수)에 절대 도달 못해 완투 → 불펜 점유 ~5%로 실패)
+const bpUsage = g(`(function(){let rot=0,bp=0;G.teams.forEach(t=>t.roster.forEach(p=>{if(!p.isPitcher||!p.ss)return;const o=p.ss.outs||0;if(p.role==='rotation')rot+=o;else if(p.role==='bullpen')bp+=o;}));return {rot,bp,share:(rot+bp)>0?bp/(rot+bp):0};})()`);
+check(`불펜 이닝 점유 현실 범위(선발 완투 방지): ${(bpUsage.share*100).toFixed(1)}%`, bpUsage.share>=0.15 && bpUsage.share<=0.60, JSON.stringify(bpUsage));
 check('전 팀 예산 유한값 유지', g('G.teams.every(t=>Number.isFinite(t.budget))'));
 check('시즌 스탯 NaN 없음', g(`G.teams.every(t=>t.roster.every(p=>{const s=p.ss||{};return Object.values(s).every(v=>typeof v!=='number'||Number.isFinite(v));}))`));
 const lgAvg = g(`(function(){let h=0,ab=0;G.teams.forEach(t=>t.roster.forEach(p=>{if(!p.isPitcher&&p.ss){h+=p.ss.h||0;ab+=p.ss.ab||0;}}));return ab>0?h/ab:0;})()`);
@@ -960,6 +964,91 @@ const dl = g(`(function(){
 })()`);
 check('T21: TRADE_DEADLINE_GAME=39 (설계 v2 G39)', dl.val===39, JSON.stringify(dl));
 check('T21: 트레이드 창 G39 열림 · G40 닫힘', dl.at39===true && dl.at40===false, JSON.stringify(dl));
+
+// T22. 8구장 파크팩터 (P3, A) — getParkFactor·중립 폴백·엔진 곱셈·리그 중립·3경로 배선
+const pkProbe = g(`(function(){
+  const known=getParkFactor({name:'데빌즈'});
+  const neutral=getParkFactor({name:'없는팀xyz'});
+  const undef=getParkFactor(undefined);
+  const vals=Object.values(PARK_FACTORS);
+  const hrAvg=vals.reduce((s,v)=>s+v.hr,0)/vals.length;
+  const hitAvg=vals.reduce((s,v)=>s+v.hit,0)/vals.length;
+  let hrHi=0,hrLo=0;
+  for(let i=0;i<4000;i++){
+    if(_ttoSimAB(80,50,50,50,50,50,50,1.0,{hr:2.0,hit:1})==='HR')hrHi++;
+    if(_ttoSimAB(80,50,50,50,50,50,50,1.0,{hr:0.5,hit:1})==='HR')hrLo++;
+  }
+  return { knownHr:known.hr, neutralHr:neutral.hr, neutralHit:neutral.hit, undefHr:undef.hr,
+    hrAvg:+hrAvg.toFixed(3), hitAvg:+hitAvg.toFixed(3), hrHi, hrLo, parkCount:vals.length,
+    wiredWatch: simulatePlay.toString().includes('getParkFactor'),
+    wiredAI: _simAIGame.toString().includes('getParkFactor'),
+    wiredMy: _simMyGame.toString().includes('getParkFactor') };
+})()`);
+check('T22: getParkFactor 알려진 팀 값·미상/undefined 중립 폴백',
+  pkProbe.knownHr===1.05 && pkProbe.neutralHr===1 && pkProbe.neutralHit===1 && pkProbe.undefHr===1, JSON.stringify(pkProbe));
+check('T22: 8구장·평균 HR·Hit ≈1.0 (리그 중립)',
+  pkProbe.parkCount===8 && pkProbe.hrAvg>=0.98 && pkProbe.hrAvg<=1.02 && pkProbe.hitAvg>=0.98 && pkProbe.hitAvg<=1.02, JSON.stringify(pkProbe));
+check('T22: 엔진 park.hr 곱셈 반영 (2.0 > 0.5 HR율)', pkProbe.hrHi>pkProbe.hrLo, JSON.stringify({hrHi:pkProbe.hrHi,hrLo:pkProbe.hrLo}));
+check('T22: 파크팩터 3경로 배선 (관전·AI·자동)', pkProbe.wiredWatch && pkProbe.wiredAI && pkProbe.wiredMy, JSON.stringify(pkProbe));
+
+// T23. 세이버 지표 + 시상 (P3, B) — FIP/wOBA/SLG/WAR 함수·투수 MVP 가능·렌더 가드
+const sbProbe = g(`(function(){
+  const bat={isPitcher:false,pos:'CF',ss:{ab:200,h:70,hr:15,xbh:20,rbi:50,bb:30,k:40,sb:5}};
+  const ace={isPitcher:true,pos:'SP',ss:{outs:180,er:10,pk:80,pbb:15,ha:40,phr:3,w:8,l:1,sv:0,gp:10}};
+  const bad={isPitcher:true,pos:'SP',ss:{outs:180,er:50,pk:30,pbb:40,ha:90,phr:20,w:2,l:8,sv:0,gp:10}};
+  const slg=ssSLG(bat), ops=ssOPS(bat);
+  return {
+    slgGtAvg: slg>ssAvg(bat),
+    opsEq: Math.abs(ops-(ssOBP(bat)+slg))<0.001,
+    fipOrder: ssFIP(ace)<ssFIP(bad),
+    warOrder: warPitcher(ace)>warPitcher(bad),
+    dispatch: warSaber(ace)===warPitcher(ace) && warSaber(bat)===warBatter(bat) };
+})()`);
+check('T23: SLG>AVG · OPS=OBP+SLG (장타 반영)', sbProbe.slgGtAvg && sbProbe.opsEq, JSON.stringify(sbProbe));
+check('T23: FIP 에이스<부진 · WAR 에이스>부진', sbProbe.fipOrder && sbProbe.warOrder, JSON.stringify(sbProbe));
+check('T23: warSaber 투수/타자 디스패치', sbProbe.dispatch, JSON.stringify(sbProbe));
+
+const awProbe = g(`(function(){
+  G.teamIdx=0; initTeams(0); G.season=2; G.gameNum=60; invalidateOvrCalib();
+  let ace=null;
+  G.teams.forEach(t=>t.roster.forEach(p=>{ initSeasonStats(p); if(p.isPitcher && !ace && p.pos==='SP')ace=p; }));
+  ace.ss={outs:200,er:8,pk:110,pbb:12,ha:35,phr:2,w:12,l:1,sv:0,gp:12}; ace._seasonsPlayed=3;
+  const myBat=G.myTeam.roster.find(p=>!p.isPitcher);
+  if(myBat) myBat.ss={ab:120,h:38,hr:6,xbh:10,rbi:22,bb:18,k:25,sb:3};
+  G.myTeam.wins=1;
+  const allQ=[]; G.teams.forEach(t=>t.roster.forEach(p=>{ if(p.ss&&((!p.isPitcher&&qualifyBatter(p,QUALIFY_RATIO_AWARDS))||(p.isPitcher&&qualifyPitcher(p,QUALIFY_RATIO_AWARDS))))allQ.push({p,team:t}); }));
+  allQ.sort((a,b)=>warSaber(b.p)-warSaber(a.p));
+  const topIsPitcher = allQ.length>0 && allQ[0].p.isPitcher;
+  let renderErr=null;
+  try{ renderAnalysisBatters(); renderAnalysisPitchers(); renderLeagueLeaders(); }catch(e){renderErr=e.message;}
+  return { aceWar:warPitcher(ace), topIsPitcher, renderErr };
+})()`);
+check('T23: 지배적 투수가 WAR 최상위 (투수 MVP 가능)', awProbe.topIsPitcher===true && awProbe.aceWar>0, JSON.stringify(awProbe));
+check('T23: 분석·리더보드 세이버 렌더 무예외', awProbe.renderErr===null, JSON.stringify(awProbe));
+
+// T24. 특성 노출 강화 (P1 팝오버 · P2 도감 · P3 평문화)
+const trProbe = g(`(function(){
+  const t=TRAITS['tcBat']; // fx {power:5,contact:5,_clutchHidden:5}
+  const q=_traitFxText(t,false), x=_traitFxText(t,true);
+  let popErr=null,popHtml='';
+  try{ showTraitInfo('iron'); popHtml=document.getElementById('traitModalBody').innerHTML||''; }catch(e){popErr=e.message;}
+  let codexErr=null,codexHtml='';
+  try{ renderTraitCodex(); codexHtml=document.getElementById('analysisContent').innerHTML||''; }catch(e){codexErr=e.message;}
+  const natN=Object.keys(TRAITS).filter(id=>TRAITS[id].kind==='nat').length;
+  const artN=Object.keys(TRAITS).filter(id=>TRAITS[id].kind==='art').length;
+  const pmini={_traits:[{id:'iron',slot:1,season:1}]};
+  const miniHtml=traitMini(pmini), badgeHtml=traitBadges(pmini,false);
+  return {
+    qHasBand: q.includes('파워')&&(q.includes('소폭')||q.includes('뚜렷')||q.includes('강력'))&&q.includes('↑'),
+    qNoNum: !/\\(\\+?\\d/.test(q), xHasNum: /\\(\\+5\\)/.test(x),
+    popErr, popOk: popHtml.includes('철인')&&popHtml.includes('숨은 가치'),
+    codexErr, codexCount:(codexHtml.match(/showTraitInfo\\(/g)||[]).length, natN, artN,
+    miniClickable: miniHtml.includes('showTraitInfo(')&&badgeHtml.includes('showTraitInfo(') };
+})()`);
+check('T24-P3: 효과 평문화 (구간+방향·비공개 수치 은닉·공개 시 수치)', trProbe.qHasBand && trProbe.qNoNum && trProbe.xHasNum, JSON.stringify(trProbe));
+check('T24-P1: 특성 팝오버 무예외 + 숨은가치 안내', trProbe.popErr===null && trProbe.popOk, JSON.stringify(trProbe));
+check(`T24-P2: 특성 도감 렌더 (자연${trProbe.natN}·인공${trProbe.artN}=${trProbe.natN+trProbe.artN} 카드)`, trProbe.codexErr===null && trProbe.codexCount>=trProbe.natN+trProbe.artN, JSON.stringify(trProbe));
+check('T24: 뱃지·마커 클릭 배선(showTraitInfo)', trProbe.miniClickable, JSON.stringify(trProbe));
 
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {

@@ -278,15 +278,16 @@ function simulatePlay(){
   // ── [8] 동적 회귀 보정 ──
   const regression=_calcRegression(batter,pitcher);
 
-  // ── [9] TTO 확률 계산 (HR → K → BB → InPlay) — 극단값 상한 축소 ──
-  const pHR=clamp(TTO_BASE_HR+(adjPower-effMovement)/165*0.16, 0.005, 0.08);
+  // ── [9] TTO 확률 계산 (HR → K → BB → InPlay) — 극단값 상한 축소 + 홈구장 파크팩터 곱셈 ──
+  const _park=getParkFactor(matchState.home); // 홈구장 = 양팀 공통
+  const pHR=clamp((TTO_BASE_HR+(adjPower-effMovement)/165*0.16)*_park.hr, 0.005, 0.08);
   const pK =clamp(TTO_BASE_K +(effStuff-adjContact)/165*0.15, 0.04, 0.30);
   const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/165*0.12, 0.02, 0.15);
 
   // ── [10] BABIP (인플레이 안타 확률) ──
   const contactMod=1+(adjContact-50)/330;
   const defMod=1-(avgFielding-50)/412;
-  const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*regression.hitMod*regression.erMod, 0.200, 0.380);
+  const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*regression.hitMod*regression.erMod*_park.hit, 0.200, 0.380);
 
   // ── [11] 인플레이 세부 확률 ──
   const pError=clamp(0.02-(avgFielding-50)/3300, 0.005, 0.04);
@@ -362,7 +363,7 @@ function simulatePlay(){
     // ── 홈런 ──
     let runs=1,_earnedRuns=1;matchState.bases.forEach((b,i)=>{if(b){runs++;if(!b._errorRunner)_earnedRuns++;matchState.bases[i]=null;}});
     matchState.score[scoreKey][ii]+=runs;matchState.hits[scoreKey]++;
-    bs.ab++;bs.h++;bs.hr++;bs.rbi+=runs; ps.ha++; ps.er+=_earnedRuns;
+    bs.ab++;bs.h++;bs.hr++;bs.rbi+=runs; ps.ha++; ps.phr++; ps.er+=_earnedRuns;
     bt.ab++;bt.h++;bt.hr++;bt.rbi+=runs; pt.h++; pt.er+=_earnedRuns;
     addLog(`💥 ${batter.name} 홈런! ${runs}점 득점!`,'homerun');
     _flashField('flash-purple');

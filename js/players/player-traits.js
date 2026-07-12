@@ -238,19 +238,84 @@ function traitBadges(p,revealFx){
     const t=TRAITS[e.id];if(!t)return '';
     const color=t.kind==='nat'?'#67e8f9':_RANK_COLOR[t.rank];
     const label=t.kind==='nat'?t.name:`${t.name} ${t.rank}`;
-    const fxText=revealFx?' ['+Object.keys(t.fx).map(k=>{
-      const v=t.fx[k];return `${STAT_KN[k]||k} ${v>0?'+':''}${v}`;
-    }).join(', ')+']':'';
-    return `<span class="trait-badge" title="${t.desc}${fxText} — 경기력·협상 반응에 반영 (OVR·TV·연봉 공식 무영향)" style="background:${color}22;color:${color};border-color:${color}55;">${t.kind==='nat'?'★':''}${label}</span>`;
+    // 정성 효과는 상시, 정확 수치(revealFx)만 게이팅 — 히든 수치 역산 우회 차단 유지
+    return `<span class="trait-badge" onclick="showTraitInfo('${e.id}');event.stopPropagation();" title="${t.desc} [${_traitFxText(t,revealFx)}] — 클릭: 상세 · 경기력·협상 반영(OVR·TV·연봉 무영향)" style="background:${color}22;color:${color};border-color:${color}55;">${t.kind==='nat'?'★':''}${label}</span>`;
   }).join('');
 }
 
-// 축약형 특성 마커 — 목록/테이블 행용 (자연 ★ / 인공 랭크 문자, 툴팁에 특성명)
+// 축약형 특성 마커 — 목록/테이블 행용 (자연 ★ / 인공 랭크 문자, 클릭 시 상세)
 function traitMini(p){
   if(!Array.isArray(p._traits)||p._traits.length===0)return '';
   return p._traits.map(e=>{
     const t=TRAITS[e.id];if(!t)return '';
     const color=t.kind==='nat'?'#67e8f9':_RANK_COLOR[t.rank];
-    return `<span class="trait-mini" title="${t.kind==='nat'?'★ ':''}${t.name}${t.kind==='nat'?'':' ('+t.rank+'랭크)'} — ${t.desc}" style="color:${color};">${t.kind==='nat'?'★':t.rank}</span>`;
+    return `<span class="trait-mini" onclick="showTraitInfo('${e.id}');event.stopPropagation();" title="${t.kind==='nat'?'★ ':''}${t.name}${t.kind==='nat'?'':' ('+t.rank+'랭크)'} — ${_traitFxText(t,false)} · 클릭: 상세" style="color:${color};">${t.kind==='nat'?'★':t.rank}</span>`;
   }).join('');
+}
+
+// ── P3: 효과 평문화 (fx → 스탯명 + 구간 서술 + 방향). revealExact 시 정확 수치 병기 ──
+function _traitFxBand(v){const a=Math.abs(v);return a<=2?'미미':a<=5?'소폭':a<=8?'뚜렷':'강력';}
+function _traitFxText(t,revealExact){
+  const ks=Object.keys(t.fx||{});
+  if(ks.length===0)return '효과 없음';
+  return ks.map(k=>{const v=t.fx[k];const nm=(typeof STAT_KN!=='undefined'&&STAT_KN[k])||k;
+    return `${nm} ${_traitFxBand(v)}${v>0?'↑':'↓'}${revealExact?` (${v>0?'+':''}${v})`:''}`;
+  }).join(' · ');
+}
+
+// ── P1: 특성 상세 팝오버 (뱃지/마커/도감 카드 클릭) ──
+function showTraitInfo(id){
+  const t=TRAITS[id];if(!t)return;
+  const el=(typeof $!=='undefined')?$('traitModalBody'):null;if(!el)return;
+  const color=t.kind==='nat'?'#67e8f9':_RANK_COLOR[t.rank];
+  const kindLabel=t.kind==='nat'?'자연 특성':'인공 특성 · '+t.rank+'랭크';
+  const catLabel=t.kind==='nat'?({pos:'순수 긍정',edge:'양날의 검',neg:'약한 부정'}[t.cat]||''):'';
+  const whoLabel=({all:'공통',bat:'타자 전용',pit:'투수 전용'}[t.who])||'';
+  const rdLv=(typeof G!=='undefined'&&G.myTeam&&(G.myTeam.analyticsLevel||0))||0;
+  const revealExact=rdLv>=60||(typeof G!=='undefined'&&G.testMode);
+  const isArt=t.kind==='art';
+  el.innerHTML=`
+    <div style="text-align:left;">
+      <div style="font-size:1.05rem;font-weight:800;color:${color};margin-bottom:4px;">${t.kind==='nat'?'★ ':''}${t.name}</div>
+      <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:10px;">${kindLabel}${catLabel?' · '+catLabel:''} · ${whoLabel}</div>
+      <div style="background:var(--bg-card-hover);border-radius:6px;padding:8px 10px;margin-bottom:8px;">
+        <div style="font-size:0.66rem;color:var(--accent);margin-bottom:3px;">효과 (경기력·Tier3)</div>
+        <div style="font-size:0.82rem;color:${color};font-weight:700;">${_traitFxText(t,revealExact)}</div>
+      </div>
+      <div style="font-size:0.75rem;color:var(--text);margin-bottom:8px;"><b>${isArt?'획득 조건':'성향'}:</b> ${t.desc}</div>
+      <div style="font-size:0.68rem;color:var(--text-dim);line-height:1.55;background:rgba(103,232,249,0.06);border-left:2px solid #67e8f9;padding:6px 8px;border-radius:3px;">
+        💡 특성은 실제 <b>경기력·협상 반응</b>에만 반영됩니다. <b>OVR·연봉·트레이드 가치(TV)엔 잡히지 않는 '숨은 가치'</b>예요.
+        ${isArt?'인공 특성은 커리어 업적(타이틀·마일스톤·시상·드래프트)으로 획득하며, 슬롯 2칸을 랭크·우선순위로 교체합니다.':'자연 특성은 생성 시 15% 확률로 발생하며 영구·교체 불가입니다.'}
+      </div>
+    </div>`;
+  $('traitModal').classList.add('active');
+}
+
+// ── P2: 특성 도감 (분석 탭 서브탭) — 현재 UI 비활성(index.html 탭·analysis.js 분기 제거). 함수 보존(재활성 용이). ──
+function renderTraitCodex(){
+  const el=(typeof $!=='undefined')?$('analysisContent'):null;if(!el)return;
+  const ids=Object.keys(TRAITS);
+  const nat=ids.filter(id=>TRAITS[id].kind==='nat');
+  const art=ids.filter(id=>TRAITS[id].kind==='art');
+  const card=(id)=>{const t=TRAITS[id];const color=t.kind==='nat'?'#67e8f9':_RANK_COLOR[t.rank];
+    return `<div onclick="showTraitInfo('${id}')" style="cursor:pointer;display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.72rem;">
+      <span style="color:${color};font-weight:800;width:18px;text-align:center;">${t.kind==='nat'?'★':t.rank}</span>
+      <span style="color:var(--text-bright);font-weight:700;min-width:92px;">${t.name}</span>
+      <span style="color:${color};flex:1;">${_traitFxText(t,false)}</span>
+      <span style="color:var(--text-dim);font-size:0.64rem;max-width:36%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.desc}</span>
+    </div>`;};
+  const natCats={pos:'순수 긍정',edge:'양날의 검',neg:'약한 부정'};
+  const natBy=c=>nat.filter(id=>TRAITS[id].cat===c);
+  const artBy=r=>art.filter(id=>TRAITS[id].rank===r);
+  const sec=(title,body)=>`<div style="font-size:0.72rem;font-weight:700;color:var(--accent);margin:12px 0 3px;">${title}</div>${body}`;
+  el.innerHTML=`
+    <div class="card">
+      <div class="card-title">✨ 특성 도감 — 자연 ${nat.length} · 인공 ${art.length}</div>
+      <div style="font-size:0.7rem;color:var(--text-dim);line-height:1.6;background:var(--bg-card-hover);border-radius:6px;padding:8px 10px;margin-bottom:4px;">
+        슬롯 <b>자연 1 + 인공 2</b>칸. 인공은 커리어 업적으로 획득하며 랭크(S&gt;A&gt;B&gt;C)·우선순위로 교체됩니다.
+        특성은 <b>Tier3 경기력·협상</b>에만 반영 — OVR·연봉·TV엔 안 잡히는 '숨은 가치'. 카드를 누르면 상세가 열립니다.
+      </div>
+      ${sec('자연 특성 (생성 15%)',['pos','edge','neg'].map(c=>`<div style="font-size:0.66rem;color:var(--text-dim);margin-top:5px;">${natCats[c]}</div>`+natBy(c).map(card).join('')).join(''))}
+      ${sec('인공 특성 (커리어 업적)',['S','A','B','C'].map(r=>`<div style="font-size:0.66rem;color:${_RANK_COLOR[r]};margin-top:5px;">${r}랭크</div>`+artBy(r).map(card).join('')).join(''))}
+    </div>`;
 }

@@ -20,4 +20,5 @@ function renderAnalysis() {
   else if (_analysisTab === 'pitchers') renderAnalysisPitchers();
   else if (_analysisTab === 'scout') renderAnalysisScout();
   else if (_analysisTab === 'contracts') renderAnalysisContracts();
+  // else if (_analysisTab === 'codex') renderTraitCodex(); // P2 특성 도감 — 현재 UI 비활성(탭 제거). 재활성: index.html 탭 + 이 분기 복원
 }

@@ -8,20 +8,18 @@ function showAwards(){
     if(p.isPitcher&&qualifyPitcher(p, QUALIFY_RATIO_AWARDS))allP.push({p,team:t});
   }));
 
-  // MVP
-  const mvpList=[...allB].sort((a,b)=>{
-    const wa=ssAvg(a.p)*100+a.p.ss.hr*3+a.p.ss.rbi;
-    const wb=ssAvg(b.p)*100+b.p.ss.hr*3+b.p.ss.rbi;
-    return wb-wa;
-  });
+  const allQ=[...allB,...allP]; // 타자·투수 공통 후보 (세이버 WAR 기반)
+
+  // MVP — 타자·투수 공통, 정식 WAR 최고 (기존 타자 전용 → 투수 MVP 가능)
+  const mvpList=[...allQ].sort((a,b)=>warSaber(b.p)-warSaber(a.p));
   const mvp=mvpList[0]||null;
 
-  // 투수상 (사이영)
-  const cyList=[...allP].sort((a,b)=>ssERA(a.p)-ssERA(b.p));
+  // 투수상 (사이영) — 투수 WAR 최고 (FIP 기반, ERA 단독 아님)
+  const cyList=[...allP].sort((a,b)=>warPitcher(b.p)-warPitcher(a.p));
   const cyYoung=cyList[0]||null;
 
-  // 신인왕
-  const rookieList=[...allB].filter(e=>(e.p._seasonsPlayed||0)<=1).sort((a,b)=>ssAvg(b.p)-ssAvg(a.p));
+  // 신인왕 — 타자·투수 공통, 데뷔 1시즌 이하 WAR 최고 (기존 타자 전용 → 투수 신인 가능)
+  const rookieList=[...allQ].filter(e=>(e.p._seasonsPlayed||0)<=1).sort((a,b)=>warSaber(b.p)-warSaber(a.p));
   const rookie=rookieList[0]||null;
 
   // 홈런왕

@@ -42,6 +42,7 @@ function _simAIGame(teamA,teamB){
     ord=ord||{i:0}; // 타순 연속 (게임 단위 유지 — 이닝마다 1번부터 리셋 금지)
     let outs=0,runs=0,pa=0;
     if(!pitcher||batters.length===0)return rand(0,3);
+    const _pf=getParkFactor(teamA); // 홈구장(teamA) 파크팩터 — 양팀 공통
 
     // 팀 컨셉 보너스
     let batBonus=0,pitBonus=0;
@@ -84,10 +85,10 @@ function _simAIGame(teamA,teamB){
 
       // 동적 회귀 + TTO 판정
       const reg=_calcRegression(b,pitcher);
-      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod*reg.erMod);
+      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod*reg.erMod,_pf);
 
       if(result==='HR'){
-        bs.ab++;bs.h++;bs.hr++;ps.ha++;
+        bs.ab++;bs.h++;bs.hr++;ps.ha++;ps.phr++;
         let r=1;bases.forEach((bb,i)=>{if(bb){r++;bases[i]=null;}});
         bs.rbi+=r;ps.er+=r;runs+=r;
       }else if(result==='K'){
@@ -137,7 +138,7 @@ function _simAIGame(teamA,teamB){
           }else{outs++;ps.outs=(ps.outs||0)+1;}
         }else{outs++;ps.outs=(ps.outs||0)+1;}
       }
-      pitcher._simNP=(pitcher._simNP||0)+1;
+      pitcher._simNP=(pitcher._simNP||0)+((result==='K'||result==='BB')?rand(4,7):rand(2,4)); // PA당 투구수 추정 — maxNp(투구수)와 단위 정합(간이 경로 강판·피로)
       pitcher.currentStamina=Math.max(0,Math.round(100*(1-pitcher._simNP/getMaxPitches(pitcher))));
       if(walkoffTarget>0&&runs>=walkoffTarget) break;
     }
@@ -287,6 +288,7 @@ function _simMyGame(){
     const batters=getStartingBatters(batTeam);
     let pitcher=curPitcher;
     if(!pitcher||batters.length===0)return rand(0,4);
+    const _pf=getParkFactor(homeTeam); // 홈구장 파크팩터 — 양팀 공통
     const fldStarters=getStartingBatters(pitcherTeam);
     const avgFld=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effFielding(p),0)/fldStarters.length:50;
 
@@ -324,10 +326,10 @@ function _simMyGame(){
 
       // 동적 회귀 + TTO 판정
       const reg=_calcRegression(b,pitcher);
-      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod*reg.erMod);
+      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod*reg.erMod,_pf);
 
       if(result==='HR'){
-        bs.ab++;bs.h++;bs.hr++;ps.ha++;
+        bs.ab++;bs.h++;bs.hr++;ps.ha++;ps.phr++;
         let r=1;bases.forEach((bb,i)=>{if(bb){r++;bases[i]=null;}});
         bs.rbi+=r;ps.er+=r;runs+=r;
       }else if(result==='K'){
@@ -377,7 +379,7 @@ function _simMyGame(){
           }else{outs++;ps.outs=(ps.outs||0)+1;}
         }else{outs++;ps.outs=(ps.outs||0)+1;}
       }
-      pitcher._simNP=(pitcher._simNP||0)+1;
+      pitcher._simNP=(pitcher._simNP||0)+((result==='K'||result==='BB')?rand(4,7):rand(2,4)); // PA당 투구수 추정 — maxNp(투구수)와 단위 정합(간이 경로 강판·피로)
       pitcher.currentStamina=Math.max(0,Math.round(100*(1-pitcher._simNP/getMaxPitches(pitcher))));
       if(walkoffTarget>0&&runs>=walkoffTarget) break;
     }

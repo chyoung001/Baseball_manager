@@ -14,8 +14,8 @@ function renderAnalysisBatters() {
         <table class="data-table" style="font-size:0.72rem;">
           <thead><tr>
             <th>이름</th><th>포지션</th><th>나이</th><th>타석</th><th>안타</th>
-            <th>AVG</th><th>OBP</th><th>HR</th><th>XBH</th><th>RBI</th>
-            <th>BB</th><th>K</th><th>SB</th><th>OVR</th>
+            <th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th><th>HR</th><th>XBH</th><th>RBI</th>
+            <th>BB</th><th>K</th><th>SB</th><th>wRC+</th><th>WAR</th><th>OVR</th>
           </tr></thead>
           <tbody>${batters.map(p => {
             const s = p.ss || {};
@@ -30,12 +30,15 @@ function renderAnalysisBatters() {
               <td>${ab}</td><td>${h}</td>
               <td style="color:${avg >= 0.300 ? '#10b981' : avg >= 0.250 ? '#f59e0b' : '#ef4444'};font-weight:700;">${avg.toFixed(3)}</td>
               <td style="color:${obp >= 0.380 ? '#10b981' : obp >= 0.320 ? '#f59e0b' : 'var(--text)'};">${obp.toFixed(3)}</td>
+              <td>${ssSLG(p).toFixed(3)}</td><td style="font-weight:600;">${ssOPS(p).toFixed(3)}</td>
               <td style="font-weight:700;color:${(s.hr || 0) >= 10 ? '#a855f7' : 'var(--text)'};">${s.hr || 0}</td>
               <td>${s.xbh || 0}</td>
               <td>${s.rbi || 0}</td>
               <td>${s.bb || 0}</td>
               <td style="color:${(s.k || 0) > ab * 0.25 ? '#ef4444' : 'var(--text)'};">${s.k || 0}</td>
               <td>${s.sb || 0}</td>
+              <td style="color:${ssWRCplus(p) >= 100 ? '#10b981' : 'var(--text-dim)'};">${ssWRCplus(p)}</td>
+              <td style="font-weight:700;">${warBatter(p).toFixed(1)}</td>
               <td style="color:${statColor(o)};font-weight:700;">${o}</td>
             </tr>`;
           }).join('')}</tbody>

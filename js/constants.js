@@ -25,6 +25,14 @@ const TEAMS_DATA=[
   {name:'타이거즈',emoji:'🐯',desc:'센터라인 수비로 점수를 틀어막는 질식 야구',concept:'defense',conceptLabel:'수비 군단',conceptColor:'#f97316',basePop:60,baseBudget:90,baseFacility:65,baseDevLevel:55},
 ];
 
+// ── 파크팩터 (P3: 8구장 차등 — HR ±7% / BABIP ±5%, 홈구장 공통 적용. 8값 평균 ≈1.0로 리그 중립) ──
+// 정적 상수(팀명 키) — 팀 객체·세이브 미변경(마이그레이션 0). 홈구장이 양팀 타석에 공통 적용(홈보정 아님).
+const PARK_FACTORS={
+  '바이킹스':{hr:1.07,hit:1.02}, '세이버스':{hr:0.95,hit:0.97}, '드림즈':{hr:1.00,hit:1.00}, '이글스':{hr:0.97,hit:0.99},
+  '트윈스':{hr:0.93,hit:1.03}, '앤젤스':{hr:0.98,hit:0.98}, '데빌즈':{hr:1.05,hit:1.05}, '타이거즈':{hr:1.00,hit:0.96},
+};
+function getParkFactor(team){ return (team&&PARK_FACTORS[team.name])||{hr:1,hit:1}; }
+
 const TRAININGS=[
   {icon:'🏏',name:'컨택 훈련',desc:'타자 컨택 상승',stat:'contact',target:'batter'},
   {icon:'💪',name:'파워 훈련',desc:'타자 파워 상승',stat:'power',target:'batter'},
