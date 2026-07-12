@@ -60,6 +60,7 @@ function saveGame(){
       teams:G.teams.map(_compressTeam),
       marketPlayers:G.marketPlayers.map(_compressPlayer),
       _lastSeasonRev:G._lastSeasonRev||null, // 스토브 결산 스냅샷 (재로드 시 표시 정합)
+      _lastReserveDrain:G._lastReserveDrain||0, // 준비금 감가 스냅샷 (결산 화면 재로드 정합)
     };
     localStorage.setItem(SAVE_KEY,JSON.stringify(snap));
   }catch(e){
@@ -96,6 +97,7 @@ function _restoreFromData(d){
   G._stoveSettledSeason=d._stoveSettledSeason||0;
   G._traitsEvaluatedSeason=d._traitsEvaluatedSeason||0;
   G._lastSeasonRev=d._lastSeasonRev||null; // 미보유 세이브 로드 시 이전 게임 잔재도 초기화
+  G._lastReserveDrain=d._lastReserveDrain||0; // 준비금 감가 스냅샷 복원 (미보유 세이브는 0)
   G.previousSeasonStandings=d.previousSeasonStandings||[];
   G.postseasonBracket=d.postseasonBracket||null;
   G.seasonModifiers=d.seasonModifiers||{};

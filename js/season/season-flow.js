@@ -83,10 +83,19 @@ function showStoveLeague(){
       if(team===G.myTeam&&share>0)showToast(`🤝 리그 분배금 +${won(share)} (연대 기금+사치세)`);
     });
 
-    // 연간 고정 지출 차감 (모든 팀)
+    // 연간 고정 지출 + 선수 급여 차감 (모든 팀) — 급여는 실지출(현금 차감). 이전엔 가용예산 제약으로만 쓰여
+    // 예산에서 안 빠져 무한 흑자·사치세 사문화를 유발하던 버그 수정.
     G.teams.forEach(team=>{
       const upkeep=calcAnnualUpkeep(team);
-      team.budget=Math.floor(team.budget-upkeep.total);
+      team.budget=Math.floor(team.budget-upkeep.total-getPayroll(team));
+    });
+    // 준비금 소프트캡 감가 (지속형 현금 싱크) — 인프라 재투자가 포화하면 흡수 못 하는 잉여를
+    // 구단주 배당으로 소각해 예산을 영구 유계로. 초과분(>CAP)에만 적용 → 캡 아래 팀·파산은 무영향.
+    G.teams.forEach(team=>{
+      const excess=(team.budget||0)-RESERVE_SOFT_CAP;
+      const drain=excess>0?Math.floor(excess*RESERVE_DECAY_RATE):0;
+      if(drain>0)team.budget=(team.budget||0)-drain;
+      if(team===G.myTeam)G._lastReserveDrain=drain; // 결산 표시용 스냅샷 (미발생 시 0 → 스테일 방지)
     });
     // 파산 체크: 유지비 차감 후 내 팀 예산이 음수면 게임오버
     if(checkBankruptcy()) return;
@@ -212,6 +221,7 @@ function showStoveLeague(){
       <div style="font-size:0.68rem;color:var(--text-dim);line-height:1.6;">
         👔 코칭스태프 -${won(upkeep.staffCost)} · 🏟️ 경기장 -${won(upkeep.stadiumCost)} · 🏗️ 시설 -${won(upkeep.facilityCost)} · 🌱 퓨처스 -${won(upkeep.farmCost)}
       </div>
+      ${(G._lastReserveDrain||0)>0?`<div style="font-size:0.68rem;color:#f59e0b;line-height:1.6;margin-top:4px;">🏦 구단주 배당 -${won(G._lastReserveDrain)} (준비금 ${won(RESERVE_SOFT_CAP)} 초과분 ${Math.round(RESERVE_DECAY_RATE*100)}% 회수 — 자금을 전력·시설에 쓰세요)</div>`:''}
     </div>`:'';
 
   // 수익 정보 (시즌 1 첫 시작 시에는 수익 정산 없음) — 정산 시점 스냅샷 우선 (재계산 오차 방지)
@@ -366,8 +376,22 @@ function _startNextSeason(){
 
   // AI 오프시즌 보강
   G.teams.filter(team=>team!==G.myTeam).forEach(team=>{
-    if(rand(1,100)<=50)team.facilityLevel=clamp(team.facilityLevel+rand(1,4),0,100);
-    if(rand(1,100)<=40)team.devLevel=clamp(team.devLevel+rand(1,4),0,100);
+    // 잉여 현금 재투자 (경쟁 지출) — 준비금 120억 초과분의 45%를 인프라에 투입.
+    // 유지비 기여 큰 항목(코치·구장·특수시설) 우선 → 전력↑ + 연 유지비↑(현금 싱크). 로스터 비대 없음.
+    let war=Math.floor(Math.max(0,(team.budget||0)-120)*0.45);
+    const spend=c=>{ if(war>=c){war-=c;team.budget=Math.floor((team.budget||0)-c);return true;} return false; };
+    team.coachStaff=team.coachStaff||{};
+    let guard=0;
+    while(war>=8 && guard++<60){
+      const cks=Object.keys(team.coachStaff).filter(k=>(team.coachStaff[k]||0)<5);
+      if(cks.length){ const k=pick(cks),lv=team.coachStaff[k]||0; if(spend(8*(lv+1))){team.coachStaff[k]=lv+1;continue;} }
+      if((team.slumpCareLevel||0)<4 && spend(FACILITY4_COSTS[team.slumpCareLevel||0])){team.slumpCareLevel=(team.slumpCareLevel||0)+1;continue;}
+      if((team.mentalCoachLevel||0)<4 && spend(FACILITY4_COSTS[team.mentalCoachLevel||0])){team.mentalCoachLevel=(team.mentalCoachLevel||0)+1;continue;}
+      if((team.stadiumLevel||0)<STADIUM_MAX_LEVEL && spend(Math.floor(Math.pow((team.stadiumLevel||0)+1,2)*8))){team.stadiumLevel=(team.stadiumLevel||0)+1;continue;}
+      const lks=['devLevel','scoutingLevel','analyticsLevel','medicalLevel','facilityLevel'].filter(k=>(team[k]||0)<100);
+      if(lks.length && spend(rand(6,10))){ const k=pick(lks); team[k]=clamp((team[k]||0)+rand(3,6),0,100); continue; }
+      break;
+    }
     if(team.budget>40){
       const np=rand(1,2)===1?genBatter(pick(BAT_POS),null,team.concept):genPitcher(pick(['SP','CP','SU','MR','LR']),null,team.concept);
       np.role=np.isPitcher?(np.pos==='SP'?'rotation':'bullpen'):'bench';
