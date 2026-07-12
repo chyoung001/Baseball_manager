@@ -199,7 +199,7 @@ function showAllStarBreak(){
   $('seasonModal').classList.add('active');
 }
 
-// ===================== ROOKIE DRAFT (5 Rounds × 8 Teams) =====================
+// ===================== ROOKIE DRAFT (6 Rounds × 8 Teams) =====================
 function _startRookieDraft(){
   $('seasonModal').classList.remove('active');
 

@@ -13,7 +13,7 @@ function _fatigueDebuff(np){
   };
 }
 
-// ── 84경기 맞춤형 동적 회귀 보정 ──
+// ── 63경기 맞춤형 동적 회귀 보정 ──
 function _calcRegression(batter, pitcher){
   let hitMod=1.0, erMod=1.0;
   // 타자: REG_PA_THRESH 타석 이상부터 평균 회귀

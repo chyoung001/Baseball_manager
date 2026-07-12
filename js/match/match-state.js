@@ -4,7 +4,7 @@
 let matchState={};
 let _luRowCache=null; // 라인업 행 캐시 (match-ui.js에서 사용)
 
-// TTO + BABIP 엔진 상수 (84경기 최적화)
+// TTO + BABIP 엔진 상수 (63경기 최적화)
 const TTO_BASE_HR    = 0.025;   // 기본 홈런율 2.5%
 const TTO_BASE_K     = 0.180;   // 기본 삼진율 18%
 const TTO_BASE_BB    = 0.090;   // 기본 볼넷율 9%

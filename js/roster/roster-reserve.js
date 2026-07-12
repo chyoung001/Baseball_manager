@@ -86,7 +86,7 @@ function renderFutures() {
         <tbody>${playerRows(pitchers)||'<tr><td colspan="8" style="color:var(--text-dim);text-align:center;">없음</td></tr>'}</tbody></table>
       </div>
       ${il.length>0?`
-      <div class="section-divider" style="margin-top:18px;">🏥 부상자 ���단 (IL) <span class="section-count">${il.length}</span></div>
+      <div class="section-divider" style="margin-top:18px;">🏥 부상자 명단 (IL) <span class="section-count">${il.length}</span></div>
       <div style="font-size:0.68rem;color:var(--text-dim);margin-bottom:8px;">IL 선수는 경기 출전 불가. 자동 복귀 후 2군 재활 3경기. 조기 복귀 시 재활 5경기 패널티.</div>
       <div style="overflow-x:auto;">
         <table class="data-table"><thead><tr><th>이름</th><th>포지션</th><th>나이</th><th>OVR</th><th>복귀까지</th><th></th></tr></thead>

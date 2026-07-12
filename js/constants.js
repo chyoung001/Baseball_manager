@@ -110,7 +110,7 @@ const IL_COOLDOWN_ON_RETURN = 5; // IL 복귀 후 콜업 쿨타임
 // ── 규정타석/규정이닝 (리더보드 최소 기준) ──
 const QUALIFY_PA_PER_GAME   = 2.0;  // 규정타석 계수 (PA/경기)
 const QUALIFY_OUTS_PER_GAME = 1.0;  // 규정이닝 계수 (outs/경기)
-const QUALIFY_RATIO_LEAGUE  = 0.50; // 리그 리�� (규정의 50%)
+const QUALIFY_RATIO_LEAGUE  = 0.50; // 리그 리더보드 (규정의 50%)
 const QUALIFY_RATIO_AWARDS  = 0.70; // 시상 (규정의 70%)
 const QUALIFY_RATIO_DASH    = 0.30; // 대시보드 (규정의 30%)
 
@@ -229,7 +229,7 @@ const POS_WEIGHT={
 const RETIRE_BASE_PROB=10;        // 은퇴 기본 확률 (%)
 const RETIRE_PROB_PER_SEASON=12;  // 초과 시즌당 추가 확률 (%)
 
-// ===================== STAT SCALE (MLB 20-80) =====================
+// ===================== STAT SCALE (1~100) =====================
 // NOTE: v2 설계는 내부 1~100 스케일. P1에서 STAT_MIN/STAT_MAX만 바꾸면
 //       clamp(x,STAT_MIN,STAT_MAX) 전 사용처가 자동 반영되도록 중앙화됨.
 const STAT_MIN=1;
