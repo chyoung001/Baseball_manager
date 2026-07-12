@@ -346,6 +346,10 @@
   <div class="modal"><button class="modal-close" onclick="$('seasonModal').classList.remove('active');">&times;</button><h2 id="modalTitle"></h2><div id="modalBody"></div></div>
 </div>
 
+<div class="modal-overlay" id="traitModal" onclick="if(event.target===this)this.classList.remove('active');">
+  <div class="modal" style="max-width:340px;"><button class="modal-close" onclick="$('traitModal').classList.remove('active');">&times;</button><h2 style="font-size:0.9rem;">✨ 특성</h2><div id="traitModalBody"></div></div>
+</div>
+
 <!-- Scripts: 의존성 순서대로 로드 -->
 <script src="js/constants.js"></script>
 <script src="js/utils/utils-core.js"></script>

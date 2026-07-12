@@ -540,8 +540,10 @@ tr.drag-row.drag-over { outline: 2px solid var(--accent); background: rgba(245,1
 .sr-traits { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:10px; }
 
 /* 특성 뱃지 (풀/축약형) — 색상은 랭크별 인라인 지정 */
-.trait-badge { display:inline-block; font-size:0.62rem; padding:2px 8px; border-radius:4px; border:1px solid; cursor:help; line-height:1.5; }
-.trait-mini { font-size:0.6rem; font-weight:800; margin-left:4px; letter-spacing:0.5px; cursor:help; vertical-align:middle; }
+.trait-badge { display:inline-block; font-size:0.62rem; padding:2px 8px; border-radius:4px; border:1px solid; cursor:pointer; line-height:1.5; transition:filter 0.12s; }
+.trait-badge:hover { filter:brightness(1.35); }
+.trait-mini { font-size:0.6rem; font-weight:800; margin-left:4px; letter-spacing:0.5px; cursor:pointer; vertical-align:middle; }
+.trait-mini:hover { filter:brightness(1.4); }
 
 /* ── Minor League System ─────────────────────────────────── */
 .minor-badge {
