@@ -17,6 +17,8 @@ function switchTab(tab){
 function updateHeader(){
   $('hdrTeam').innerHTML=`${G.myTeam.emoji} <span>${G.myTeam.name}</span>`;
   $('hdrSeason').textContent=G.season;$('hdrBudget').textContent=G.myTeam.budget;
+  const _ap=$('hdrApproval');
+  if(_ap){const a=G.myTeam.approval!=null?G.myTeam.approval:APPROVAL_START;_ap.textContent=a;_ap.style.color=a<=APPROVAL_WARN?'#ef4444':a<=40?'#f59e0b':'';}
   $('hdrPop').innerHTML=starsHTML(G.myTeam.popularity);$('hdrGame').textContent=G.gameNum;
   const tg=$('hdrTotalGames');if(tg)tg.textContent=G.totalGames||TOTAL_REGULAR;
   // 시리즈 표시 (정규시즌 중에만) — 예: "🆚 5/21시리즈 vs 세이버스 (2/3)"

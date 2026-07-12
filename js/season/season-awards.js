@@ -1,6 +1,19 @@
 // ===================== SEASON AWARDS (Awards, Retirement) =====================
 // ===================== PHASE 6: AWARDS & RETIREMENT =====================
 function showAwards(){
+  // P6 구단주 신임도 평가 (최종 순위·우승·재정 확정 시점) — 멱등 가드(재진입 중복 적용 방지)
+  if(G._approvalEvalSeason!==G.season){
+    G._approvalEvalSeason=G.season;
+    const _std=[...G.teams].sort((a,b)=>(b.wins/(b.wins+b.losses||1))-(a.wins/(a.wins+a.losses||1)));
+    const _myRank=_std.indexOf(G.myTeam)+1;
+    const _champRec=((G.postseasonBracket&&G.postseasonBracket.results)||[]).find(r=>r.champion);
+    const _isChamp=!!(_champRec&&_champRec.winner===G.myTeam.name);
+    // 재정 페널티는 당시즌 순수익 기준 — _lastSeasonRev는 스토브(phase8)에서만 세팅돼
+    // 시상식(phase6)에선 전년 값이므로, 당시즌 순위로 수익을 재계산해 시즌 정합을 맞춘다.
+    const _net=calcSeasonRevenue(G.myTeam,_myRank).net;
+    _applyApprovalDelta(G.myTeam,_myRank,_isChamp,_net);
+  }
+
   const allB=[];const allP=[];
   G.teams.forEach(t=>t.roster.forEach(p=>{
     if(!p.ss)return;
@@ -93,7 +106,11 @@ function showAwards(){
       <div style="margin-top:14px;font-size:0.72rem;color:var(--text-dim);margin-bottom:6px;">👋 은퇴 선수</div>
       ${retirees.map(r=>'<div style="font-size:0.75rem;padding:3px 0;">'+r.emoji+' '+r.name+' (OVR '+r.ovr+', '+r.seasonsPlayed+'시즌)</div>').join('')}
       `:''}
-      <button class="btn btn-primary" onclick="$('seasonModal').classList.remove('active');G.phase='gm_meeting';advancePhase();" style="width:100%;margin-top:16px;">▶ GM 회의로</button>
+      <div class="card" style="background:var(--bg-card-hover);padding:10px;margin-top:14px;">
+        <div style="font-size:0.72rem;color:#f59e0b;margin-bottom:4px;">🏛️ 구단주 신임도</div>
+        <div style="font-size:0.8rem;">목표 ${G._lastApprovalGoal}위 → 실제 ${G._lastApprovalRank}위 · <b style="color:${G._lastApprovalDelta>=0?'#10b981':'#ef4444'};">${G._lastApprovalDelta>=0?'+':''}${G._lastApprovalDelta}</b> → <b>${G.myTeam.approval}/100</b> ${G.myTeam.approval<=APPROVAL_DISMISS?'<span style="color:#ef4444;">⚠️ 경질</span>':G.myTeam.approval<=APPROVAL_WARN?'<span style="color:#f59e0b;">⚠️ 경고</span>':'<span style="color:#10b981;">✅ 정상</span>'}</div>
+      </div>
+      <button class="btn btn-primary" onclick="if(!checkApprovalDismissal()){$('seasonModal').classList.remove('active');G.phase='gm_meeting';advancePhase();}" style="width:100%;margin-top:16px;">▶ GM 회의로</button>
     </div>`;
   $('seasonModal').classList.add('active');
 }
