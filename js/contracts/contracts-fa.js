@@ -40,8 +40,10 @@ function _runAIFreeAgentBidding(){
       // P2-4: 소프트캡(사치세 라인) 근접 시 추가 영입 중단 — AI가 모르고 세금 구간에 눌러앉는 것 방지
       const payroll=getPayroll(t);
       if(payroll+marketSalary>getLuxuryTaxLine()*1.05) return false;
-      // 높은 OVR → 더 많은 팀이 관심 (랜덤 경쟁)
-      const interest=pOvr>=84?60:pOvr>=75?45:pOvr>=67?30:20;
+      // 잉여 현금 팀은 캡 근처까지 경쟁적으로 전력 보강 (설계: 지출로 잉여 소모·사치세 활성)
+      // 예산 여유 크고 페이롤이 소프트캡에 여유 있을 때만 — 세금 구간 눌러앉기 방지
+      const surplus=(t.budget||0)>250 && payroll<getLuxuryTaxLine()*0.80;
+      const interest=surplus?92:(pOvr>=84?60:pOvr>=75?45:pOvr>=67?30:20);
       return canAfford&&(posMatch||rand(1,100)<=interest);
     });
 
@@ -70,6 +72,12 @@ function _runAIFreeAgentBidding(){
     initSeasonStats(fa);
     winner.roster.push(fa);
     winner.budget=+(winner.budget-transferFee).toFixed(1);
+    // 로스터 비대 방지 — 정원 초과 시 최저 가치 2군/벤치 방출 (공격 영입의 부작용 상쇄)
+    if(winner.roster.length>FUTURES_ORG_MAX){
+      const cut=winner.roster.filter(p=>p!==fa&&(p.status==='futures'||p.status==='developmental'||p.role==='bench'))
+        .sort((a,b)=>_aiPlayerValue(a)-_aiPlayerValue(b))[0];
+      if(cut)winner.roster.splice(winner.roster.indexOf(cut),1);
+    }
 
     G.faBiddingLog.push({
       name:fa.name, pos:fa.pos, ovr:pOvr, age:fa.age||22,
