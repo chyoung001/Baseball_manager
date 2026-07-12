@@ -41,9 +41,12 @@ function renderDashboard(){
   const rotation=getRotation(t);
   const avgPOvr=Math.round(rotation.reduce((s,p)=>s+ovrPitcher(p),0)/Math.max(1,rotation.length));
   const overseas=t.roster.filter(p=>p.role==='overseas');
+  const _ap=t.approval!=null?t.approval:APPROVAL_START;
+  const _apCol=_ap<=APPROVAL_WARN?'#ef4444':_ap<=40?'#f59e0b':'#10b981';
 
   $('dashTeamInfo').innerHTML=`
     <div style="font-size:0.78rem;margin-bottom:8px;"><span style="color:var(--text-dim);">컨셉:</span> <span style="color:${t.conceptColor};font-weight:700;">${t.conceptLabel}</span></div>
+    <div style="font-size:0.78rem;margin-bottom:8px;"><span style="color:var(--text-dim);">🏛️ 구단주 신임도:</span> <span style="color:${_apCol};font-weight:700;">${_ap}/100</span>${t._seasonGoalRank?` <span style="font-size:0.68rem;color:var(--text-dim);">(목표 ${t._seasonGoalRank}위)</span>`:''}<div class="prog-bar"><div class="prog-bar-fill" style="width:${_ap}%;background:${_apCol};"></div></div></div>
     <div style="font-size:0.78rem;margin-bottom:4px;"><span style="color:var(--text-dim);">타선 평균 OVR:</span> <span style="color:${statColor(avgOvr)};font-weight:700;">${avgOvr}</span> (${starters.length}명)</div>
     <div style="font-size:0.78rem;margin-bottom:8px;"><span style="color:var(--text-dim);">로테이션 평균 OVR:</span> <span style="color:${statColor(avgPOvr)};font-weight:700;">${avgPOvr}</span> (${rotation.length}명)</div>
     ${overseas.length>0?`<div style="font-size:0.72rem;color:#67e8f9;margin-bottom:6px;">✈️ 해외연수 중: ${overseas.map(p=>p.name).join(', ')}</div>`:''}

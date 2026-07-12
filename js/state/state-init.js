@@ -24,6 +24,8 @@ function initTeams(myIdx){
       moralBoost:0,
       eventRevenue:0,
       scoutCampUsed:0,
+      approval:APPROVAL_START,   // P6 구단주 신임도 (0~100, 평가·경질은 myTeam만 대상)
+      _seasonGoalRank:null,      // 이번 시즌 구단주 제시 목표 순위 (프리시즌에 설정)
     };
   });
   G.myTeam=G.teams[myIdx];

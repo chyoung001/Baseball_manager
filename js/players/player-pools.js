@@ -4,19 +4,22 @@
 // 목표 기대값: S 1명, A 7명, B 20명, C 15명, D 5명
 function generateDraftPool(){
   const pool=[];
-  // 1. 최소 보장 (1~3픽용 대어)
+  // GM 회의 '드래프트 풍년'(draft_bumper) 가결 시 등급 확률 상향 — 풀 크기(48)는 불변(라운드 정합 유지).
+  // 이전엔 seasonModifiers.draftQualityBonus가 어디서도 소비되지 않아 가결해도 효과 0이던 死 modifier.
+  const dq=(G.seasonModifiers&&G.seasonModifiers.draftQualityBonus)||0;
+  // 1. 최소 보장 (1~3픽용 대어) — 풍년 시 3번째 대어도 S로 승급
   pool.push(genDraftProspect(Math.random()<0.5, 'S'));
   pool.push(genDraftProspect(Math.random()<0.5, 'A'));
-  pool.push(genDraftProspect(Math.random()<0.5, 'A'));
-  // 2. 나머지 45명 확률형 생성
+  pool.push(genDraftProspect(Math.random()<0.5, dq>0?'S':'A'));
+  // 2. 나머지 45명 확률형 생성 (풍년 시 상위 등급 임계 확대 → D↓)
   for(let i=0;i<45;i++){
     const r=Math.random()*100;
     let g='D';
-    if(r<0.5) g='S';       // 0.5% (황금 세대 잭팟)
-    else if(r<12.0) g='A'; // 11.5%
-    else if(r<56.0) g='B'; // 44.0%
-    else if(r<90.0) g='C'; // 34.0%
-    // 나머지 10% = D급
+    if(r<0.5+dq*0.3) g='S';       // 기본 0.5% (황금 세대 잭팟)
+    else if(r<12.0+dq*2.5) g='A'; // 기본 11.5%
+    else if(r<56.0+dq*3) g='B';   // 기본 44.0%
+    else if(r<90.0+dq*2) g='C';   // 기본 34.0%
+    // 나머지 = D급
     pool.push(genDraftProspect(Math.random()<0.5, g));
   }
   // 3. 스카우팅 블라인드 (셔플)

@@ -24,6 +24,51 @@ function checkBankruptcy(){
   return true;
 }
 
+// ── 구단주 신임도 (P6 '경영 압박') ──
+// 구단주 자동 목표 순위 제시: 전년 순위 + 페이롤(전력 기대) 평균에서 1 상향(늘 조금 더 원함).
+function _proposeSeasonGoal(){
+  const N=G.teams.length;
+  let prevRank=Math.ceil(N/2); // 전년 기록 없으면 중위
+  const ps=G.previousSeasonStandings;
+  if(ps&&ps.length){ const r=ps.indexOf(G.teams.indexOf(G.myTeam)); if(r>=0)prevRank=r+1; }
+  const myPay=getPayroll(G.myTeam);
+  const payRank=G.teams.filter(t=>getPayroll(t)>myPay).length+1; // 1=최고 페이롤
+  return clamp(Math.round((prevRank+payRank)/2)-1,1,N);
+}
+// 시즌 성적·우승·재정으로 신임도 증감 (시상식 시점). 목표 상회 +, 미달 −.
+function _applyApprovalDelta(team,rank,isChamp,net){
+  const goal=team._seasonGoalRank||Math.ceil(G.teams.length/2);
+  let delta=(goal-rank)*APPROVAL_RANK_WEIGHT;
+  if(isChamp)delta+=APPROVAL_CHAMP_BONUS;
+  else if(rank<=POSTSEASON_TEAMS)delta+=APPROVAL_POSTSEASON_BONUS;
+  if(net<0)delta+=APPROVAL_FINANCE_PENALTY;
+  delta=Math.round(delta);
+  const before=team.approval!=null?team.approval:APPROVAL_START;
+  team.approval=clamp(before+delta,0,100);
+  if(team===G.myTeam){G._lastApprovalDelta=delta;G._lastApprovalGoal=goal;G._lastApprovalRank=rank;}
+  return delta;
+}
+// 경질 게임오버 판정 (파산과 병렬) — 신임도 ≤ 0이면 경질 통보·게임 진행 차단.
+function checkApprovalDismissal(){
+  if(!G.myTeam||(G.myTeam.approval!=null?G.myTeam.approval:APPROVAL_START)>APPROVAL_DISMISS)return false;
+  $('modalTitle').textContent='📋 구단주 경질 통보';
+  $('modalBody').innerHTML=`
+    <div style="text-align:center;padding:24px 0;">
+      <div style="font-size:3rem;margin-bottom:12px;">📉</div>
+      <div style="font-size:1rem;color:#ef4444;font-weight:700;margin-bottom:8px;">신임도 상실 — 단장직 경질</div>
+      <div style="font-size:0.8rem;color:var(--text-dim);line-height:1.8;margin-bottom:20px;">
+        구단주 신임도가 <b style="color:#ef4444;">0</b>으로 떨어졌습니다.<br>
+        구단주가 성적 부진을 이유로 당신을 경질했습니다.<br>
+        <span style="font-size:0.7rem;color:#6b7280;">시즌 ${G.season} · ${G.myTeam.wins}승 ${G.myTeam.losses}패 · 목표 ${G._lastApprovalGoal||'-'}위 / 실제 ${G._lastApprovalRank||'-'}위</span>
+      </div>
+      <button class="btn btn-primary" onclick="newGame();" style="width:100%;background:#ef4444;border-color:#ef4444;">🔄 새 게임 시작</button>
+    </div>`;
+  $('seasonModal').classList.add('active');
+  const nb=$('btnNavAdvance');if(nb)nb.disabled=true;
+  const pb=$('btnPlayMatch');if(pb)pb.disabled=true;
+  return true;
+}
+
 // ===================== PHASE 7: STOVE LEAGUE =====================
 function showStoveLeague(){
   const t=G.myTeam;
@@ -83,10 +128,19 @@ function showStoveLeague(){
       if(team===G.myTeam&&share>0)showToast(`🤝 리그 분배금 +${won(share)} (연대 기금+사치세)`);
     });
 
-    // 연간 고정 지출 차감 (모든 팀)
+    // 연간 고정 지출 + 선수 급여 차감 (모든 팀) — 급여는 실지출(현금 차감). 이전엔 가용예산 제약으로만 쓰여
+    // 예산에서 안 빠져 무한 흑자·사치세 사문화를 유발하던 버그 수정.
     G.teams.forEach(team=>{
       const upkeep=calcAnnualUpkeep(team);
-      team.budget=Math.floor(team.budget-upkeep.total);
+      team.budget=Math.floor(team.budget-upkeep.total-getPayroll(team));
+    });
+    // 준비금 소프트캡 감가 (지속형 현금 싱크) — 인프라 재투자가 포화하면 흡수 못 하는 잉여를
+    // 구단주 배당으로 소각해 예산을 영구 유계로. 초과분(>CAP)에만 적용 → 캡 아래 팀·파산은 무영향.
+    G.teams.forEach(team=>{
+      const excess=(team.budget||0)-RESERVE_SOFT_CAP;
+      const drain=excess>0?Math.floor(excess*RESERVE_DECAY_RATE):0;
+      if(drain>0)team.budget=(team.budget||0)-drain;
+      if(team===G.myTeam)G._lastReserveDrain=drain; // 결산 표시용 스냅샷 (미발생 시 0 → 스테일 방지)
     });
     // 파산 체크: 유지비 차감 후 내 팀 예산이 음수면 게임오버
     if(checkBankruptcy()) return;
@@ -212,6 +266,7 @@ function showStoveLeague(){
       <div style="font-size:0.68rem;color:var(--text-dim);line-height:1.6;">
         👔 코칭스태프 -${won(upkeep.staffCost)} · 🏟️ 경기장 -${won(upkeep.stadiumCost)} · 🏗️ 시설 -${won(upkeep.facilityCost)} · 🌱 퓨처스 -${won(upkeep.farmCost)}
       </div>
+      ${(G._lastReserveDrain||0)>0?`<div style="font-size:0.68rem;color:#f59e0b;line-height:1.6;margin-top:4px;">🏦 구단주 배당 -${won(G._lastReserveDrain)} (준비금 ${won(RESERVE_SOFT_CAP)} 초과분 ${Math.round(RESERVE_DECAY_RATE*100)}% 회수 — 자금을 전력·시설에 쓰세요)</div>`:''}
     </div>`:'';
 
   // 수익 정보 (시즌 1 첫 시작 시에는 수익 정산 없음) — 정산 시점 스냅샷 우선 (재계산 오차 방지)
@@ -366,8 +421,22 @@ function _startNextSeason(){
 
   // AI 오프시즌 보강
   G.teams.filter(team=>team!==G.myTeam).forEach(team=>{
-    if(rand(1,100)<=50)team.facilityLevel=clamp(team.facilityLevel+rand(1,4),0,100);
-    if(rand(1,100)<=40)team.devLevel=clamp(team.devLevel+rand(1,4),0,100);
+    // 잉여 현금 재투자 (경쟁 지출) — 준비금 120억 초과분의 45%를 인프라에 투입.
+    // 유지비 기여 큰 항목(코치·구장·특수시설) 우선 → 전력↑ + 연 유지비↑(현금 싱크). 로스터 비대 없음.
+    let war=Math.floor(Math.max(0,(team.budget||0)-120)*0.45);
+    const spend=c=>{ if(war>=c){war-=c;team.budget=Math.floor((team.budget||0)-c);return true;} return false; };
+    team.coachStaff=team.coachStaff||{};
+    let guard=0;
+    while(war>=8 && guard++<60){
+      const cks=Object.keys(team.coachStaff).filter(k=>(team.coachStaff[k]||0)<5);
+      if(cks.length){ const k=pick(cks),lv=team.coachStaff[k]||0; if(spend(8*(lv+1))){team.coachStaff[k]=lv+1;continue;} }
+      if((team.slumpCareLevel||0)<4 && spend(FACILITY4_COSTS[team.slumpCareLevel||0])){team.slumpCareLevel=(team.slumpCareLevel||0)+1;continue;}
+      if((team.mentalCoachLevel||0)<4 && spend(FACILITY4_COSTS[team.mentalCoachLevel||0])){team.mentalCoachLevel=(team.mentalCoachLevel||0)+1;continue;}
+      if((team.stadiumLevel||0)<STADIUM_MAX_LEVEL && spend(Math.floor(Math.pow((team.stadiumLevel||0)+1,2)*8))){team.stadiumLevel=(team.stadiumLevel||0)+1;continue;}
+      const lks=['devLevel','scoutingLevel','analyticsLevel','medicalLevel','facilityLevel'].filter(k=>(team[k]||0)<100);
+      if(lks.length && spend(rand(6,10))){ const k=pick(lks); team[k]=clamp((team[k]||0)+rand(3,6),0,100); continue; }
+      break;
+    }
     if(team.budget>40){
       const np=rand(1,2)===1?genBatter(pick(BAT_POS),null,team.concept):genPitcher(pick(['SP','CP','SU','MR','LR']),null,team.concept);
       np.role=np.isPitcher?(np.pos==='SP'?'rotation':'bullpen'):'bench';
@@ -412,7 +481,3 @@ function _startNextSeason(){
   advancePhase(); // → preseason
   saveGame();
 }
-
-// ── showSeasonEnd (하위 호환 — 기존 코드 참조용) ─────────────────
-function showSeasonEnd(){showStoveLeague();}
-function nextSeason(){_startNextSeason();}

@@ -242,6 +242,27 @@ check('전 팀 예산 유한값 유지', g('G.teams.every(t=>Number.isFinite(t.b
 check('시즌 스탯 NaN 없음', g(`G.teams.every(t=>t.roster.every(p=>{const s=p.ss||{};return Object.values(s).every(v=>typeof v!=='number'||Number.isFinite(v));}))`));
 const lgAvg = g(`(function(){let h=0,ab=0;G.teams.forEach(t=>t.roster.forEach(p=>{if(!p.isPitcher&&p.ss){h+=p.ss.h||0;ab+=p.ss.ab||0;}}));return ab>0?h/ab:0;})()`);
 check(`리그 타율 온건 범위(0.15~0.40): ${lgAvg.toFixed(3)}`, lgAvg > 0.15 && lgAvg < 0.40);
+// ── 매치엔진 리그 총합 앵커 (P4 1단계) — 시즌 시뮬 후 리그 rate를 실측 베이스라인 밴드로 가드.
+// MLB2024 앵커(K22.6/BB8.2/HR-PA3.0/BABIP.298/OPS.711/ERA4.08) 델타는 비실패 정보로 인쇄.
+// 엔진이 HOT(AVG~.276·ERA~5.1)이라 밴드는 현행 실측 기준 — 다음 Logit/Softmax PR에서 MLB 앵커로 재타겟.
+const anchor = g(`(function(){
+  let AB=0,H=0,HR=0,BB=0,K=0,XBH=0,OUTS=0,ER=0;
+  G.teams.forEach(t=>t.roster.forEach(p=>{const s=p.ss;if(!s)return;
+    if(!p.isPitcher){AB+=s.ab||0;H+=s.h||0;HR+=s.hr||0;BB+=s.bb||0;K+=s.k||0;XBH+=s.xbh||0;}
+    if(p.isPitcher){OUTS+=s.outs||0;ER+=s.er||0;}}));
+  const PA=AB+BB, b1=H-XBH-HR, TB=b1+2*(XBH*0.85)+3*(XBH*0.15)+4*HR;
+  return {Kpct:K/PA, BBpct:BB/PA, HRpa:HR/PA, BABIP:(H-HR)/(AB-K-HR),
+          OPS:((H+BB)/PA)+(TB/AB), ERA:OUTS>0?ER*27/OUTS:0, PA};
+})()`);
+const _MLB={Kpct:0.226,BBpct:0.082,HRpa:0.030,BABIP:0.298,OPS:0.711,ERA:4.08};
+const _dp=(a,b)=>((a-b)*100).toFixed(1); // %p 델타
+console.log(`  [앵커 MLB2024 델타] K%${_dp(anchor.Kpct,_MLB.Kpct)}p · BB%${_dp(anchor.BBpct,_MLB.BBpct)}p · HR/PA${_dp(anchor.HRpa,_MLB.HRpa)}p · BABIP${_dp(anchor.BABIP,_MLB.BABIP)}p · OPS${(anchor.OPS-_MLB.OPS).toFixed(3)} · ERA${(anchor.ERA-_MLB.ERA).toFixed(2)} (PA=${anchor.PA})`);
+check(`리그 K% 베이스라인 밴드 0.15~0.21: ${anchor.Kpct.toFixed(4)}`, anchor.Kpct>=0.15 && anchor.Kpct<=0.21);
+check(`리그 BB% 베이스라인 밴드 0.075~0.115: ${anchor.BBpct.toFixed(4)}`, anchor.BBpct>=0.075 && anchor.BBpct<=0.115);
+check(`리그 HR/PA 베이스라인 밴드 0.018~0.042: ${anchor.HRpa.toFixed(4)}`, anchor.HRpa>=0.018 && anchor.HRpa<=0.042);
+check(`리그 BABIP 베이스라인 밴드 0.295~0.340: ${anchor.BABIP.toFixed(4)}`, anchor.BABIP>=0.295 && anchor.BABIP<=0.340);
+check(`리그 OPS 베이스라인 밴드 0.70~0.86: ${anchor.OPS.toFixed(4)}`, anchor.OPS>=0.70 && anchor.OPS<=0.86);
+check(`리그 ERA 베이스라인 밴드 3.9~6.3: ${anchor.ERA.toFixed(3)}`, anchor.ERA>=3.9 && anchor.ERA<=6.3);
 // ① 개인 성적 현실성 가드 — 스프레드 확대 후에도 비현실 값(타율 0.5·홈런 폭주) 방지
 const realism = g(`(function(){
   const all=G.teams.flatMap(t=>t.roster);
@@ -899,7 +920,8 @@ check('E: gameNum>=43 최초 1회 발화 + 멱등(재발화 없음)', bugE.err?f
 // ── T20. 엔진 비대칭/밸런스 수정 회귀 (F erMod · G condFactor · H stamina · I 부상심도 · J 재정렬) ──
 section('T20. 엔진 비대칭 수정 회귀 (F~J)');
 
-// F. erMod — 저ERA 자격 투수에 1.20, 그 외 1.0 (엔진) + 3경로 배선(관전·AI·자동)
+// F. erMod — 저ERA 자격 투수에 1.20, 그 외 1.0 (엔진) + 3경로 resolvePA 배선(feat/#17 단일화)
+// P4 1단계: erMod·condFactor·stamFactor·피로가 resolvePA 단일 엔진에 있고 3경로가 이를 경유 → 균일 보장.
 const bugF = g(`(function(){
   const bat=G.myTeam.roster.find(p=>!p.isPitcher)||{ss:null};
   const mk=(role,outs,er)=>({role,ss:{outs,er,ab:0,h:0}});
@@ -907,23 +929,36 @@ const bugF = g(`(function(){
     low: _calcRegression(bat, mk('rotation',60,2)).erMod,    // era=0.90<1.80 → 1.20
     high: _calcRegression(bat, mk('rotation',60,10)).erMod,   // era=4.50 → 1.0
     fewIP: _calcRegression(bat, mk('rotation',10,0)).erMod,   // outs<45 → 1.0
-    wiredWatch: simulatePlay.toString().includes('regression.erMod'),
-    wiredAI: _simAIGame.toString().includes('reg.erMod'),
-    wiredMy: _simMyGame.toString().includes('reg.erMod'),
+    engineErMod: resolvePA.toString().includes('regression.erMod'), // 통합 엔진이 erMod 적용
+    wiredWatch: simulatePlay.toString().includes('resolvePA('),
+    wiredAI: _simAIGame.toString().includes('resolvePA('),
+    wiredMy: _simMyGame.toString().includes('resolvePA('),
   };
 })()`);
 check('F: 저ERA 자격 투수 erMod=1.20', bugF.low===1.20, JSON.stringify(bugF));
 check('F: 정상 ERA·IP 미달 erMod=1.0', bugF.high===1.0 && bugF.fewIP===1.0, JSON.stringify(bugF));
-check('F: erMod 3경로 배선(관전·AI·자동)', bugF.wiredWatch && bugF.wiredAI && bugF.wiredMy, JSON.stringify(bugF));
+check('F: erMod 통합 엔진 적용 + 3경로 resolvePA 배선(관전·AI·자동)', bugF.engineErMod && bugF.wiredWatch && bugF.wiredAI && bugF.wiredMy, JSON.stringify(bugF));
 
-// G. condFactor — 간이 2경로(simHalf/simHalfFull)에 condF 반영 (소스 가드)
+// G. condFactor — 통합 엔진 resolvePA가 condFactor를 effStuff·effControl에 반영 (3경로 공통)
 const bugG = g(`(function(){
-  const ai=_simAIGame.toString(), my=_simMyGame.toString();
-  return { aiCond:(ai.match(/condF/g)||[]).length, myCond:(my.match(/condF/g)||[]).length,
-           watch: simulatePlay.toString().includes('condFactor') };
+  const e=resolvePA.toString();
+  return { def:e.includes('condFactor=Math.min'), stuff:/effStuff=.*condFactor/.test(e), ctrl:/effControl=.*condFactor/.test(e) };
 })()`);
-check('G: 간이 2경로에 condF 반영(정의+stuff+control)', bugG.aiCond>=3 && bugG.myCond>=3, JSON.stringify(bugG));
-check('G: 관전 경로 condFactor 유지', bugG.watch===true);
+check('G: 통합 엔진 condFactor 반영(정의+effStuff+effControl)', bugG.def && bugG.stuff && bugG.ctrl, JSON.stringify(bugG));
+
+// F2. resolvePA 통합 엔진 — 필드·확률 범위 유효 + 상황보정(피로 NP) 배선 확인 (공정성 기반)
+const rpaProbe = g(`(function(){
+  const b=G.myTeam.roster.find(p=>!p.isPitcher), p=G.myTeam.roster.find(x=>x.isPitcher);
+  let freshBB=0, tiredBB=0;
+  for(let i=0;i<300;i++){ freshBB+=resolvePA(b,p,{np:0}).pBB; tiredBB+=resolvePA(b,p,{np:110}).pBB; }
+  const r=resolvePA(b,p,{});
+  return {
+    fields:['pHR','pK','pBB','babip','pError','gbRate','xbhRate','tripleRate','batSpeed'].every(k=>typeof r[k]==='number'&&Number.isFinite(r[k])),
+    ranges:r.pHR>=0.005&&r.pHR<=0.08 && r.pK>=0.04&&r.pK<=0.30 && r.pBB>=0.02&&r.pBB<=0.15 && r.babip>=0.20&&r.babip<=0.38,
+    fatigueWired:(tiredBB/300)>(freshBB/300), // 피로 → 제구 저하 → 볼넷 확률 상승
+  };
+})()`);
+check('F2: resolvePA 필드·확률범위 유효 + 피로 상황보정 배선(피로→볼넷↑)', rpaProbe.fields && rpaProbe.ranges && rpaProbe.fatigueWired, JSON.stringify(rpaProbe));
 
 // H. currentStamina 초기화 통일 — 세 경로 =100, 구 statEff 초기화 제거 (소스 가드)
 const bugH = g(`(function(){
@@ -947,13 +982,14 @@ check('I: rollInjuryDuration 중증(>15경기) 발생', bugI.over15>0, JSON.stri
 check('I: 시즌아웃(=TOTAL_REGULAR) 발생 + 4종 심도', bugI.seasonOut>0 && bugI.typeCount>=4, JSON.stringify(bugI));
 check('I: 자동 경로 rollInjuryDuration 배선(rand(5,15) 제거)', bugI.wired===true);
 
-// J. 부상 교체가 피로/계수 계산 前에 확정 (소스 순서 가드)
+// J. 부상 교체가 타석 판정(resolvePA) 前에 확정 (소스 순서 가드 — 교체된 투수로 피로/유효스탯 계산)
+// feat/#17: 피로 계수(stamFactor)가 resolvePA로 이동 → 교체가 resolvePA 호출보다 앞서는지로 검사.
 const bugJ = g(`(function(){
   const s=simulatePlay.toString();
-  return { swap:s.indexOf('pitcher=bpEmg[0]'), fatigue:s.indexOf('const stamFactor=') };
+  return { swap:s.indexOf('pitcher=bpEmg[0]'), resolve:s.indexOf('resolvePA(') };
 })()`);
-check('J: 부상 교체(pitcher=bpEmg[0])가 피로 계수(stamFactor) 계산보다 앞섬',
-  bugJ.swap>=0 && bugJ.fatigue>=0 && bugJ.swap<bugJ.fatigue, JSON.stringify(bugJ));
+check('J: 부상 교체(pitcher=bpEmg[0])가 타석 판정(resolvePA)보다 앞섬',
+  bugJ.swap>=0 && bugJ.resolve>=0 && bugJ.swap<bugJ.resolve, JSON.stringify(bugJ));
 
 // T21. 트레이드 데드라인 재확정 (#2) — 설계 v2 후반기 G39 (구 84경기 산식 56 잔재 제거)
 const dl = g(`(function(){
@@ -1049,6 +1085,113 @@ check('T24-P3: 효과 평문화 (구간+방향·비공개 수치 은닉·공개 
 check('T24-P1: 특성 팝오버 무예외 + 숨은가치 안내', trProbe.popErr===null && trProbe.popOk, JSON.stringify(trProbe));
 check(`T24-P2: 특성 도감 렌더 (자연${trProbe.natN}·인공${trProbe.artN}=${trProbe.natN+trProbe.artN} 카드)`, trProbe.codexErr===null && trProbe.codexCount>=trProbe.natN+trProbe.artN, JSON.stringify(trProbe));
 check('T24: 뱃지·마커 클릭 배선(showTraitInfo)', trProbe.miniClickable, JSON.stringify(trProbe));
+
+// ── T25. fix/#14 경제 유계화 회귀 — 준비금 감가 · 급여 실차감 · 유지비 싱크 · 유계 인베리언트 ──
+section('T25. 경제 유계화 (fix/#14) — 준비금 감가·급여 실차감·유지비 싱크');
+const decayProbe = g(`(function(){
+  const R={cap:(typeof RESERVE_SOFT_CAP!=='undefined')?RESERVE_SOFT_CAP:null,
+           rate:(typeof RESERVE_DECAY_RATE!=='undefined')?RESERVE_DECAY_RATE:null};
+  const decay=(b)=> b>R.cap ? b-Math.floor((b-R.cap)*R.rate) : b;
+  R.boundary = decay(R.cap)===R.cap;                          // 경계(=cap): 감가 0
+  R.below    = decay(120)===120;                              // 캡 아래: 무영향
+  R.prop     = decay(R.cap+200)===(R.cap+200)-Math.floor(200*R.rate); // 초과분 비례
+  R.noBankrupt = decay(100000)>R.cap;                         // 결과가 캡 초과 유지 → 감가는 파산 유발 불가
+  return R;
+})()`);
+check(`준비금 감가 상수 (소프트캡 ${decayProbe.cap} / 감가율 ${decayProbe.rate})`, decayProbe.cap===300 && decayProbe.rate===0.30);
+check('감가 공식: 경계=0 · 캡아래 무영향 · 초과분 비례 · 파산 유발 불가', decayProbe.boundary && decayProbe.below && decayProbe.prop && decayProbe.noBankrupt, JSON.stringify(decayProbe));
+
+const sinkProbe = g(`(function(){
+  const mk=()=>({coachStaff:{},stadiumLevel:0,slumpCareLevel:0,mentalCoachLevel:0,medicalLevel:0,devLevel:0,scoutingLevel:0,analyticsLevel:0,facilityLevel:0,roster:[]});
+  const u0=calcAnnualUpkeep(mk()).total;
+  const t=mk(); t.stadiumLevel=5; t.slumpCareLevel=4; t.coachStaff={batting:5};
+  const u1=calcAnnualUpkeep(t).total;
+  return {u0,u1,rise:u1>u0};
+})()`);
+check(`유지비 싱크: 인프라 투자↑ → 연 유지비↑ (${sinkProbe.u0}→${sinkProbe.u1}, AI 재투자 잉여 흡수 근거)`, sinkProbe.rise, JSON.stringify(sinkProbe));
+
+const settleProbe = g(`(function(){
+  try{
+    G.myTeam.budget=Math.max(G.myTeam.budget,500); // 파산 게임오버 회피
+    const sorted=[...G.teams].sort((a,b)=>(b.wins/(b.wins+b.losses||1))-(a.wins/(a.wins+a.losses||1)));
+    const team=sorted[0]; // 1위팀: 하위4 분배·(대개)플로어 벌과금 영향 최소
+    const B=team.budget, rev=calcSeasonRevenue(team,1).net, upkeep=calcAnnualUpkeep(team).total, pay=getPayroll(team);
+    let e=B+rev;                                    // 정산 순서 복제: 수익
+    const sf=+(getSalaryFloor()-pay).toFixed(1); if(sf>0) e=+(e-sf).toFixed(1); // 플로어 벌과금
+    e=Math.floor(e-upkeep-pay);                     // 유지비 + 급여 실차감
+    if(e>RESERVE_SOFT_CAP) e-=Math.floor((e-RESERVE_SOFT_CAP)*RESERVE_DECAY_RATE); // 준비금 감가
+    G._stoveSettledSeason=-1; showStoveLeague();    // 실제 정산 구동
+    return {exp:e, act:team.budget, pay:Math.round(pay), diff:Math.abs(team.budget-e)};
+  }catch(err){return {err:err.message};}
+})()`);
+check(`급여 실차감 정산 공식 정합 (1위팀 예산=수익-유지비-급여-감가, 페이롤 ${settleProbe.pay}억 차감)`, settleProbe.diff!=null && settleProbe.diff<=1, JSON.stringify(settleProbe));
+
+const boundProbe = g(`(function(){
+  try{
+    G.myTeam.budget=Math.max(G.myTeam.budget,500);
+    G.teams.forEach(t=>{t.budget=2000;});          // 전 팀 예산 폭등
+    G._stoveSettledSeason=-1; showStoveLeague();    // 1회 정산
+    const a=G.teams.map(t=>t.budget);
+    return {finite:a.every(Number.isFinite), reduced:a.every(b=>b<2000), noNeg:a.every(b=>b>=0), max:Math.round(Math.max(...a))};
+  }catch(err){return {err:err.message};}
+})()`);
+check(`유계 인베리언트: 예산 2000억 폭등 → 정산 후 감소·유한·비음수 (max ${boundProbe.max})`, boundProbe.finite && boundProbe.reduced && boundProbe.noNeg, JSON.stringify(boundProbe));
+
+// ── T26. P6 구단주 신임도 — 목표 제시 · 증감 공식 · clamp · 경질 · 영속 ──
+section('T26. P6 구단주 신임도 — 목표·증감·경질·세이브');
+const apConstProbe = g(`(function(){
+  const goal=_proposeSeasonGoal();
+  return {start:APPROVAL_START, warn:APPROVAL_WARN, dismiss:APPROVAL_DISMISS, goal, goalOk:goal>=1&&goal<=G.teams.length};
+})()`);
+check(`신임도 상수 (시작 ${apConstProbe.start} / 경고 ${apConstProbe.warn} / 경질 ${apConstProbe.dismiss})`, apConstProbe.start===50 && apConstProbe.warn===20 && apConstProbe.dismiss===0);
+check(`구단주 목표 순위 자동 제시 유효 (1~${g('G.teams.length')}): ${apConstProbe.goal}`, apConstProbe.goalOk);
+
+const apDeltaProbe = g(`(function(){
+  const mk=(goal,ap)=>({_seasonGoalRank:goal,approval:ap});
+  const d=(t,rank,champ,net)=>{_applyApprovalDelta(t,rank,champ,net);return t.approval;};
+  return {
+    over:  d(mk(4,50),1,false,100),  // (4-1)*4=12 +포스트5 = +17 → 67
+    under: d(mk(4,50),8,false,100),  // (4-8)*4=-16 → 34
+    champ: d(mk(4,50),1,true,100),   // (4-1)*4=12 +우승15(포스트 배타) → 77
+    fin:   d(mk(4,50),4,false,-10),  // 0 +포스트5 -적자3 = +2 → 52
+    clampLo:d(mk(1,5),8,false,-10),  // -31 → clamp 0
+    clampHi:d(mk(8,98),1,true,100),  // +43 → clamp 100
+  };
+})()`);
+check(`증감 공식: 목표상회 +17(${apDeltaProbe.over}) / 미달 -16(${apDeltaProbe.under}) / 우승 +15(${apDeltaProbe.champ}) / 적자 -3(${apDeltaProbe.fin})`,
+  apDeltaProbe.over===67 && apDeltaProbe.under===34 && apDeltaProbe.champ===77 && apDeltaProbe.fin===52, JSON.stringify(apDeltaProbe));
+check(`신임도 clamp 0~100 (하한 ${apDeltaProbe.clampLo} / 상한 ${apDeltaProbe.clampHi})`, apDeltaProbe.clampLo===0 && apDeltaProbe.clampHi===100);
+
+const apDismissProbe = g(`(function(){
+  const saved=G.myTeam.approval;
+  G.myTeam.approval=0;  const fired=checkApprovalDismissal();
+  G.myTeam.approval=50; const notFired=checkApprovalDismissal();
+  G.myTeam.approval=saved; const nb=document.getElementById('btnNavAdvance'); if(nb)nb.disabled=false;
+  return {fired, notFired};
+})()`);
+check('경질 판정: 신임도 0 → 게임오버 발동 / >0 → 미발동', apDismissProbe.fired===true && apDismissProbe.notFired===false, JSON.stringify(apDismissProbe));
+
+const apPersistProbe = g(`(function(){
+  try{
+    G.myTeam.approval=37; G.myTeam._seasonGoalRank=5; G._goalSetSeason=G.season; G._approvalEvalSeason=G.season;
+    saveGame();
+    G.myTeam.approval=99; G.myTeam._seasonGoalRank=1; G._goalSetSeason=0;
+    loadGame();
+    return {ap:G.myTeam.approval, goal:G.myTeam._seasonGoalRank, guard:G._goalSetSeason===G.season, allInit:G.teams.every(t=>typeof t.approval==='number'), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check('save→load 신임도·목표·멱등가드 보존 + 전 팀 approval 수치', apPersistProbe.ap===37 && apPersistProbe.goal===5 && apPersistProbe.guard===true && apPersistProbe.allInit===true, JSON.stringify(apPersistProbe));
+
+const apPreseasonProbe = g(`(function(){
+  try{
+    G._goalSetSeason=0; G.myTeam._seasonGoalRank=null;
+    showPreseason(); // 실제 프리시즌 구동 → 구단주 목표 자동 설정
+    const first=G.myTeam._seasonGoalRank;
+    showPreseason(); // 재진입 — 멱등 가드로 목표 불변
+    return {goal:first, set:G._goalSetSeason===G.season, valid:first>=1&&first<=G.teams.length, idem:G.myTeam._seasonGoalRank===first, err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check('프리시즌: 구단주 목표 자동 설정 + 멱등(재진입 불변)', apPreseasonProbe.set && apPreseasonProbe.valid && apPreseasonProbe.idem, JSON.stringify(apPreseasonProbe));
 
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {

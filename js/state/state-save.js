@@ -41,27 +41,36 @@ function _expandTeam(c,idx){
   return t;
 }
 
+// 저장/내보내기 공통 스냅샷 빌더 — save·export가 수기 중복되며 필드 드리프트를 유발하던 것을 단일화.
+// (이전엔 exportGame이 _lastSeasonRev·_lastReserveDrain을 누락 → export→import 시 결산 표시 스테일)
+function _buildSnapshot(){
+  return {
+    _v:5, season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
+    teamIdx:G.teamIdx, trainingCooldown:G.trainingCooldown||0, matchSpeed:G.matchSpeed,
+    currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
+    testMode:G.testMode,
+    phase:G.phase,
+    _stoveSettledSeason:G._stoveSettledSeason||0,
+    _traitsEvaluatedSeason:G._traitsEvaluatedSeason||0, // P3-2 시상 특성 평가 멱등 가드
+    previousSeasonStandings:G.previousSeasonStandings,
+    draftPool:(G.draftPool||[]).map(_compressPlayer),
+    postseasonBracket:G.postseasonBracket,
+    seasonModifiers:G.seasonModifiers||{},
+    allStars:G.allStars,
+    awards:G.awards,
+    teams:G.teams.map(_compressTeam),
+    marketPlayers:G.marketPlayers.map(_compressPlayer),
+    _lastSeasonRev:G._lastSeasonRev||null, // 스토브 결산 스냅샷 (재로드 시 표시 정합)
+    _lastReserveDrain:G._lastReserveDrain||0, // 준비금 감가 스냅샷 (결산 화면 재로드 정합)
+    _approvalEvalSeason:G._approvalEvalSeason||0, // P6 신임도 평가 멱등 가드
+    _goalSetSeason:G._goalSetSeason||0,           // P6 시즌 목표 설정 멱등 가드
+    _lastApprovalDelta:G._lastApprovalDelta||0, _lastApprovalGoal:G._lastApprovalGoal||0, _lastApprovalRank:G._lastApprovalRank||0, // 시상식 신임도 표시 스냅샷
+  };
+}
+
 function saveGame(){
   try{
-    const snap={
-      _v:5, season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
-      teamIdx:G.teamIdx, trainingCooldown:G.trainingCooldown||0, matchSpeed:G.matchSpeed,
-      currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
-      testMode:G.testMode,
-      phase:G.phase,
-      _stoveSettledSeason:G._stoveSettledSeason||0,
-      _traitsEvaluatedSeason:G._traitsEvaluatedSeason||0, // P3-2 시상 특성 평가 멱등 가드
-      previousSeasonStandings:G.previousSeasonStandings,
-      draftPool:(G.draftPool||[]).map(_compressPlayer),
-      postseasonBracket:G.postseasonBracket,
-      seasonModifiers:G.seasonModifiers||{},
-      allStars:G.allStars,
-      awards:G.awards,
-      teams:G.teams.map(_compressTeam),
-      marketPlayers:G.marketPlayers.map(_compressPlayer),
-      _lastSeasonRev:G._lastSeasonRev||null, // 스토브 결산 스냅샷 (재로드 시 표시 정합)
-    };
-    localStorage.setItem(SAVE_KEY,JSON.stringify(snap));
+    localStorage.setItem(SAVE_KEY,JSON.stringify(_buildSnapshot()));
   }catch(e){
     console.warn('saveGame failed:',e);
     if(typeof showToast==='function') showToast('⚠️ 저장 실패! 용량 초과일 수 있습니다. 파일 내보내기를 권장합니다.');
@@ -96,6 +105,9 @@ function _restoreFromData(d){
   G._stoveSettledSeason=d._stoveSettledSeason||0;
   G._traitsEvaluatedSeason=d._traitsEvaluatedSeason||0;
   G._lastSeasonRev=d._lastSeasonRev||null; // 미보유 세이브 로드 시 이전 게임 잔재도 초기화
+  G._lastReserveDrain=d._lastReserveDrain||0; // 준비금 감가 스냅샷 복원 (미보유 세이브는 0)
+  G._approvalEvalSeason=d._approvalEvalSeason||0; G._goalSetSeason=d._goalSetSeason||0; // P6 멱등 가드 복원
+  G._lastApprovalDelta=d._lastApprovalDelta||0; G._lastApprovalGoal=d._lastApprovalGoal||0; G._lastApprovalRank=d._lastApprovalRank||0;
   G.previousSeasonStandings=d.previousSeasonStandings||[];
   G.postseasonBracket=d.postseasonBracket||null;
   G.seasonModifiers=d.seasonModifiers||{};
@@ -187,6 +199,8 @@ function _restoreFromData(d){
     if(t.analyticsLevel===undefined) t.analyticsLevel=0;
     if(t.slumpCareLevel===undefined) t.slumpCareLevel=0;   // P2-5 백필
     if(t.mentalCoachLevel===undefined) t.mentalCoachLevel=0;
+    if(t.approval===undefined) t.approval=APPROVAL_START;  // P6 구단주 신임도 백필 (구세이브)
+    if(t._seasonGoalRank===undefined) t._seasonGoalRank=null;
   });
   // OVR Z-score 보정 캐시 무효화 — 로드/마이그레이션으로 스탯이 변해도
   // 캐시 키(시즌:경기:인원합)가 동일하면 낡은 보정치를 쓰는 문제 방지
@@ -199,24 +213,7 @@ function clearSave(){localStorage.removeItem(SAVE_KEY);sessionStorage.removeItem
 // ── 내보내기 (JSON 파일 다운로드) ──
 function exportGame(){
   try{
-    const snap={
-      _v:5, _exportDate:new Date().toISOString(),
-      season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
-      teamIdx:G.teamIdx, trainingCooldown:G.trainingCooldown||0, matchSpeed:G.matchSpeed,
-      currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
-      testMode:G.testMode,
-      phase:G.phase,
-      _stoveSettledSeason:G._stoveSettledSeason||0,
-      _traitsEvaluatedSeason:G._traitsEvaluatedSeason||0, // P3-2 시상 특성 평가 멱등 가드
-      previousSeasonStandings:G.previousSeasonStandings,
-      draftPool:(G.draftPool||[]).map(_compressPlayer),
-      postseasonBracket:G.postseasonBracket,
-      seasonModifiers:G.seasonModifiers||{},
-      allStars:G.allStars,
-      awards:G.awards,
-      teams:G.teams.map(_compressTeam),
-      marketPlayers:G.marketPlayers.map(_compressPlayer),
-    };
+    const snap={..._buildSnapshot(), _exportDate:new Date().toISOString()};
     const blob=new Blob([JSON.stringify(snap)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');

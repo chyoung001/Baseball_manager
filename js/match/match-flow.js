@@ -204,64 +204,19 @@ function simulatePlay(){
     }
   }
 
-  // ── [2] 팀 컨셉 보너스 ──
-  let batBonus=0,pitchBonus=0;
-  if(batTeam.concept==='contact_hit') batBonus+=4;
-  if(batTeam.concept==='speed')       batBonus+=3;
-  if(batTeam.concept==='sabermetrics')batBonus+=3;
-  if(batTeam.concept==='prospect')    batBonus+=2;  // 육성팀: 젊은 타자 기량 발전 중
-  if(fldTeam.concept==='power_hit')   pitchBonus+=5;
-  if(fldTeam.concept==='defense')     pitchBonus+=4;
-  if(fldTeam.concept==='pitching')    pitchBonus+=4;
-  if(fldTeam.concept==='bullpen'&&pitcher.role==='bullpen') pitchBonus+=5;
-
-  // ── [3] 투수 피로도 (스태미나 + 투구수 커브) — 최종(교체 후) 투수 기준 ──
-  const fatigue=_fatigueDebuff((pitcher.today&&pitcher.today.np)||0);
-  const stamFactor=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
-  const condFactor=Math.min(1.0,(pitcher.condition||100)/100);
-  const adjVelocity=Math.max(1,(statEff(pitcher,'velocity'))+fatigue.vel);
-  const velMult=1+adjVelocity/400;
-
-  // ── [4] 히든 스탯 반영 ──
+  // ── 상황 컨텍스트 (관전 경로: matchState 기반) → 통합 엔진 resolvePA 입력 ──
+  const _park=getParkFactor(matchState.home); // 홈구장 = 양팀 공통
   const hasRISP=!!(matchState.bases[1]||matchState.bases[2]);
-  const clutchAdd=hasRISP?((statEff(pitcher,'clutch'))*0.05):0;
-  const batCon=hiddenEff(batter,'_consistency'); // 1~100 스케일
-  const batInSlump=(batter._slumpGames||0)>0;
-  const batSwingBase=Math.round((100-batCon)/5);
-  const batSwing=batInSlump?rand(-batSwingBase,Math.floor(batSwingBase*0.3)):rand(-batSwingBase,batSwingBase);
-  const pitCon=hiddenEff(pitcher,'_consistency');
-  const pitSwingBase=Math.round((100-pitCon)/5);
-  const pitSwing=rand(-pitSwingBase,pitSwingBase);
   const aTotal=matchState.score.away.reduce((a,b)=>a+b,0);
   const hTotal=matchState.score.home.reduce((a,b)=>a+b,0);
   const inning=matchState.inning||1;
   const scoreDiff=Math.abs(aTotal-hTotal);
-  const hasRunnersInScoring=!!(matchState.bases[1]||matchState.bases[2]);
   const tiebreakRunner=!!(matchState.bases[0]||matchState.bases[1]||matchState.bases[2])&&scoreDiff<=1;
-  const isHighLeverage=inning>=7&&(scoreDiff<=3||hasRunnersInScoring||tiebreakRunner);
-  // P2-5 멘탈 코칭 룸: 클러치 보정 증폭 (설계: 시설 7 — 자연 확장, 독립 레이어 아님)
-  const _mcBat=1+(MENTAL_COACH_AMP[batTeam.mentalCoachLevel||0]||0);
+  const isHighLeverage=inning>=7&&(scoreDiff<=3||hasRISP||tiebreakRunner);
+  const _mcBat=1+(MENTAL_COACH_AMP[batTeam.mentalCoachLevel||0]||0); // P2-5 멘탈 코칭 증폭
   const _mcPit=1+(MENTAL_COACH_AMP[fldTeam.mentalCoachLevel||0]||0);
-  const batBigGame=isHighLeverage?((hiddenEff(batter,'_clutchHidden'))-50)*0.12*_mcBat:0;
-  const pitBigGame=isHighLeverage?((hiddenEff(pitcher,'_clutchHidden'))-50)*0.12*_mcPit:0;
 
-  // ── [5] 유효 투수 스탯 (피로도 커브 반영) ──
-  const effStuff=((statEff(pitcher,'stuff'))+pitchBonus+clutchAdd+pitSwing+pitBigGame)*velMult*stamFactor*condFactor;
-  const effControl=((statEff(pitcher,'control'))+fatigue.ctrl+pitchBonus*0.5+clutchAdd*0.6+pitSwing*0.5+pitBigGame*0.5)*stamFactor*condFactor;
-  const effMovement=((statEff(pitcher,'movement'))+fatigue.mov+pitchBonus*0.3+pitSwing*0.3)*velMult*stamFactor;
-
-  // ── [6] 유효 타자 스탯 ──
-  const isSlumping=(batter.condition||100)<SLUMP_CONDITION_THRESHOLD;
-  const slumpDebuff=isSlumping?SLUMP_DEBUFF:0;
-  const rehabDebuff=(batter.rehabGamesLeft||0)>0?REHAB_DEBUFF:0;
-  const totalDebuff=slumpDebuff+rehabDebuff;
-  const adjContact=(statEff(batter,'contact'))+batBonus-totalDebuff+batSwing+batBigGame;
-  const adjPower=(statEff(batter,'power'))+batBonus*0.5-totalDebuff*0.8+batSwing*0.5+batBigGame*0.5;
-  const adjEye=(statEff(batter,'eye'))+batBonus*0.3+batSwing*0.3;
-  const batSpeed=(statEff(batter,'speed'));
-
-  // ── [7] 수비력 (하프이닝 캐시 — 전환 페널티 포함 평균이 타석마다 재계산되던 것 방지) ──
-  // 수비 라인업은 하프이닝 중 바뀌지 않음: 이닝/공수 교대 시 키가 달라져 자동 재계산
+  // ── 수비력 (하프이닝 캐시 — 전환 페널티 포함 평균이 타석마다 재계산되던 것 방지) ──
   const _defKey=fldKey+':'+matchState.inning+':'+matchState.half;
   if(!matchState._defCache||matchState._defCache.key!==_defKey){
     const fldStarters=getStartingBatters(fldTeam);
@@ -275,33 +230,18 @@ function simulatePlay(){
   const avgArm=matchState._defCache.avgArm;
   const armPenalty=Math.max(0.4,1-avgArm/200);
 
-  // ── [8] 동적 회귀 보정 ──
-  const regression=_calcRegression(batter,pitcher);
-
-  // ── [9] TTO 확률 계산 (HR → K → BB → InPlay) — 극단값 상한 축소 + 홈구장 파크팩터 곱셈 ──
-  const _park=getParkFactor(matchState.home); // 홈구장 = 양팀 공통
-  const pHR=clamp((TTO_BASE_HR+(adjPower-effMovement)/165*0.16)*_park.hr, 0.005, 0.08);
-  const pK =clamp(TTO_BASE_K +(effStuff-adjContact)/165*0.15, 0.04, 0.30);
-  const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/165*0.12, 0.02, 0.15);
-
-  // ── [10] BABIP (인플레이 안타 확률) ──
-  const contactMod=1+(adjContact-50)/330;
-  const defMod=1-(avgFielding-50)/412;
-  const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*regression.hitMod*regression.erMod*_park.hit, 0.200, 0.380);
-
-  // ── [11] 인플레이 세부 확률 ──
-  const pError=clamp(0.02-(avgFielding-50)/3300, 0.005, 0.04);
-  let gbAdj=0;
-  if(fldTeam.concept==='defense') gbAdj+=0.05;
-  if(batTeam.concept==='power_hit') gbAdj-=0.05;
-  const gbRate=clamp(0.45+(effMovement-adjPower)/330+gbAdj, 0.30, 0.65);
-  const xbhRate=clamp(0.20+(adjPower-50)/330, 0.10, 0.40);
-  const tripleRate=batSpeed>75?0.025:batSpeed>51?0.012:0.004;
-  const doubleRate=xbhRate-tripleRate;
+  // ── 통합 타석 판정 (유효스탯+TTO/BABIP+인플레율 단일화 — simHalf/simHalfFull과 동일 엔진) ──
+  const _r=resolvePA(batter,pitcher,{
+    batConcept:batTeam.concept, fldConcept:fldTeam.concept,
+    np:(pitcher.today&&pitcher.today.np)||0, hasRISP, isHighLeverage,
+    batMentalAmp:_mcBat, pitMentalAmp:_mcPit, avgFielding, park:_park});
+  const pHR=_r.pHR, pK=_r.pK, pBB=_r.pBB, babip=_r.babip, pError=_r.pError;
+  const gbRate=_r.gbRate, xbhRate=_r.xbhRate, tripleRate=_r.tripleRate, doubleRate=_r.xbhRate-_r.tripleRate;
+  const batSpeed=_r.batSpeed;
 
   // ── Stats references ──
-  const bs=batter.ss||(batter.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
-  const ps=pitcher.ss||(pitcher.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0});
+  const bs=batter.ss||(initSeasonStats(batter),batter.ss);
+  const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
   const bt=batter.today||(batter.today={ab:0,h:0,hr:0,rbi:0,bb:0,k:0,r:0});
   const pt=pitcher.today||(pitcher.today={ip:0,outs:0,h:0,er:0,bb:0,k:0,np:0});
 
