@@ -54,6 +54,77 @@ function _ttoSimAB(adjPow, adjCon, adjEye, effStuff, effControl, effMovement, av
   return 'OUT';
 }
 
+// ── 통합 타석 판정 엔진 (관전·AI·자동 3경로 공유) ──
+// simulatePlay·simHalf·simHalfFull에 3중 복제돼 있던 유효스탯+TTO/BABIP+인플레율 계산을 단일화.
+// 상황 입력(피로 np·RISP·고레버리지·멘탈코칭·컨셉·수비평균·파크)은 ctx로 전달, 미제공 시 중립 기본값.
+// 롤은 하지 않고 확률·인플레율만 반환 → 각 경로가 기존 롤/주루를 그대로 유지(관전 분포 불변 보장).
+// 시뮬 경로가 상황 ctx를 전달하면 클러치/피로/consistency가 반영돼 관전과 동일 분포 → 공정성 확보.
+function resolvePA(batter, pitcher, ctx){
+  ctx=ctx||{};
+  const bc=ctx.batConcept, fc=ctx.fldConcept;
+  // [2] 팀 컨셉 보너스
+  let batBonus=0, pitchBonus=0;
+  if(bc==='contact_hit')batBonus+=4; if(bc==='speed')batBonus+=3; if(bc==='sabermetrics')batBonus+=3; if(bc==='prospect')batBonus+=2;
+  if(fc==='power_hit')pitchBonus+=5; if(fc==='defense')pitchBonus+=4; if(fc==='pitching')pitchBonus+=4;
+  if(fc==='bullpen'&&pitcher.role==='bullpen')pitchBonus+=5;
+  // [3] 투수 피로도 (스태미나 버킷 + 투구수 커브)
+  const fatigue=_fatigueDebuff(ctx.np||0);
+  const stamFactor=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
+  const condFactor=Math.min(1.0,(pitcher.condition||100)/100);
+  const adjVelocity=Math.max(1,(statEff(pitcher,'velocity'))+fatigue.vel);
+  const velMult=1+adjVelocity/400;
+  // [4] 히든/상황 (RISP 클러치 · consistency swing · 고레버리지 bigGame×멘탈코칭)
+  const hasRISP=!!ctx.hasRISP;
+  const clutchAdd=hasRISP?((statEff(pitcher,'clutch'))*0.05):0;
+  const batCon=hiddenEff(batter,'_consistency');
+  const batInSlump=(batter._slumpGames||0)>0;
+  const batSwingBase=Math.round((100-batCon)/5);
+  const batSwing=batInSlump?rand(-batSwingBase,Math.floor(batSwingBase*0.3)):rand(-batSwingBase,batSwingBase);
+  const pitCon=hiddenEff(pitcher,'_consistency');
+  const pitSwingBase=Math.round((100-pitCon)/5);
+  const pitSwing=rand(-pitSwingBase,pitSwingBase);
+  const isHighLeverage=!!ctx.isHighLeverage;
+  const _mcBat=ctx.batMentalAmp||1, _mcPit=ctx.pitMentalAmp||1;
+  const batBigGame=isHighLeverage?((hiddenEff(batter,'_clutchHidden'))-50)*0.12*_mcBat:0;
+  const pitBigGame=isHighLeverage?((hiddenEff(pitcher,'_clutchHidden'))-50)*0.12*_mcPit:0;
+  // [5] 유효 투수 스탯
+  const effStuff=((statEff(pitcher,'stuff'))+pitchBonus+clutchAdd+pitSwing+pitBigGame)*velMult*stamFactor*condFactor;
+  const effControl=((statEff(pitcher,'control'))+fatigue.ctrl+pitchBonus*0.5+clutchAdd*0.6+pitSwing*0.5+pitBigGame*0.5)*stamFactor*condFactor;
+  const effMovement=((statEff(pitcher,'movement'))+fatigue.mov+pitchBonus*0.3+pitSwing*0.3)*velMult*stamFactor;
+  // [6] 유효 타자 스탯
+  const isSlumping=(batter.condition||100)<SLUMP_CONDITION_THRESHOLD;
+  const slumpDebuff=isSlumping?SLUMP_DEBUFF:0;
+  const rehabDebuff=(batter.rehabGamesLeft||0)>0?REHAB_DEBUFF:0;
+  const totalDebuff=slumpDebuff+rehabDebuff;
+  const adjContact=(statEff(batter,'contact'))+batBonus-totalDebuff+batSwing+batBigGame;
+  const adjPower=(statEff(batter,'power'))+batBonus*0.5-totalDebuff*0.8+batSwing*0.5+batBigGame*0.5;
+  const adjEye=(statEff(batter,'eye'))+batBonus*0.3+batSwing*0.3;
+  const batSpeed=(statEff(batter,'speed'));
+  // [7] 수비력 (호출부가 계산해 ctx로 전달 — 관전 캐시 vs 시뮬 라인업 방식 차이 유지)
+  const avgFielding=ctx.avgFielding!=null?ctx.avgFielding:50;
+  // [8] 동적 회귀
+  const regression=_calcRegression(batter,pitcher);
+  // [9] TTO 확률 (파크팩터 곱셈)
+  const _park=ctx.park||{hr:1,hit:1};
+  const pHR=clamp((TTO_BASE_HR+(adjPower-effMovement)/165*0.16)*_park.hr, 0.005, 0.08);
+  const pK =clamp(TTO_BASE_K +(effStuff-adjContact)/165*0.15, 0.04, 0.30);
+  const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/165*0.12, 0.02, 0.15);
+  // [10] BABIP
+  const contactMod=1+(adjContact-50)/330;
+  const defMod=1-(avgFielding-50)/412;
+  const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*regression.hitMod*regression.erMod*_park.hit, 0.200, 0.380);
+  // [11] 인플레 세부율
+  const pError=clamp(0.02-(avgFielding-50)/3300, 0.005, 0.04);
+  let gbAdj=0;
+  if(fc==='defense') gbAdj+=0.05;
+  if(bc==='power_hit') gbAdj-=0.05;
+  const gbRate=clamp(0.45+(effMovement-adjPower)/330+gbAdj, 0.30, 0.65);
+  const xbhRate=clamp(0.20+(adjPower-50)/330, 0.10, 0.40);
+  const tripleRate=batSpeed>75?0.025:batSpeed>51?0.012:0.004;
+  return {pHR, pK, pBB, babip, pError, gbRate, xbhRate, tripleRate, batSpeed, adjPower, effMovement,
+          adjContact, adjEye, effStuff, effControl};
+}
+
 // ── 투구수 한계 산정 (스태미나 스탯 기반) ──
 function getMaxPitches(pitcher){
   const base=statEff(pitcher,'stamina');

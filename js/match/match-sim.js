@@ -67,25 +67,14 @@ function _simAIGame(teamA,teamB){
       const bs=b.ss||(initSeasonStats(b),b.ss);
       const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
 
-      // 슬럼프 보정
-      const isSlumping=(b.condition||100)<SLUMP_CONDITION_THRESHOLD;
-      const slumpDebuff=isSlumping?SLUMP_DEBUFF:0;
-      // 상한 미적용 — Tier3 소프트캡(125)은 statEff가 관리, 실경기 경로와 동일 (구 clamp 100은 특성 보정 차단)
-      const adjCon=Math.max(1,statEff(b,'contact')+batBonus-slumpDebuff);
-      const adjPow=Math.max(1,statEff(b,'power')+batBonus*0.5-slumpDebuff*0.8);
-      const adjEye=Math.max(1,statEff(b,'eye')+batBonus*0.3);
-
-      // 투수 유효 스탯 (체력 기반 피로도)
-      const stamF=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
-      const condF=Math.min(1.0,(pitcher.condition||100)/100); // 컨디션 배율 — 관전 경로(match-flow)와 통일, movement 제외
-      const velMult=1+((statEff(pitcher,'velocity'))/400);
-      const effStuff=((statEff(pitcher,'stuff'))+pitBonus)*velMult*stamF*condF;
-      const effControl=((statEff(pitcher,'control'))+pitBonus*0.5)*stamF*condF;
-      const effMovement=((statEff(pitcher,'movement'))+pitBonus*0.3)*velMult*stamF;
-
-      // 동적 회귀 + TTO 판정
-      const reg=_calcRegression(b,pitcher);
-      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod*reg.erMod,_pf);
+      // ── 통합 타석 판정 (관전·자동과 동일 resolvePA) — 시뮬 경로도 피로(NP)/RISP 클러치/consistency/재활 반영 → 공정성 ──
+      // (고레버리지 bigGame은 이닝/점수차 미추적으로 이 경로 미적용 = 잔여, #18 예정)
+      const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:fldTeam.concept,
+        np:pitcher._simNP||0, hasRISP:!!(bases[1]||bases[2]), isHighLeverage:false, avgFielding:avgFld, park:_pf});
+      const adjPow=_r.adjPower, effMovement=_r.effMovement; // 주루 인플레율 재계산 호환
+      const _rr=Math.random();
+      const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'
+        : (function(){const ip=Math.random();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
 
       if(result==='HR'){
         bs.ab++;bs.h++;bs.hr++;ps.ha++;ps.phr++;
@@ -305,28 +294,14 @@ function _simMyGame(){
       const bs=b.ss||(initSeasonStats(b),b.ss);
       const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
 
-      // 슬럼프/재활 보정
-      const isSlumping=(b.condition||100)<SLUMP_CONDITION_THRESHOLD;
-      const slumpDebuff=isSlumping?SLUMP_DEBUFF:0;
-      const rehabDebuff=(b.rehabGamesLeft||0)>0?REHAB_DEBUFF:0;
-      const totalDebuff=slumpDebuff+rehabDebuff;
-      // 상한 미적용 — Tier3 소프트캡(125)은 statEff가 관리 (실경기 경로와 동일)
-      const adjCon=Math.max(1,statEff(b,'contact')+batBonus-totalDebuff);
-      const adjPow=Math.max(1,statEff(b,'power')+batBonus*0.5-totalDebuff*0.8);
-      const adjEye=Math.max(1,statEff(b,'eye')+batBonus*0.3);
-
-      // 투수 유효 스탯 (불펜 컨셉 보너스 포함)
-      const bpBonus=(pitcherTeam.concept==='bullpen'&&pitcher.role==='bullpen')?5:0;
-      const stamF=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
-      const condF=Math.min(1.0,(pitcher.condition||100)/100); // 컨디션 배율 — 관전 경로(match-flow)와 통일, movement 제외
-      const velMult=1+((statEff(pitcher,'velocity'))/400);
-      const effStuff=((statEff(pitcher,'stuff'))+pitBonus+bpBonus)*velMult*stamF*condF;
-      const effControl=((statEff(pitcher,'control'))+(pitBonus+bpBonus)*0.5)*stamF*condF;
-      const effMovement=((statEff(pitcher,'movement'))+(pitBonus+bpBonus)*0.3)*velMult*stamF;
-
-      // 동적 회귀 + TTO 판정
-      const reg=_calcRegression(b,pitcher);
-      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod*reg.erMod,_pf);
+      // ── 통합 타석 판정 (관전·AI와 동일 resolvePA) — 시뮬 경로도 피로(NP)/RISP 클러치/consistency/재활 반영 → 공정성 ──
+      // 컨셉 보너스(불펜 포함)는 resolvePA가 컨셉에서 단일 계산(기존 batBonus/pitBonus arg·bpBonus 대체).
+      const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:pitcherTeam.concept,
+        np:pitcher._simNP||0, hasRISP:!!(bases[1]||bases[2]), isHighLeverage:false, avgFielding:avgFld, park:_pf});
+      const adjPow=_r.adjPower, effMovement=_r.effMovement; // 주루 인플레율 재계산 호환
+      const _rr=Math.random();
+      const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'
+        : (function(){const ip=Math.random();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
 
       if(result==='HR'){
         bs.ab++;bs.h++;bs.hr++;ps.ha++;ps.phr++;
