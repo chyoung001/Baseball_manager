@@ -103,8 +103,14 @@ function renderLeagueLeaders(){
   const byRBI=[...allBatters].sort((a,b)=>b.p.ss.rbi-a.p.ss.rbi);
   const bySB=[...allBatters].sort((a,b)=>b.p.ss.sb-a.p.ss.sb);
   const byOBP=[...qualBatters].sort((a,b)=>ssOBP(b.p)-ssOBP(a.p));
+  const byWAR=[...qualBatters].sort((a,b)=>warBatter(b.p)-warBatter(a.p));
+  const byWRC=[...qualBatters].sort((a,b)=>ssWRCplus(b.p)-ssWRCplus(a.p));
+  const byOPS=[...qualBatters].sort((a,b)=>ssOPS(b.p)-ssOPS(a.p));
 
   $('leagueBatLeaders').innerHTML=
+    leaderSection('WAR',byWAR,e=>warBatter(e.p).toFixed(1))+
+    leaderSection('wRC+',byWRC,e=>ssWRCplus(e.p))+
+    leaderSection('OPS',byOPS,e=>ssOPS(e.p).toFixed(3))+
     leaderSection('타율 (AVG)',byAvg,e=>ssAvg(e.p).toFixed(3))+
     leaderSection('홈런 (HR)',byHR,e=>e.p.ss.hr)+
     leaderSection('타점 (RBI)',byRBI,e=>e.p.ss.rbi)+
@@ -117,8 +123,12 @@ function renderLeagueLeaders(){
   const byK=[...allPitchers].sort((a,b)=>b.p.ss.pk-a.p.ss.pk);
   const bySV=[...allPitchers].sort((a,b)=>b.p.ss.sv-a.p.ss.sv);
   const byWHIP=[...qualPitchers].sort((a,b)=>ssWHIP(a.p)-ssWHIP(b.p));
+  const byPWAR=[...qualPitchers].sort((a,b)=>warPitcher(b.p)-warPitcher(a.p));
+  const byFIP=[...qualPitchers].sort((a,b)=>ssFIP(a.p)-ssFIP(b.p));
 
   $('leaguePitLeaders').innerHTML=
+    leaderSection('WAR (투)',byPWAR,e=>warPitcher(e.p).toFixed(1))+
+    leaderSection('FIP',byFIP,e=>ssFIP(e.p).toFixed(2))+
     leaderSection('방어율 (ERA)',byERA,e=>ssERA(e.p).toFixed(2))+
     leaderSection('승리 (W)',byW,e=>e.p.ss.w)+
     leaderSection('탈삼진 (K)',byK,e=>e.p.ss.pk)+

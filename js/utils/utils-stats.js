@@ -131,7 +131,7 @@ function maxOvrFromPot(pot){return Math.floor(18+(pot||50)*0.825);}
 // ---- Season Stats (per-player real game stats) ----
 function initSeasonStats(p){
   p.ss={ab:0,h:0,hr:0,xbh:0,rbi:0,bb:0,k:0,sb:0,     // batter
-        ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0};  // pitcher (outs 정수 누적)
+        ip:0,outs:0,er:0,pk:0,pbb:0,w:0,l:0,sv:0,ha:0,gp:0,phr:0};  // pitcher (outs 정수 누적, phr=피홈런 for FIP)
 }
 function ssAvg(p){const s=p.ss;return s&&s.ab>0?(s.h/s.ab):0;}
 function ssOBP(p){const s=p.ss;return s&&(s.ab+s.bb)>0?((s.h+s.bb)/(s.ab+s.bb)):0;}
@@ -142,6 +142,36 @@ function ssIPstr(p){const o=_ssOuts(p.ss||{});return Math.floor(o/3)+'.'+(o%3);}
 function ssERA(p){const s=p.ss;const o=_ssOuts(s||{});return o>0?(s.er*27/o):99.99;}
 function ssK9(p){const s=p.ss;const o=_ssOuts(s||{});return o>0?(s.pk*27/o):0;}
 function ssWHIP(p){const s=p.ss;const o=_ssOuts(s||{});return o>0?((s.ha+s.pbb)*3/o):99.99;}
+
+// ---- Sabermetrics (P3): SLG/OPS/wOBA/wRC+/FIP/WAR ----
+// 2B/3B 미분리(xbh=장타 합)라 TB·wOBA는 장타 평균 가중으로 근사. phr=피홈런(FIP용).
+function _ssSingles(s){return Math.max(0,(s.h||0)-(s.xbh||0)-(s.hr||0));}
+function ssSLG(p){const s=p.ss;if(!s||!((s.ab||0)>0))return 0;
+  const tb=_ssSingles(s)+2.3*(s.xbh||0)+4*(s.hr||0); return tb/s.ab;} // 장타 평균 2.3루타 근사
+function ssOPS(p){return ssOBP(p)+ssSLG(p);}
+function ssWOBA(p){const s=p.ss;if(!s)return 0;const pa=(s.ab||0)+(s.bb||0);if(pa<=0)return 0;
+  return (0.69*(s.bb||0)+0.89*_ssSingles(s)+1.35*(s.xbh||0)+2.10*(s.hr||0))/pa;} // 장타 가중 1.35 근사
+const FIP_CONSTANT=3.10; // ERA 스케일 정렬 상수 (MLB 근사)
+function ssFIP(p){const s=p.ss;const o=_ssOuts(s||{});if(o<=0)return 99.99;const ip=o/3;
+  return +(((13*(s.phr||0)+3*(s.pbb||0)-2*(s.pk||0))/ip)+FIP_CONSTANT).toFixed(2);}
+// 리그 평균 wOBA (활성 타자·PA≥10) — wRC+/WAR 기준선. 시상·리더보드에서만 호출되어 매번 산출.
+function _leagueWOBA(){
+  if(typeof G==='undefined'||!G.teams)return 0.315;
+  let num=0,den=0;
+  G.teams.forEach(t=>(t.roster||[]).forEach(p=>{
+    if(p.isPitcher||!p.ss)return;const pa=(p.ss.ab||0)+(p.ss.bb||0);
+    if(pa<10)return;num+=ssWOBA(p)*pa;den+=pa;}));
+  return den>0?num/den:0.315;}
+function ssWRCplus(p){const lg=_leagueWOBA();return lg>0?Math.round((ssWOBA(p)/lg)*100):100;} // 100=리그평균
+// WAR — 타자(wOBA 대비 리그평균 + 포지션 보정)·투수(FIP 대비 대체수준). 공통 스케일(시상 랭킹).
+const _WAR_POS_ADJ={C:9,SS:7,'2B':3,CF:3,'3B':2,DH:-15,'1B':-9,LF:-7,RF:-7};
+function warBatter(p){const s=p.ss;if(!s)return 0;const pa=(s.ab||0)+(s.bb||0);if(pa<=0)return 0;
+  const wraa=(ssWOBA(p)-_leagueWOBA())/1.20*pa;              // wOBA 대비 득점 기여
+  const pos=(_WAR_POS_ADJ[p.pos]||0)*pa/600;                 // 포지션 조정(풀시즌 600PA 기준)
+  return +((wraa+pa*0.028+pos)/9).toFixed(1);}               // 대체수준 +0.028R/PA, RPW 9
+function warPitcher(p){const o=_ssOuts(p.ss||{});if(o<=0)return 0;const ip=o/3;
+  return +(((5.00-ssFIP(p))*ip/9)/9).toFixed(1);}            // 대체 FIP 5.00, /9이닝, RPW 9
+function warSaber(p){return p.isPitcher?warPitcher(p):warBatter(p);} // 시상용 정식 WAR (approxWAR는 연봉 전용 유지)
 
 // ---- 규정타석/규정이닝 최소 기준 (비율 스탯 랭킹용) ----
 function getMinPA(ratio){return Math.max(1,Math.floor((G.gameNum||1)*QUALIFY_PA_PER_GAME*ratio));}
