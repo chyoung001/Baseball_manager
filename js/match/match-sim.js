@@ -1,8 +1,17 @@
 // ===================== MATCH SIM (간이 시뮬 — AI 리그 경기 / 내 팀 자동 진행) =====================
 
+// AI 팀 IL 카운트다운 — processPostGame(내 팀 전용, match-postgame.js)의 AI 대응.
+// 복귀는 2군(futures)로 되돌려 1군 정원 초과를 막고, rehabGamesLeft=0으로 두어
+// _aiMaintainLineup이 같은 날 즉시 재콜업할 수 있게 한다(AI엔 재활 감산 경로가 없음).
+function _aiILCountdown(t){
+  t.roster.filter(p=>p.status==='il').forEach(p=>{
+    if((p.ilGamesLeft||0)>0) p.ilGamesLeft--;
+    if((p.ilGamesLeft||0)<=0){ p.status='futures'; p.isOnIL=false; p.rehabGamesLeft=0; }
+  });
+}
 function simulateOtherGames(){
-  // AI 라인업 유지 (부상 이탈 보충) — 내 팀 제외 전 구단, 오늘 상대 포함(다음 경기 대비)
-  G.teams.forEach(t=>{if(t!==G.myTeam)_aiMaintainLineup(t);});
+  // AI IL 카운트다운 + 라인업 유지 — 내 팀 제외 전 구단, 오늘 상대 포함(다음 경기 대비)
+  G.teams.forEach(t=>{if(t!==G.myTeam){_aiILCountdown(t);_aiMaintainLineup(t);}});
   const teams=G.teams.filter(t=>t!==G.myTeam&&t!==getOpponent());
   for(let i=0;i<teams.length;i+=2){
     if(i+1<teams.length) _simAIGame(teams[i],teams[i+1]);
@@ -23,9 +32,7 @@ function _simAIGame(teamA,teamB){
 
   // 체력 & NP 세팅
   [teamA,teamB].forEach(t=>getPitchers(t).forEach(p=>{
-    const base=statEff(p,'stamina')+rand(0,10); // Tier3 — 투구 한계(getMaxPitches)와 동일 티어
-    const bonus=(t.concept==='bullpen'&&p.role==='bullpen')?Math.round(base*0.2):0;
-    p.currentStamina=Math.min(100,base+bonus);
+    p.currentStamina=100; // 경기 시작=풀(%). NP식·시즌 리셋과 동일 스케일
     p._simNP=0;p._pitchedThisGame=false;
   }));
 
@@ -69,14 +76,15 @@ function _simAIGame(teamA,teamB){
 
       // 투수 유효 스탯 (체력 기반 피로도)
       const stamF=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
+      const condF=Math.min(1.0,(pitcher.condition||100)/100); // 컨디션 배율 — 관전 경로(match-flow)와 통일, movement 제외
       const velMult=1+((statEff(pitcher,'velocity'))/400);
-      const effStuff=((statEff(pitcher,'stuff'))+pitBonus)*velMult*stamF;
-      const effControl=((statEff(pitcher,'control'))+pitBonus*0.5)*stamF;
+      const effStuff=((statEff(pitcher,'stuff'))+pitBonus)*velMult*stamF*condF;
+      const effControl=((statEff(pitcher,'control'))+pitBonus*0.5)*stamF*condF;
       const effMovement=((statEff(pitcher,'movement'))+pitBonus*0.3)*velMult*stamF;
 
       // 동적 회귀 + TTO 판정
       const reg=_calcRegression(b,pitcher);
-      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod);
+      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod*reg.erMod);
 
       if(result==='HR'){
         bs.ab++;bs.h++;bs.hr++;ps.ha++;
@@ -245,9 +253,7 @@ function _simMyGame(){
 
   // 체력 & NP 세팅
   [homeTeam,awayTeam].forEach(t=>getPitchers(t).forEach(p=>{
-    const base=statEff(p,'stamina')+rand(0,10); // Tier3 — 투구 한계(getMaxPitches)와 동일 티어
-    const bonus=(t.concept==='bullpen'&&p.role==='bullpen')?Math.round(base*0.2):0;
-    p.currentStamina=Math.min(100,base+bonus);
+    p.currentStamina=100; // 경기 시작=풀(%). NP식·시즌 리셋과 동일 스케일
     p._simNP=0;p._pitchedThisGame=false;
   }));
 
@@ -310,14 +316,15 @@ function _simMyGame(){
       // 투수 유효 스탯 (불펜 컨셉 보너스 포함)
       const bpBonus=(pitcherTeam.concept==='bullpen'&&pitcher.role==='bullpen')?5:0;
       const stamF=pitcher.currentStamina<=5?0.40:pitcher.currentStamina<25?0.75:pitcher.currentStamina<50?0.88:1.0;
+      const condF=Math.min(1.0,(pitcher.condition||100)/100); // 컨디션 배율 — 관전 경로(match-flow)와 통일, movement 제외
       const velMult=1+((statEff(pitcher,'velocity'))/400);
-      const effStuff=((statEff(pitcher,'stuff'))+pitBonus+bpBonus)*velMult*stamF;
-      const effControl=((statEff(pitcher,'control'))+(pitBonus+bpBonus)*0.5)*stamF;
+      const effStuff=((statEff(pitcher,'stuff'))+pitBonus+bpBonus)*velMult*stamF*condF;
+      const effControl=((statEff(pitcher,'control'))+(pitBonus+bpBonus)*0.5)*stamF*condF;
       const effMovement=((statEff(pitcher,'movement'))+(pitBonus+bpBonus)*0.3)*velMult*stamF;
 
       // 동적 회귀 + TTO 판정
       const reg=_calcRegression(b,pitcher);
-      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod);
+      const result=_ttoSimAB(adjPow,adjCon,adjEye,effStuff,effControl,effMovement,avgFld,reg.hitMod*reg.erMod);
 
       if(result==='HR'){
         bs.ab++;bs.h++;bs.hr++;ps.ha++;
@@ -481,7 +488,7 @@ function _simMyGame(){
     const durMod=Math.round((dur-50)/15);
     p.condition=clamp(p.condition-rand(Math.max(1,dropMin-durMod),Math.max(1,dropMax-durMod)),30,100);
     const _injMult=(p._recentILReturn||0)>0?1.5:1.0; // 복귀 직후 재부상 위험 (실경기와 동일)
-    if(p.condition<55&&rand(1,300)<=Math.round(_injuryThreshold(dur)*_injMult)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
+    if(p.condition<55&&rand(1,300)<=Math.round(_injuryThreshold(dur)*_injMult)){const _inj=rollInjuryDuration();p.status='il';p.isOnIL=true;p.ilGamesLeft=_inj.games;}
     if((p._recentILReturn||0)>0) p._recentILReturn--;
     if((p._slumpGames||0)>0) p._slumpGames--;
     else{const _sg=_rollSlumpOnset(p,G.myTeam);if(_sg>0)p._slumpGames=_sg;} // 실경기와 동일 공식으로 통일
@@ -510,7 +517,7 @@ function _simMyGame(){
       p._consecutiveDaysPitched=0;
     }
     const _pitInjMult=(p._recentILReturn||0)>0?1.5:1.0; // 복귀 직후 재부상 위험 (실경기와 동일)
-    if(p.condition<40&&rand(1,400)<=Math.round(_injuryThreshold(dur)*_pitInjMult)){p.status='il';p.isOnIL=true;p.ilGamesLeft=rand(5,15);}
+    if(p.condition<40&&rand(1,400)<=Math.round(_injuryThreshold(dur)*_pitInjMult)){const _inj=rollInjuryDuration();p.status='il';p.isOnIL=true;p.ilGamesLeft=_inj.games;}
     if((p._recentILReturn||0)>0) p._recentILReturn--;
   });
 
@@ -532,11 +539,6 @@ function _simMyGame(){
   simulateOtherGames();
   processPostGame();
   G.gameNum++;
-
-  // 9월 확대 엔트리
-  if(G.phase==='second_half'&&G.gameNum===EXPANDED_ENTRY_START){
-    showToast('📋 9월 확대 엔트리! 1군 최대 32명');
-  }
 
   return myWon;
 }

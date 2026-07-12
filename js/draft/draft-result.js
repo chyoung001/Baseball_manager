@@ -31,7 +31,7 @@ function renderDraftResult(){
             const isMine=r.team===G.myTeam.name;
             return `<tr style="${isMine?'background:rgba(245,158,11,0.08);':''}">
               <td>${r.round}</td><td>${r.pick}</td>
-              <td>${r.emoji} ${r.name}</td>
+              <td>${r.emoji} ${r.team}</td>
               <td style="text-align:left;${isMine?'color:var(--accent);font-weight:700;':''}">${r.name}</td>
               <td><span class="pos-badge${r.isPitcher?' pitcher':''}" style="font-size:0.5rem;padding:1px 3px;">${r.pos}</span></td>
               <td style="color:${statColor(r.ovr)};font-weight:700;">${r.ovr}</td>

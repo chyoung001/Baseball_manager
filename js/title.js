@@ -15,7 +15,7 @@ function initTitleScreen(){
 
 function selectTeam(idx){
   G.teamIdx=idx;initTeams(idx);G.season=1;G.gameNum=0;G.trainingCooldown=0;
-  G.phase='preseason';G.previousSeasonStandings=[];
+  G.phase='preseason';G.previousSeasonStandings=[];G.expandedEntryNotified=false;
   G.faPool=[];G.faBiddingLog=[];
   generateMarket();
   $('titleScreen').classList.remove('active');

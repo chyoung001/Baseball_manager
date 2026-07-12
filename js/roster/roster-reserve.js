@@ -46,7 +46,7 @@ function renderFutures() {
   function ilRows(list) {
     return list.map(p=>{
       const idx=G.myTeam.roster.indexOf(p);
-      const pct=p.ilGamesLeft>0?Math.round((1-p.ilGamesLeft/20)*100):100;
+      const pct=p.ilGamesLeft>0?Math.max(0,Math.round((1-p.ilGamesLeft/20)*100)):100;
       return `<tr>
       <td><span class="player-name">${p.name}</span></td>
       <td><span class="pos-badge${p.isPitcher?' pitcher':''}">${ALL_POS_NAMES[p.pos]||p.pos}</span></td>

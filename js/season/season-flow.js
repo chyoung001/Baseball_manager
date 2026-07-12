@@ -354,7 +354,7 @@ function _aiOptimizeRoster(team){
 function _startNextSeason(){
   $('seasonModal').classList.remove('active');
   G.season++;G.gameNum=0;G.phase='preseason';
-  G.fanEventUsedThisGame=false;G.trainingCooldown=0;
+  G.fanEventUsedThisGame=false;G.trainingCooldown=0;G.expandedEntryNotified=false;
   G.allStars=[];G.awards=[];G.postseasonBracket=null;
   G.faPool=[];G.faBiddingLog=[];G._draftResult=null;
 
