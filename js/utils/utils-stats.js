@@ -137,7 +137,6 @@ function ssAvg(p){const s=p.ss;return s&&s.ab>0?(s.h/s.ab):0;}
 function ssOBP(p){const s=p.ss;return s&&(s.ab+s.bb)>0?((s.h+s.bb)/(s.ab+s.bb)):0;}
 // outs 기반 이닝 계산 (부동소수점 방지, 구버전 ip 폴백)
 function _ssOuts(s){return (s.outs||0)>0?s.outs:Math.round((s.ip||0)*3);}
-function ssIP(p){const o=_ssOuts(p.ss||{});return Math.floor(o/3)+(o%3)/10;} // 6.1 = 6⅓이닝
 function ssIPstr(p){const o=_ssOuts(p.ss||{});return Math.floor(o/3)+'.'+(o%3);}
 function ssERA(p){const s=p.ss;const o=_ssOuts(s||{});return o>0?(s.er*27/o):99.99;}
 function ssK9(p){const s=p.ss;const o=_ssOuts(s||{});return o>0?(s.pk*27/o):0;}

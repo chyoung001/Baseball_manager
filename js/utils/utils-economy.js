@@ -53,12 +53,6 @@ function getLuxuryTax(team){
 }
 
 // ── 코칭/훈련 ──
-function getCoachBonus(team,stat){
-  const ct=COACH_TYPES.find(c=>c.bonusStat===stat);
-  if(!ct||!team.coachStaff)return 0;
-  const lv=team.coachStaff[ct.key]||0;
-  return stat==='condition'?lv*3:lv*2;
-}
 
 // 훈련 효율 배율: 1.0 ~ 1.5 (코치레벨 + 스태프레벨 기반)
 // 스탯 → 코치 매핑 (power→batting, arm→defense, velocity→pitching, clutch→stamina)

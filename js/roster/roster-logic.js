@@ -80,18 +80,6 @@ function moveToStarting(idx,e){
   G.myTeam.roster[idx].role = 'starting';
   renderRoster();saveGame();
 }
-function moveToBullpen(idx,e){
-  if(_isPosDrop(e)||G.matchInProgress) return;
-  const p = G.myTeam.roster[idx];
-  if(getRotation(G.myTeam).length <= 1) return;
-  p.role = 'bullpen';
-  renderRoster();saveGame();
-}
-function moveToRotation(idx,e){
-  if(_isPosDrop(e)||G.matchInProgress) return;
-  G.myTeam.roster[idx].role = 'rotation';
-  renderRoster();saveGame();
-}
 
 // ===================== 1군/2군/육성 로스터 관리 =====================
 function sendToFutures(idx) {
