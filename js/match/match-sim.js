@@ -43,17 +43,7 @@ function _simAIGame(teamA,teamB){
     let outs=0,runs=0,pa=0;
     if(!pitcher||batters.length===0)return rand(0,3);
     const _pf=getParkFactor(teamA); // 홈구장(teamA) 파크팩터 — 양팀 공통
-
-    // 팀 컨셉 보너스
-    let batBonus=0,pitBonus=0;
-    if(batTeam.concept==='contact_hit')batBonus+=4;
-    if(batTeam.concept==='speed')batBonus+=3;
-    if(batTeam.concept==='sabermetrics')batBonus+=3;
-    if(batTeam.concept==='prospect')batBonus+=2;
-    if(fldTeam.concept==='power_hit')pitBonus+=5;
-    if(fldTeam.concept==='defense')pitBonus+=4;
-    if(fldTeam.concept==='pitching')pitBonus+=4;
-    if(fldTeam.concept==='bullpen'&&pitcher.role==='bullpen')pitBonus+=5;
+    // 팀 컨셉 보너스는 resolvePA가 ctx.batConcept/fldConcept에서 단일 계산
 
     // 수비력 평균 (전환 페널티 반영)
     const fldStarters=fldTeam?getStartingBatters(fldTeam):[];
@@ -252,27 +242,10 @@ function _simMyGame(){
   const awaySP=getStartingPitcher(awayTeam);
   // null 투수 시 simHalfFull 내부의 rand(0,4) 폴백으로 처리됨
 
-  // 컨셉 보정 (startMatch와 동일)
-  let batBonusHome=0,pitBonusHome=0,batBonusAway=0,pitBonusAway=0;
-  if(homeTeam.concept==='contact_hit')batBonusHome+=4;
-  if(homeTeam.concept==='speed')batBonusHome+=3;
-  if(homeTeam.concept==='sabermetrics')batBonusHome+=3;
-  if(homeTeam.concept==='prospect')batBonusHome+=2;
-  if(awayTeam.concept==='contact_hit')batBonusAway+=4;
-  if(awayTeam.concept==='speed')batBonusAway+=3;
-  if(awayTeam.concept==='sabermetrics')batBonusAway+=3;
-  if(awayTeam.concept==='prospect')batBonusAway+=2;
-  if(homeTeam.concept==='power_hit')pitBonusHome+=5;
-  if(homeTeam.concept==='defense')pitBonusHome+=4;
-  if(homeTeam.concept==='pitching')pitBonusHome+=4;
-  if(awayTeam.concept==='power_hit')pitBonusAway+=5;
-  if(awayTeam.concept==='defense')pitBonusAway+=4;
-  if(awayTeam.concept==='pitching')pitBonusAway+=4;
-
-  const _boHome={i:0},_boAway={i:0}; // 게임 단위 타순 연속
+  const _boHome={i:0},_boAway={i:0}; // 게임 단위 타순 연속 (컨셉 보너스는 resolvePA가 ctx에서 단일 계산)
 
   // 각 팀 TTO+BABIP 간이 시뮬 — simulatePlay 공식 통일 + 체력 소모 + 끝내기
-  function simHalfFull(batTeam,pitcherTeam,batBonus,pitBonus,curPitcher,walkoffTarget,ord){
+  function simHalfFull(batTeam,pitcherTeam,curPitcher,walkoffTarget,ord){
     ord=ord||{i:0}; // 타순 연속 (게임 단위 유지)
     const batters=getStartingBatters(batTeam);
     let pitcher=curPitcher;
@@ -377,10 +350,10 @@ function _simMyGame(){
       const pickA=_pickReliever(awayTeam,inn,runsAway-runsHome);
       if(pickA){curPitAway=pickA;lastPitAway=pickA;}
     }
-    runsAway+=simHalfFull(awayTeam,homeTeam,batBonusAway,pitBonusHome,curPitHome,0,_boAway);
+    runsAway+=simHalfFull(awayTeam,homeTeam,curPitHome,0,_boAway);
     if(inn===9&&runsHome>runsAway) break;
     const wot=inn>=9?(runsAway-runsHome+1):0;
-    runsHome+=simHalfFull(homeTeam,awayTeam,batBonusHome,pitBonusAway,curPitAway,wot,_boHome);
+    runsHome+=simHalfFull(homeTeam,awayTeam,curPitAway,wot,_boHome);
     if(inn>=9&&runsHome>runsAway) break;
   }
 
@@ -395,10 +368,10 @@ function _simMyGame(){
         const pickA=_pickReliever(awayTeam,inn,runsAway-runsHome);
         if(pickA){curPitAway=pickA;lastPitAway=pickA;}
       }
-      runsAway+=simHalfFull(awayTeam,homeTeam,batBonusAway,pitBonusHome,curPitHome,0,_boAway);
+      runsAway+=simHalfFull(awayTeam,homeTeam,curPitHome,0,_boAway);
       if(runsHome>runsAway) break;
       const wot=runsAway-runsHome+1;
-      runsHome+=simHalfFull(homeTeam,awayTeam,batBonusHome,pitBonusAway,curPitAway,wot,_boHome);
+      runsHome+=simHalfFull(homeTeam,awayTeam,curPitAway,wot,_boHome);
       if(runsHome!==runsAway) break;
     }
   }

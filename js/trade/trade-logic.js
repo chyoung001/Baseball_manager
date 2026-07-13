@@ -70,9 +70,9 @@ function _toggleTradePlayer(side,rosterIdx){
   renderTrade();
 }
 
-// 프랜차이즈 스타 판정: 재적 8년 이상 AND OVR 75 이상
+// 프랜차이즈 스타 판정: 재적 FRANCHISE_MIN_TENURE 시즌 이상 AND OVR FRANCHISE_MIN_OVR 이상
 function _isFranchiseStar(p){
-  return (p._teamTenure||0)>=8 && ovr(p)>=75;
+  return (p._teamTenure||0)>=FRANCHISE_MIN_TENURE && ovr(p)>=FRANCHISE_MIN_OVR;
 }
 
 function _executeTrade(){

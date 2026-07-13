@@ -1009,10 +1009,13 @@ const pkProbe = g(`(function(){
   const vals=Object.values(PARK_FACTORS);
   const hrAvg=vals.reduce((s,v)=>s+v.hr,0)/vals.length;
   const hitAvg=vals.reduce((s,v)=>s+v.hit,0)/vals.length;
+  // 파크팩터 park.hr 곱셈이 resolvePA의 pHR에 반영되는지 — 죽은 코드 _ttoSimAB 대신 엔진 직접 호출
   let hrHi=0,hrLo=0;
+  const _pkBat={power:80,contact:50,eye:50,speed:50,fielding:50};
+  const _pkPit={stuff:50,control:50,movement:50,velocity:50,stamina:50,clutch:50,currentStamina:100,condition:100,role:'rotation'};
   for(let i=0;i<4000;i++){
-    if(_ttoSimAB(80,50,50,50,50,50,50,1.0,{hr:2.0,hit:1})==='HR')hrHi++;
-    if(_ttoSimAB(80,50,50,50,50,50,50,1.0,{hr:0.5,hit:1})==='HR')hrLo++;
+    hrHi+=resolvePA(_pkBat,_pkPit,{park:{hr:2.0,hit:1},avgFielding:50}).pHR;
+    hrLo+=resolvePA(_pkBat,_pkPit,{park:{hr:0.5,hit:1},avgFielding:50}).pHR;
   }
   return { knownHr:known.hr, neutralHr:neutral.hr, neutralHit:neutral.hit, undefHr:undef.hr,
     hrAvg:+hrAvg.toFixed(3), hitAvg:+hitAvg.toFixed(3), hrHi, hrLo, parkCount:vals.length,

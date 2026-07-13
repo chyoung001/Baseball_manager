@@ -34,26 +34,6 @@ function _calcRegression(batter, pitcher){
   return {hitMod, erMod};
 }
 
-// ── TTO 기반 간이 타석 판정 (AI/빠른 시뮬용) ──
-function _ttoSimAB(adjPow, adjCon, adjEye, effStuff, effControl, effMovement, avgFld, babipMod, park){
-  const _pf=park||{hr:1,hit:1}; // 홈구장 파크팩터 (없으면 중립) — 확률 변환 후 곱셈
-  const pHR=clamp((TTO_BASE_HR+(adjPow-effMovement)/165*0.16)*_pf.hr, 0.005, 0.08);
-  const pK =clamp(TTO_BASE_K +(effStuff-adjCon)/165*0.15, 0.04, 0.30);
-  const pBB=clamp(TTO_BASE_BB+(adjEye-effControl)/165*0.12, 0.02, 0.15);
-  const contactMod=1+(adjCon-50)/330;
-  const defMod=1-(avgFld-50)/412;
-  const babip=clamp(TTO_BASE_BABIP*contactMod*defMod*(babipMod||1.0)*_pf.hit, 0.200, 0.380);
-  const pError=clamp(0.02-(avgFld-50)/3300, 0.005, 0.04);
-  const r=Math.random();
-  if(r<pHR) return 'HR';
-  if(r<pHR+pK) return 'K';
-  if(r<pHR+pK+pBB) return 'BB';
-  const ip=Math.random();
-  if(ip<pError) return 'ERROR';
-  if(ip<pError+babip) return 'HIT';
-  return 'OUT';
-}
-
 // ── 통합 타석 판정 엔진 (관전·AI·자동 3경로 공유) ──
 // simulatePlay·simHalf·simHalfFull에 3중 복제돼 있던 유효스탯+TTO/BABIP+인플레율 계산을 단일화.
 // 상황 입력(피로 np·RISP·고레버리지·멘탈코칭·컨셉·수비평균·파크)은 ctx로 전달, 미제공 시 중립 기본값.
