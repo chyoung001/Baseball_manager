@@ -61,7 +61,7 @@ function _simAIGame(teamA,teamB){
       // (고레버리지 bigGame은 이닝/점수차 미추적으로 이 경로 미적용 = 잔여, #18 예정)
       const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:fldTeam.concept,
         np:pitcher._simNP||0, hasRISP:!!(bases[1]||bases[2]), isHighLeverage:false, avgFielding:avgFld, park:_pf});
-      const adjPow=_r.adjPower, effMovement=_r.effMovement; // 주루 인플레율 재계산 호환
+      const adjPow=_r.adjPower; // 주루 인플레율(xbh) 재계산 호환
       const _rr=Math.random();
       const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'
         : (function(){const ip=Math.random();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
@@ -104,7 +104,7 @@ function _simAIGame(teamA,teamB){
       }else{
         // 범타 아웃 — 땅볼/DP 판정
         bs.ab++;
-        const gbRate=clamp(0.45+(effMovement-adjPow)/330,0.30,0.65);
+        const gbRate=_r.gbRate; // 컨셉 gbAdj 포함 — 관전 경로와 병살·땅볼 분포 통일
         if(Math.random()<gbRate){
           const baseDpChance=fldTeam.concept==='defense'?0.14:0.09;
           const speedDpMod=(statEff(b,'speed'))<=42?1.4:(statEff(b,'speed'))>=75?0.6:1.0;
@@ -271,7 +271,7 @@ function _simMyGame(){
       // 컨셉 보너스(불펜 포함)는 resolvePA가 컨셉에서 단일 계산(기존 batBonus/pitBonus arg·bpBonus 대체).
       const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:pitcherTeam.concept,
         np:pitcher._simNP||0, hasRISP:!!(bases[1]||bases[2]), isHighLeverage:false, avgFielding:avgFld, park:_pf});
-      const adjPow=_r.adjPower, effMovement=_r.effMovement; // 주루 인플레율 재계산 호환
+      const adjPow=_r.adjPower; // 주루 인플레율(xbh) 재계산 호환
       const _rr=Math.random();
       const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'
         : (function(){const ip=Math.random();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
@@ -314,7 +314,7 @@ function _simMyGame(){
       }else{
         // 범타 아웃 — 땅볼/DP 판정
         bs.ab++;
-        const gbRate=clamp(0.45+(effMovement-adjPow)/330,0.30,0.65);
+        const gbRate=_r.gbRate; // 컨셉 gbAdj 포함 — 관전 경로와 병살·땅볼 분포 통일
         if(Math.random()<gbRate){
           const baseDpChance=pitcherTeam.concept==='defense'?0.14:0.09;
           const speedDpMod=(statEff(b,'speed'))<=42?1.4:(statEff(b,'speed'))>=75?0.6:1.0;
