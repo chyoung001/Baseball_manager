@@ -8,9 +8,10 @@ function showAwards(){
     const _myRank=_std.indexOf(G.myTeam)+1;
     const _champRec=((G.postseasonBracket&&G.postseasonBracket.results)||[]).find(r=>r.champion);
     const _isChamp=!!(_champRec&&_champRec.winner===G.myTeam.name);
-    // 재정 페널티는 당시즌 순수익 기준 — _lastSeasonRev는 스토브(phase8)에서만 세팅돼
-    // 시상식(phase6)에선 전년 값이므로, 당시즌 순위로 수익을 재계산해 시즌 정합을 맞춘다.
-    const _net=calcSeasonRevenue(G.myTeam,_myRank).net;
+    // 재정 페널티는 당시즌 운영 순손익 기준. calcSeasonRevenue().net은 수익측(사치세·연대기금 차감)만이라
+    // 유지비·급여를 빼야 실제 적자를 판정할 수 있다 (준비금 감가는 배당 성격이라 제외).
+    const _rev=calcSeasonRevenue(G.myTeam,_myRank);
+    const _net=+(_rev.net-calcAnnualUpkeep(G.myTeam).total-getPayroll(G.myTeam)).toFixed(1);
     _applyApprovalDelta(G.myTeam,_myRank,_isChamp,_net);
   }
 
