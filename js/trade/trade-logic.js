@@ -156,6 +156,12 @@ function _executeTrade(){
     showToast('⚠️ 프랜차이즈 스타의 이적으로 팬덤이 분노하여 인기도가 폭락했습니다!');
   }
 
+  // ── 트레이드 후 1군 정합: 주전 유출로 규정이 깨졌으면 자동 재배치 (내부에서 렌더·저장) ──
+  if(!G.matchInProgress && typeof validateActiveRoster==='function'
+     && !validateActiveRoster(G.myTeam).ok && typeof autoArrangeRoster==='function'){
+    autoArrangeRoster();
+  }
+
   _tradeState.targetTeam=null;
   _tradeState.myOffer=[];
   _tradeState.theirOffer=[];
