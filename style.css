@@ -360,12 +360,19 @@ body { background:var(--bg-dark); color:var(--text); font-family:'Noto Sans KR',
 #autoSimProgress { font-size:0.72rem; color:#f59e0b; font-family:'JetBrains Mono',monospace; display:none; }
 
 .training-grid,.facility-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
-.training-card,.facility-card { background:var(--bg-card-hover); border:1px solid var(--border); border-radius:10px; padding:14px; cursor:pointer; transition:all 0.2s; text-align:center; }
-.training-card:hover,.facility-card:hover { border-color:var(--accent); transform:translateY(-2px); }
-.training-icon,.facility-icon { font-size:1.8rem; margin-bottom:6px; }
-.training-name,.facility-name { font-weight:700; font-size:0.82rem; margin-bottom:3px; }
-.training-desc,.facility-desc { font-size:0.7rem; color:var(--text-dim); }
-.facility-level { font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--accent); margin-top:6px; }
+.training-card,.facility-card { display:flex; flex-direction:column; background:var(--bg-card-hover); border:1px solid var(--border); border-radius:12px; padding:14px; cursor:pointer; transition:transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; text-align:center; }
+.training-card:hover,.facility-card:hover { border-color:var(--accent); transform:translateY(-3px); box-shadow:0 6px 18px rgba(0,0,0,0.28); }
+.training-icon,.facility-icon { font-size:1.9rem; margin-bottom:6px; }
+.training-name,.facility-name { font-weight:700; font-size:0.84rem; margin-bottom:4px; }
+.training-desc,.facility-desc { font-size:0.7rem; color:var(--text-dim); min-height:2.5em; line-height:1.25; }
+.facility-level { display:inline-block; align-self:center; font-family:'JetBrains Mono',monospace; font-size:0.72rem; font-weight:700; color:var(--accent); background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:20px; padding:2px 10px; margin-top:8px; }
+
+/* 투자 상단 예산 요약바 — 어느 탭에서든 고정 노출 */
+.invest-budgetbar { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
+.invest-budgetbar .ibb-item { flex:1 1 150px; background:var(--bg-card-hover); border:1px solid var(--border); border-radius:12px; padding:10px 14px; }
+.ibb-label { font-size:0.66rem; color:var(--text-dim); margin-bottom:4px; letter-spacing:0.02em; }
+.ibb-value { font-family:'Orbitron',sans-serif; font-size:1.05rem; font-weight:700; }
+.ibb-sub { font-size:0.68rem; color:var(--text-dim); font-family:'JetBrains Mono',monospace; font-weight:400; }
 
 .market-grid { display:block; }
 .market-card { background:var(--bg-card-hover); border:1px solid var(--border); border-radius:10px; padding:14px; transition:all 0.2s; }
