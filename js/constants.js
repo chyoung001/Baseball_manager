@@ -212,7 +212,7 @@ const APPROVAL_FINANCE_PENALTY=-3;   // 시즌 순수익 적자 페널티
 
 // ===================== DRAFT CONSTANTS =====================
 const DRAFT_ROUNDS=6;             // 드래프트 라운드 수 (6라운드 × 8팀 = 48명)
-const DRAFT_POOL_SIZE=32;         // 드래프트 풀 크기 (4라운드 × 8팀)
+// 드래프트 풀 크기(48)는 player-pools.generateDraftPool에서 보장 3 + 확률 45로 하드코딩됨
 
 // ===================== FA & SALARY CONSTANTS (KBO-style, 단위: 억원) =====================
 // P2-3 설계 정렬: 신인 계약 3년(서비스 0~2) → Arb 서비스 3~5 → FA 서비스 6+
@@ -242,6 +242,8 @@ const TRADE_MAX_PLAYERS=3;          // 한쪽 최대 교환 인원
 const TRADE_AI_ACCEPT_RATIO=0.85;   // AI 수락 기본 임계값 (85%)
 const TRADE_CONTENDER_BONUS=1.3;    // 윈나우 AI 즉전력 프리미엄
 const TRADE_REBUILD_BONUS=1.5;      // 리빌딩 AI 유망주 프리미엄
+const FRANCHISE_MIN_TENURE=8;       // 프랜차이즈 스타 판정: 최소 재적 시즌 (trade-logic·utils-economy 공유)
+const FRANCHISE_MIN_OVR=75;         // 프랜차이즈 스타 판정: 최소 OVR
 
 // ===================== POSITION WEIGHT (Trade Value) =====================
 const POS_WEIGHT={

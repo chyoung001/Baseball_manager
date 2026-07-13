@@ -5,7 +5,7 @@
 function generateDraftPool(){
   const pool=[];
   // GM 회의 '드래프트 풍년'(draft_bumper) 가결 시 등급 확률 상향 — 풀 크기(48)는 불변(라운드 정합 유지).
-  // 이전엔 seasonModifiers.draftQualityBonus가 어디서도 소비되지 않아 가결해도 효과 0이던 死 modifier.
+  // 이전엔 seasonModifiers.draftQualityBonus가 어디서도 소비되지 않아 가결해도 효과 0이던 죽은 modifier.
   const dq=(G.seasonModifiers&&G.seasonModifiers.draftQualityBonus)||0;
   // 1. 최소 보장 (1~3픽용 대어) — 풍년 시 3번째 대어도 S로 승급
   pool.push(genDraftProspect(Math.random()<0.5, 'S'));

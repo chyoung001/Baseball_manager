@@ -186,7 +186,7 @@ function calcTradeValueForAI(p,aiTeam){
   // ── 6단계: 프랜차이즈 스타 언터처블 프리미엄 ──
   // AI 소속 선수가 프랜차이즈 스타면 팬 반발 의식하여 2배 프리미엄
   const isOnAiTeam=aiTeam.roster.includes(p);
-  if(isOnAiTeam&&(p._teamTenure||0)>=8&&pOvr>=75){
+  if(isOnAiTeam&&(p._teamTenure||0)>=FRANCHISE_MIN_TENURE&&pOvr>=FRANCHISE_MIN_OVR){
     tv=Math.round(tv*2.0);
   }
 
