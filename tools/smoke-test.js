@@ -1327,6 +1327,40 @@ check(`C: bullpen 컨셉 선발 이닝 > 0 (구 버그: 0IP): ${bullpenConceptPr
 check('C: _simAIGame 현재투수가 이닝 간 유지 (curPit 선언이 루프 밖)',
   !/for\s*\(let inn[^)]*\)\s*\{\s*let curPit/.test(g('_simAIGame.toString()')));
 
+// ── D. AI 투수 피로 — 컨디션·연투가 내 팀 전용이 아니어야 한다 ──
+// 구 버그: 컨디션/연투 갱신이 `G.myTeam.roster`로만 한정돼 AI 투수는 condition이 생성 시
+// 초깃값에 영구 고정되고 `_consecutiveDaysPitched`가 항상 0 → `_pickReliever`의 필터 2종
+// (3연투 금지 · 컨디션 20 이상)이 AI에겐 사문화되고 resolvePA의 condFactor가 비대칭이 된다.
+check('D: _aiPitcherRest가 simulateOtherGames에 배선',
+  g('simulateOtherGames.toString()').includes('_aiPitcherRest'));
+const aiRestProbe = g(`(function(){
+  try{
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0; G.phase='first_half';
+    G.teams.forEach(t=>t.roster.forEach(p=>initSeasonStats(p)));
+    for(let i=0;i<25;i++){
+      if(G.gameNum>=FIRST_HALF_END&&G.phase==='first_half')G.phase='second_half';
+      __harnessFixRoster(); const b=G.gameNum; _simMyGame(); if(G.gameNum===b) break;
+    }
+    const ai=G.teams.filter(t=>t!==G.myTeam);
+    const stat=t=>{const ps=getPitchers(t).filter(p=>(p.status||'active')==='active');
+      return {consec:ps.filter(p=>(p._consecutiveDaysPitched||0)>0).length,
+              full:ps.filter(p=>(p.condition||100)>=100).length,
+              tired:ps.filter(p=>(p.condition||100)<80).length};};
+    const s=ai.map(stat);
+    return {teams:s.length,
+      consecTeams:s.filter(x=>x.consec>0).length,   // 연투 카운터가 갱신되는 팀 수
+      fullTeams:s.filter(x=>x.full>0).length,       // 휴식으로 100까지 회복한 투수를 가진 팀 수
+      tiredTeams:s.filter(x=>x.tired>0).length, err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check(`D: AI 투수 연투 카운터가 갱신됨 (${aiRestProbe.consecTeams}/${aiRestProbe.teams}팀 — 구 버그 0팀)`,
+  !aiRestProbe.err && aiRestProbe.consecTeams >= 4, JSON.stringify(aiRestProbe));
+check(`D: AI 투수 컨디션이 등판/휴식에 반응 (회복 ${aiRestProbe.fullTeams}팀 · 소모 ${aiRestProbe.tiredTeams}팀)`,
+  aiRestProbe.fullTeams >= 4 && aiRestProbe.tiredTeams >= 1, JSON.stringify(aiRestProbe));
+// 관전 경로도 `_simNP`를 갱신해야 경기 후 정산이 경로와 무관하게 동작한다
+check('D: 관전 경로가 _simNP를 미러링 (AI today는 스테일이라 사용 불가)',
+  g('simulatePlay.toString()').includes('_simNP=pt.np'));
+
 // ── T28. 시즌 사이클 end-to-end (오프시즌 페이즈 실구동) ──
 // 기존 스모크는 인게임 루프만 돌리고 오프시즌 페이즈 함수를 한 번도 실행하지 않았다
 // (showAllStarBreak·_startRookieDraft·showAwards·showPostseason·showGMMeeting·_startNextSeason = 0회 호출.

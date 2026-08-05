@@ -9,6 +9,31 @@ function _aiILCountdown(t){
     if((p.ilGamesLeft||0)<=0){ p.status='futures'; p.isOnIL=false; p.rehabGamesLeft=0; }
   });
 }
+// AI 팀 투수 경기 후 처리 (컨디션 · 연투) — endMatch/_simMyGame이 내 팀에만 하던 것의 AI 대응.
+// 이게 없으면 AI 투수는 condition이 생성 시 초깃값에 영구 고정되고 `_consecutiveDaysPitched`가 항상 0이라
+//  ① `_pickReliever`의 필터 2종(3연투 금지 · 컨디션 20 이상)이 AI에겐 완전 사문화되고
+//  ② resolvePA의 condFactor(=condition/100)가 비대칭이 된다(내 팀만 등판/휴식에 따라 변동).
+// 투구수는 `_simNP`를 단일 소스로 쓴다 — 3경로 모두 경기 시작 시 0으로 리셋하고 타석마다 누적한다.
+// (부상 롤은 내 팀 전용 유지 — AI 부상 도입은 별도 밸런스 사안)
+function _aiPitcherRest(t){
+  if(!t||t===G.myTeam)return;
+  getPitchers(t).filter(p=>p.role!=='overseas'&&(p.status||'active')==='active').forEach(p=>{
+    const np=p._simNP||0;
+    const didPitch=!!p._pitchedThisGame||np>0;
+    if(didPitch){
+      const npRatio=np/Math.max(1,getMaxPitches(p));
+      let condDrop=npRatio<=0.5?rand(5,10):npRatio<=1.0?rand(10,20):rand(20,30);
+      p._consecutiveDaysPitched=(p._consecutiveDaysPitched||0)+1;
+      if(p._consecutiveDaysPitched>=3) condDrop+=15;
+      else if(p._consecutiveDaysPitched>=2) condDrop+=5;
+      p.condition=clamp((p.condition||100)-condDrop,0,100);
+    }else{
+      p.condition=clamp((p.condition||100)+15+_restRecoveryBonus(p),0,100);
+      p._consecutiveDaysPitched=0;
+    }
+  });
+}
+
 function simulateOtherGames(){
   // AI IL 카운트다운 + 라인업 유지 — 내 팀 제외 전 구단, 오늘 상대 포함(다음 경기 대비)
   G.teams.forEach(t=>{if(t!==G.myTeam){_aiILCountdown(t);_aiMaintainLineup(t);}});
@@ -16,6 +41,8 @@ function simulateOtherGames(){
   for(let i=0;i<teams.length;i+=2){
     if(i+1<teams.length) _simAIGame(teams[i],teams[i+1]);
   }
+  // 오늘 경기를 마친 전 AI 구단(오늘 내 상대 포함)의 투수 피로 정산
+  G.teams.forEach(t=>{if(t!==G.myTeam)_aiPitcherRest(t);});
 }
 
 // 두 AI팀 간 간이 시뮬 (선수별 기록 누적) — teamA=Home, teamB=Away

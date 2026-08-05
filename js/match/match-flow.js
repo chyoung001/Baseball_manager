@@ -453,6 +453,9 @@ function simulatePlay(){
   //  단위가 어긋나 관전 경기에서만 피로 보정·투구수 강판이 영구 미발동 → 완투 남발·불펜 미사용)
   const _isKorBB=ttoRoll>=_c1&&ttoRoll<_c3; // K(_c1~_c2) 또는 BB(_c2~_c3) — 볼카운트 소모가 큰 타석
   pt.np+=_isKorBB?rand(4,7):rand(2,4);
+  // `_simNP`에도 미러링 — 경기 단위 투구수를 3경로가 같은 필드로 갖게 해 경기 후 처리(_aiPitcherRest)가
+  // 경로와 무관하게 동작하게 한다. (관전 경로는 today.np를 쓰지만 AI 팀의 today는 갱신되지 않아 스테일)
+  pitcher._simNP=pt.np;
   // NP 기반 스태미나 파생 (투구수/한계투구수 비율)
   const _maxNP=getMaxPitches(pitcher);
   pitcher.currentStamina=Math.max(0,Math.round(100*(1-pt.np/_maxNP)));
