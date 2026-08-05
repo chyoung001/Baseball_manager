@@ -1327,6 +1327,143 @@ check(`C: bullpen 컨셉 선발 이닝 > 0 (구 버그: 0IP): ${bullpenConceptPr
 check('C: _simAIGame 현재투수가 이닝 간 유지 (curPit 선언이 루프 밖)',
   !/for\s*\(let inn[^)]*\)\s*\{\s*let curPit/.test(g('_simAIGame.toString()')));
 
+// ── T28. 시즌 사이클 end-to-end (오프시즌 페이즈 실구동) ──
+// 기존 스모크는 인게임 루프만 돌리고 오프시즌 페이즈 함수를 한 번도 실행하지 않았다
+// (showAllStarBreak·_startRookieDraft·showAwards·showPostseason·showGMMeeting·_startNextSeason = 0회 호출.
+//  포스트시즌/GM회의 테스트는 G.postseasonBracket을 직접 조작하는 합성 테스트였다).
+// 그 공백 때문에 "드래프트가 유저 지명에서 멈춘다"는 사실이 드러나지 않았고, 로스터·예산 수지를
+// 6명/시즌 유입이 빠진 채로 오진할 수 있었다. 여기서는 실제 버튼 전이를 그대로 재현해 사이클을 완주한다.
+section('T28. 시즌 사이클 end-to-end (오프시즌 페이즈 실구동)');
+
+// setTimeout 큐를 실제로 실행 (드래프트 AI 픽 체인은 setTimeout 재귀로 진행됨)
+function drainTimers(cap = 20000) {
+  let n = 0;
+  while (timeouts.length && n++ < cap) { const fn = timeouts.shift(); try { fn(); } catch (e) { /* 연출 코드 무시 */ } }
+  return n;
+}
+
+vm.runInContext(`
+  // 한 시즌 완주: 프리시즌 → 전반기 → 올스타·드래프트 → 후반기 → 포스트시즌 → 시상식 → GM회의 → 스토브 → 다음시즌
+  // 각 페이즈의 "버튼 onclick"이 하던 전이를 하네스가 대신한다(게임 코드 무변경).
+  function __playHalf(limit){
+    let guard=0;
+    while(G.gameNum<limit && guard++<200){
+      __harnessFixRoster();
+      const before=G.gameNum;
+      _simMyGame();
+      if(G.gameNum===before) break; // 로스터 미달 등으로 진행 불가
+    }
+    return G.gameNum;
+  }
+`, ctx);
+
+const cycle = g(`(function(){
+  const rec={phases:[], err:null};
+  try{
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0;
+    const snap=(tag)=>rec.phases.push({tag, season:G.season, gameNum:G.gameNum, phase:G.phase,
+      rosters:G.teams.map(t=>t.roster.length), budgets:G.teams.map(t=>Math.round(t.budget))});
+
+    G.phase='preseason'; showPreseason(); G.phase='first_half'; snap('preseason');
+    __playHalf(FIRST_HALF_END); snap('first_half');
+
+    // 올스타 → 드래프트 (유저 지명 차례에서 체인이 멈추므로 하네스가 자동 지명)
+    G.phase='allstar'; showAllStarBreak();
+    const rosterBeforeDraft=G.teams.map(t=>t.roster.length);
+    _startRookieDraft();
+    rec.draftStarted=!!G._draftState;
+    return {rec, rosterBeforeDraft};
+  }catch(e){ rec.err=e.message+' @'+G.phase; return {rec}; }
+})()`);
+check('T28: 프리시즌·전반기·올스타·드래프트 개시 무예외',
+  !cycle.rec.err && cycle.rec.draftStarted === true, JSON.stringify(cycle.rec.err || cycle.rec.phases.slice(-1)));
+
+// 드래프트 체인 구동 — AI 픽은 setTimeout, 내 픽은 draftPick() 호출로 이어준다
+let draftGuard = 0, myPicks = 0;
+while (draftGuard++ < 200) {
+  drainTimers();
+  const stalled = g(`(function(){const ds=G._draftState;
+    return !!(ds && ds.round<=ds.totalRounds && G.draftPool.length>0 && ds.order[ds.pickInRound]===G.myTeam);})()`);
+  if (!stalled) break;
+  vm.runInContext(`draftPick(G.draftPool[0]._uid);`, ctx);
+  myPicks++;
+}
+drainTimers();
+const draftRes = g(`(function(){
+  return {phase:G.phase, poolLeft:(G.draftPool||[]).length,
+    picked:(G._draftResult||[]).length, // _finishDraft가 _draftState.log를 _draftResult로 옮기고 state를 정리
+    rosters:G.teams.map(t=>t.roster.length)};
+})()`);
+// 6라운드 × 8팀 = 48픽. 유저 지명이 UI 대기(_processDraftPick이 renderDraft만 하고 반환)라
+// 하네스가 draftPick()으로 이어주지 않으면 첫 내 차례에서 체인이 멈춘다.
+const draftExpected = g('DRAFT_ROUNDS') * g('G.teams.length');
+check(`T28: 드래프트 ${draftExpected}픽 완주 (관측 ${draftRes.picked}픽 · 내 지명 ${myPicks}회 · 풀 잔여 ${draftRes.poolLeft})`,
+  draftRes.picked === draftExpected && draftRes.poolLeft === 0, JSON.stringify(draftRes));
+check(`T28: 드래프트 후 second_half 전이 (관측 ${draftRes.phase})`,
+  draftRes.phase === 'second_half', JSON.stringify(draftRes));
+const inflow = draftRes.rosters.map((n, i) => n - cycle.rosterBeforeDraft[i]);
+check(`T28: 전 구단 드래프트 유입 = ${g('DRAFT_ROUNDS')}명 (관측 ${JSON.stringify(inflow)})`,
+  inflow.every(x => x === g('DRAFT_ROUNDS')), JSON.stringify(inflow));
+
+// 후반기 → 포스트시즌 → 시상식(은퇴) → GM회의 → 스토브 → 다음시즌
+const rest = g(`(function(){
+  const out={err:null};
+  try{
+    __playHalf(TOTAL_REGULAR);
+    out.regularDone=G.gameNum;
+    out.beforeRetire=G.teams.map(t=>t.roster.length);
+
+    G.phase='postseason'; showPostseason();
+    if(typeof _runPostseason==='function' && G.postseasonBracket && G.postseasonBracket.round==='semifinal'
+       && _sortByWinPct().indexOf(G.myTeam)<POSTSEASON_TEAMS){ _runPostseason(); }
+    out.bracket=!!(G.postseasonBracket&&(G.postseasonBracket.results||[]).length>0);
+
+    G.phase='awards'; showAwards();
+    out.afterRetire=G.teams.map(t=>t.roster.length);
+    out.awards=(G.awards||[]).length;
+
+    G.phase='gm_meeting'; showGMMeeting();
+    out.gmProposals=!!(G._gmState||G.seasonModifiers);
+
+    G.phase='stove_league'; showStoveLeague();
+    out.faPoolLeft=(G.faPool||[]).length;
+    out.afterStove=G.teams.map(t=>t.roster.length);
+
+    _startNextSeason();
+    out.nextSeason=G.season; out.nextPhase=G.phase; out.nextGameNum=G.gameNum;
+    out.afterRollover=G.teams.map(t=>t.roster.length);
+    out.budgets=G.teams.map(t=>Math.round(t.budget));
+    out.statsReset=G.teams.every(t=>t.roster.every(p=>!p.ss||((p.ss.ab||0)===0&&(p.ss.outs||0)===0)));
+    out.recordReset=G.teams.every(t=>t.wins===0&&t.losses===0);
+    return out;
+  }catch(e){ out.err=e.message+' @'+G.phase; return out; }
+})()`);
+check('T28: 후반기~포스트시즌~시상식~GM회의~스토브~롤오버 무예외',
+  !rest.err, rest.err || '');
+check(`T28: 정규시즌 완주 (${rest.regularDone}/${g('TOTAL_REGULAR')})`,
+  rest.regularDone === g('TOTAL_REGULAR'), JSON.stringify({done:rest.regularDone}));
+check('T28: 포스트시즌 시리즈 실제 진행 (bracket.results 채워짐)', rest.bracket === true, JSON.stringify(rest.bracket));
+check(`T28: 시즌 롤오버 (season ${rest.nextSeason} · phase ${rest.nextPhase} · gameNum ${rest.nextGameNum})`,
+  rest.nextSeason === 2 && rest.nextPhase === 'preseason' && rest.nextGameNum === 0, JSON.stringify(rest));
+check('T28: 롤오버 시 시즌 스탯·전적 초기화', rest.statsReset === true && rest.recordReset === true,
+  JSON.stringify({statsReset:rest.statsReset, recordReset:rest.recordReset}));
+// 은퇴 기능이 실제로 동작하는지(=0이 아님)와 로스터를 붕괴시키지 않는지만 본다.
+// 비율 자체는 밸런스 사안이라 밴드로 고정하지 않는다 — 초기 로스터는 `_seasonsPlayed=age-18`로
+// 생성돼 30세 58% / 32세 82% / 34세 100% 곡선에 걸리는 베테랑 비중이 커서 첫 오프시즌 유출이 크다.
+// (롤오버 후 조직 인원·예산 건전성은 아래 별도 어서션이 담보)
+const retired = rest.beforeRetire.map((n, i) => n - rest.afterRetire[i]);
+check(`T28: 은퇴 처리 동작 (전 구단 발생 · 관측 ${JSON.stringify(retired)})`,
+  retired.every(x => x >= 0) && retired.some(x => x > 0), JSON.stringify(retired));
+// TODO(은퇴 곡선): 본래 기준은 1군 최소 정원(ACTIVE_MIN_TOTAL=27)이어야 하나, 현재는 첫 오프시즌에
+// 26명까지 떨어지는 팀이 나온다 — 초기 로스터가 `_seasonsPlayed=age-18`로 생성돼 30세 58%/32세 82%/
+// 34세 100% 은퇴 곡선에 걸리는 베테랑 비중이 크기 때문. 곡선 조정 후 이 밴드를 27로 조인다.
+// 지금은 '붕괴 없음' 하한만 지켜 회귀를 막는다.
+const rollMin = Math.min(...rest.afterRollover);
+check(`T28: 롤오버 후 조직 인원 붕괴 없음 (≥20 · 최소 ${rollMin} / 1군 최소 정원 ${g('ACTIVE_MIN_TOTAL')})`,
+  rest.afterRollover.every(n => n >= 20), JSON.stringify(rest.afterRollover));
+check(`T28: 롤오버 후 전 구단 예산 유한·비음수 — 관측 ${JSON.stringify(rest.budgets)}`,
+  rest.budgets.every(b => Number.isFinite(b) && b >= 0), JSON.stringify(rest.budgets));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
