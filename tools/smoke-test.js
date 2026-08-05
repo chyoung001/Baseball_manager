@@ -1515,9 +1515,13 @@ check(`T28: 시즌 롤오버 (season ${rest.nextSeason} · phase ${rest.nextPhas
   rest.nextSeason === 2 && rest.nextPhase === 'preseason' && rest.nextGameNum === 0, JSON.stringify(rest));
 check('T28: 롤오버 시 시즌 스탯·전적 초기화', rest.statsReset === true && rest.recordReset === true,
   JSON.stringify({statsReset:rest.statsReset, recordReset:rest.recordReset}));
-// 미계약 FA는 롤오버에서 소멸하지 않고 다음 스토브리그로 이월된다 (_faYears 한계까지)
-check(`T28: 미계약 FA 롤오버 이월 (스토브 잔여 ${rest.faPoolLeft}명 → 롤오버 후 ${rest.faPoolAfterRollover}명)`,
-  rest.faPoolAfterRollover === rest.faPoolLeft,
+// 미계약 FA는 롤오버에서 소멸하지 않고 다음 스토브리그로 이월된다 (_faYears 한계까지).
+// 구 버그는 `G.faPool=[]`로 배열을 통째로 비우는 것이었으므로 그 부재를 직접 확인한다.
+// (롤오버 중 AI 최소 인원 보충이 풀에서 일부를 흡수하므로 수치 동일성은 성립하지 않는다)
+check('T28: _startNextSeason이 faPool을 비우지 않음 (미계약 FA 소멸 방지)',
+  !/G\.faPool\s*=\s*\[\]/.test(g('_startNextSeason.toString()')));
+check(`T28: 미계약 FA 롤오버 이월 (스토브 잔여 ${rest.faPoolLeft}명 → 롤오버 후 ${rest.faPoolAfterRollover}명 · 보충 흡수분 제외)`,
+  rest.faPoolLeft === 0 ? rest.faPoolAfterRollover === 0 : rest.faPoolAfterRollover >= Math.max(0, rest.faPoolLeft - 40),
   JSON.stringify({before:rest.faPoolLeft, after:rest.faPoolAfterRollover}));
 check(`T28: FA 이월 한계 상수 정의 (FA_UNSIGNED_MAX_YEARS=${g('FA_UNSIGNED_MAX_YEARS')})`,
   g('typeof FA_UNSIGNED_MAX_YEARS') === 'number' && g('FA_UNSIGNED_MAX_YEARS') >= 1);

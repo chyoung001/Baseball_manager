@@ -451,6 +451,32 @@ function _startNextSeason(){
       np.role=np.isPitcher?(np.pos==='SP'?'rotation':'bullpen'):'bench';
       team.roster.push(np);initSeasonStats(np);team.budget=+(team.budget-rand(10,25)).toFixed(1);
     }
+    // ── 최소 인원 보충 ──
+    // 은퇴·계약만료·방출이 겹친 해에 AI 조직 인원이 1군 최소 정원(ACTIVE_MIN_TOTAL) 아래로
+    // 떨어져 규정을 채울 수 없는 팀이 생겼다(관측 26명). AI엔 validateActiveRoster 경로가 없어
+    // 스스로 복구하지 못하므로 오프시즌에 조직 하한(ORG_MIN_TOTAL)까지 채운다.
+    // 잔여 FA를 먼저 흡수(소멸 방지와도 맞물림)하고, 모자라면 최저 연봉 선수를 생성한다.
+    let fillGuard=0;
+    while(team.roster.length<ORG_MIN_TOTAL && fillGuard++<60){
+      const needPit=getPitchers(team).length<ACTIVE_MIN_PITCHERS+3;
+      let add=null;
+      const faIdx=(G.faPool||[]).findIndex(p=>p.isPitcher===needPit);
+      if(faIdx>=0){
+        add=G.faPool.splice(faIdx,1)[0];
+        add.salary=Math.max(SALARY_MIN,+(add.salary||SALARY_MIN));
+        add._contractYears=Math.max(1,add._contractYears||1);
+        add._faYears=0;
+      }else{
+        add=needPit?genPitcher(pick(['SP','CP','SU','MR','LR']),null,team.concept)
+                   :genBatter(pick(BAT_POS),null,team.concept);
+        add.salary=SALARY_MIN;
+      }
+      add.status='futures';
+      add.role=add.isPitcher?'bullpen':'bench';
+      add._teamTenure=0;
+      team.roster.push(add);
+      if(!add.ss)initSeasonStats(add);
+    }
     // AI 연봉 자동 조정
     team.roster.forEach(p=>{
       const pOvr=ovr(p);
