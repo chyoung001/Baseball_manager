@@ -76,12 +76,17 @@ function _simAIGame(teamA,teamB){
 
   // 한 하프이닝 TTO+BABIP 간이 시뮬 (공격팀 vs 수비팀) — simulatePlay 공식 통일
   // walkoffTarget>0: 끝내기 상황, runs>=walkoffTarget이면 즉시 종료
-  function simHalf(batTeam,batters,pitcher,fldTeam,walkoffTarget,ord){
+  // `inning`/`lead`는 고레버리지 판정용 — 관전 경로(match-flow)와 동일 공식을 쓰기 위해 받는다.
+  // `lead`는 **수비(투수)팀 기준** 점수차 (simHalfFull·_pickReliever와 동일 기준으로 통일).
+  function simHalf(batTeam,batters,pitcher,fldTeam,inning,lead,walkoffTarget,ord){
     ord=ord||{i:0}; // 타순 연속 (게임 단위 유지 — 이닝마다 1번부터 리셋 금지)
     let outs=0,runs=0,pa=0;
     if(!pitcher||batters.length===0)return rand(0,3);
     const _pf=getParkFactor(teamA); // 홈구장(teamA) 파크팩터 — 양팀 공통
     // 팀 컨셉 보너스는 resolvePA가 ctx.batConcept/fldConcept에서 단일 계산
+    // P2-5 멘탈 코칭 증폭 — 관전 경로에만 전달되던 것을 시뮬에도 배선(투자한 시설이 자동 진행에서 무효였다)
+    const _mcBat=1+(MENTAL_COACH_AMP[batTeam.mentalCoachLevel||0]||0);
+    const _mcPit=1+(MENTAL_COACH_AMP[fldTeam.mentalCoachLevel||0]||0);
 
     // 수비력 평균 (전환 페널티 반영)
     const fldStarters=fldTeam?getStartingBatters(fldTeam):[];
@@ -95,10 +100,15 @@ function _simAIGame(teamA,teamB){
       const bs=b.ss||(initSeasonStats(b),b.ss);
       const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
 
-      // ── 통합 타석 판정 (관전·자동과 동일 resolvePA) — 시뮬 경로도 피로(NP)/RISP 클러치/consistency/재활 반영 → 공정성 ──
-      // (고레버리지 bigGame은 이닝/점수차 미추적으로 이 경로 미적용 = 잔여, #18 예정)
+      // ── 통합 타석 판정 (관전·자동과 동일 resolvePA) ──
+      // 고레버리지 판정은 관전 경로(match-flow)와 동일 공식. 진행 중 득점을 반영해 lead를 갱신한다.
+      const _hasRISP=!!(bases[1]||bases[2]);
+      const _diff=Math.abs((lead||0)-runs); // 공격팀 득점만큼 수비팀 리드가 감소
+      const _tieRunner=!!(bases[0]||bases[1]||bases[2])&&_diff<=1;
+      const _hiLev=(inning||1)>=7&&(_diff<=3||_hasRISP||_tieRunner);
       const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:fldTeam.concept,
-        np:pitcher._simNP||0, hasRISP:!!(bases[1]||bases[2]), isHighLeverage:false, avgFielding:avgFld, park:_pf});
+        np:pitcher._simNP||0, hasRISP:_hasRISP, isHighLeverage:_hiLev,
+        batMentalAmp:_mcBat, pitMentalAmp:_mcPit, avgFielding:avgFld, park:_pf});
       const adjPow=_r.adjPower; // 주루 인플레율(xbh) 재계산 호환
       const _rr=Math.random();
       const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'
@@ -173,10 +183,10 @@ function _simAIGame(teamA,teamB){
       const pickB=_pickReliever(teamB,inn,runsB-runsA);
       if(pickB){curPitB=pickB;lastPitB=pickB;}
     }
-    runsB+=simHalf(teamB,batB,curPitA,teamA,0,_boB);
+    runsB+=simHalf(teamB,batB,curPitA,teamA,inn,runsA-runsB,0,_boB);
     if(inn===9&&runsA>runsB) break;
     const wotA=inn>=9?(runsB-runsA+1):0;
-    runsA+=simHalf(teamA,batA,curPitB,teamB,wotA,_boA);
+    runsA+=simHalf(teamA,batA,curPitB,teamB,inn,runsB-runsA,wotA,_boA);
     if(inn>=9&&runsA>runsB) break;
   }
 
@@ -191,10 +201,10 @@ function _simAIGame(teamA,teamB){
         const pickB=_pickReliever(teamB,inn,runsB-runsA);
         if(pickB){curPitB=pickB;lastPitB=pickB;}
       }
-      runsB+=simHalf(teamB,batB,curPitA,teamA,0,_boB);
+      runsB+=simHalf(teamB,batB,curPitA,teamA,inn,runsA-runsB,0,_boB);
       if(runsA>runsB) break;
       const wotA=runsB-runsA+1;
-      runsA+=simHalf(teamA,batA,curPitB,teamB,wotA,_boA);
+      runsA+=simHalf(teamA,batA,curPitB,teamB,inn,runsB-runsA,wotA,_boA);
       if(runsA!==runsB) break;
     }
   }
@@ -296,6 +306,9 @@ function _simMyGame(){
     const _pf=getParkFactor(homeTeam); // 홈구장 파크팩터 — 양팀 공통
     const fldStarters=getStartingBatters(pitcherTeam);
     const avgFld=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effFielding(p),0)/fldStarters.length:50;
+    // P2-5 멘탈 코칭 증폭 — 관전 경로에만 전달되던 것을 시뮬에도 배선
+    const _mcBat=1+(MENTAL_COACH_AMP[batTeam.mentalCoachLevel||0]||0);
+    const _mcPit=1+(MENTAL_COACH_AMP[pitcherTeam.mentalCoachLevel||0]||0);
 
     // 주루 상태 간이 추적
     let bases=[null,null,null];
@@ -311,10 +324,15 @@ function _simMyGame(){
       const bs=b.ss||(initSeasonStats(b),b.ss);
       const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
 
-      // ── 통합 타석 판정 (관전·AI와 동일 resolvePA) — 시뮬 경로도 피로(NP)/RISP 클러치/consistency/재활 반영 → 공정성 ──
-      // 컨셉 보너스(불펜 포함)는 resolvePA가 컨셉에서 단일 계산(기존 batBonus/pitBonus arg·bpBonus 대체).
+      // ── 통합 타석 판정 (관전·AI와 동일 resolvePA) ──
+      // 컨셉 보너스(불펜 포함)는 resolvePA가 컨셉에서 단일 계산. 고레버리지 판정도 관전과 동일 공식.
+      const _hasRISP=!!(bases[1]||bases[2]);
+      const _diff=Math.abs((lead||0)-runs); // 공격팀 득점만큼 수비팀 리드가 감소
+      const _tieRunner=!!(bases[0]||bases[1]||bases[2])&&_diff<=1;
+      const _hiLev=(inning||1)>=7&&(_diff<=3||_hasRISP||_tieRunner);
       const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:pitcherTeam.concept,
-        np:pitcher._simNP||0, hasRISP:!!(bases[1]||bases[2]), isHighLeverage:false, avgFielding:avgFld, park:_pf});
+        np:pitcher._simNP||0, hasRISP:_hasRISP, isHighLeverage:_hiLev,
+        batMentalAmp:_mcBat, pitMentalAmp:_mcPit, avgFielding:avgFld, park:_pf});
       const adjPow=_r.adjPower; // 주루 인플레율(xbh) 재계산 호환
       const _rr=Math.random();
       const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'

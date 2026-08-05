@@ -1546,6 +1546,58 @@ check(`T28: 은퇴는 ${g('RETIRE_MIN_AGE')}세 미만에서 발생하지 않음
 check(`T28: 롤오버 후 전 구단 예산 유한·비음수 — 관측 ${JSON.stringify(rest.budgets)}`,
   rest.budgets.every(b => Number.isFinite(b) && b >= 0), JSON.stringify(rest.budgets));
 
+// ── T29. 상황 보정 3경로 대칭 (고레버리지 bigGame · 멘탈코칭 증폭) ──
+// resolvePA로 확률식은 단일화됐지만 `isHighLeverage`와 멘탈코칭 앰프는 관전 경로에서만 전달됐다.
+// 시뮬 2경로는 `isHighLeverage:false` 고정 + 앰프 미전달이라
+//  ① 자동 진행·AI 경기엔 클러치 승부가 없고
+//  ② P2-5 멘탈 코칭 룸(L1~L4, 클러치 보정 +15~50%)이 관전할 때만 듣는 시설이 된다.
+section('T29. 상황 보정 3경로 대칭 (고레버리지 · 멘탈코칭)');
+
+check('T29: 시뮬 경로에 isHighLeverage 하드코딩 false 부재',
+  !/isHighLeverage:\s*false/.test(g('_simAIGame.toString()')) &&
+  !/isHighLeverage:\s*false/.test(g('_simMyGame.toString()')));
+check('T29: 시뮬 2경로가 멘탈코칭 앰프를 전달',
+  g('_simAIGame.toString()').includes('batMentalAmp') &&
+  g('_simMyGame.toString()').includes('batMentalAmp'));
+check('T29: 시뮬 2경로가 관전과 동일한 고레버리지 공식(이닝≥7 · 점수차≤3 · RISP · 동점주자)',
+  /inning\|\|1\)>=7/.test(g('_simAIGame.toString()')) &&
+  /inning\|\|1\)>=7/.test(g('_simMyGame.toString()')));
+
+// 엔진 레벨 수치 검증 — _consistency=100으로 랜덤 스윙을 0으로 만들어 결정적으로 비교
+const levProbe = g(`(function(){
+  try{
+    const mk=(o)=>Object.assign({contact:50,power:50,eye:50,speed:50,fielding:50,arm:50,
+      stuff:50,control:50,velocity:50,movement:50,stamina:50,clutch:50,
+      _consistency:100,_clutchHidden:100,condition:100,currentStamina:100,role:'rotation'},o||{});
+    const bat=mk(), pit=mk({_clutchHidden:50});
+    const base=resolvePA(bat,pit,{avgFielding:50,isHighLeverage:false});
+    const hi  =resolvePA(bat,pit,{avgFielding:50,isHighLeverage:true});
+    const amp =resolvePA(bat,pit,{avgFielding:50,isHighLeverage:true,batMentalAmp:1.5});
+    return {base:+base.adjContact.toFixed(3), hi:+hi.adjContact.toFixed(3), amp:+amp.adjContact.toFixed(3), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+// _clutchHidden 100 → bigGame = (100-50)*0.12 = +6, 앰프 1.5 → +9
+check(`T29: 고레버리지가 타자 유효 컨택을 올림 (${levProbe.base} → ${levProbe.hi}, 기대 +6)`,
+  !levProbe.err && Math.abs((levProbe.hi - levProbe.base) - 6) < 0.01, JSON.stringify(levProbe));
+check(`T29: 멘탈코칭 앰프가 클러치 보정을 증폭 (${levProbe.hi} → ${levProbe.amp}, 기대 +3)`,
+  Math.abs((levProbe.amp - levProbe.hi) - 3) < 0.01, JSON.stringify(levProbe));
+
+// 시뮬 경로에서 실제로 고레버리지가 발생하는가 (7회 이후 접전이 시즌 중 반드시 나온다)
+const levWireProbe = g(`(function(){
+  try{
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0; G.phase='first_half';
+    let hi=0, total=0;
+    const orig=resolvePA;
+    resolvePA=function(b,p,ctx){ total++; if(ctx&&ctx.isHighLeverage)hi++; return orig(b,p,ctx); };
+    for(let i=0;i<12;i++){ __harnessFixRoster(); const before=G.gameNum; _simMyGame(); if(G.gameNum===before) break; }
+    resolvePA=orig;
+    return {hi, total, rate:+(hi/Math.max(1,total)).toFixed(4), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+// 12경기(내 경기 + AI 3경기/일)면 7회 이후 접전 타석이 반드시 다수 발생한다
+check(`T29: 시뮬 경로에서 고레버리지 타석이 실제 발생 (${levProbe.err?'-':levWireProbe.hi}/${levWireProbe.total} = ${(levWireProbe.rate*100).toFixed(1)}%)`,
+  !levWireProbe.err && levWireProbe.hi > 0 && levWireProbe.rate < 0.5, JSON.stringify(levWireProbe));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
