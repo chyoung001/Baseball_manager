@@ -1598,6 +1598,73 @@ const levWireProbe = g(`(function(){
 check(`T29: 시뮬 경로에서 고레버리지 타석이 실제 발생 (${levProbe.err?'-':levWireProbe.hi}/${levWireProbe.total} = ${(levWireProbe.rate*100).toFixed(1)}%)`,
   !levWireProbe.err && levWireProbe.hi > 0 && levWireProbe.rate < 0.5, JSON.stringify(levWireProbe));
 
+// ── T30. 주루·아웃 단일 소스 (resolveBaserunning) ──
+// resolvePA는 확률만 단일화했고 주루는 3중 복제로 남아 규칙이 갈려 있었다.
+// 시뮬 경로엔 송구 페널티·희생플라이·자책/비자책 분리·단타 시 1루→3루가 통째로 없었다.
+section('T30. 주루·아웃 단일 소스 (resolveBaserunning)');
+
+check('T30: 3경로가 resolveBaserunning을 사용',
+  g('simulatePlay.toString()').includes('resolveBaserunning') &&
+  g('_simAIGame.toString()').includes('resolveBaserunning') &&
+  g('_simMyGame.toString()').includes('resolveBaserunning'));
+check('T30: 시뮬 경로가 송구 페널티(armPenalty)를 산출·전달',
+  /avgArm[\s\S]*armPenalty/.test(g('_simAIGame.toString()')) &&
+  /avgArm[\s\S]*armPenalty/.test(g('_simMyGame.toString()')));
+
+// 규칙 단위 검증 — 각 결과 종류가 베이스/득점/아웃을 규정대로 바꾸는가
+const brProbe = g(`(function(){
+  try{
+    const P=(spd,err)=>({contact:50,power:50,eye:50,speed:spd,fielding:50,arm:50,_errorRunner:!!err,name:'R'+spd});
+    const out={};
+    // 만루 홈런 = 4득점 4자책
+    let b=[P(50),P(50),P(50)];
+    out.grandSlam=resolveBaserunning('HR',b,P(50),{});
+    // 만루 볼넷 = 1득점 (밀어내기)
+    b=[P(50),P(50),P(50)];
+    out.walkForce=resolveBaserunning('BB',b,P(50),{});
+    // 주자 없는 볼넷 = 0득점, 타자 1루
+    b=[null,null,null];
+    const bw=P(50); out.walkEmpty=resolveBaserunning('BB',b,bw,{}); out.walkEmptyBase=(b[0]===bw);
+    // 에러 출루 타자는 _errorRunner 마킹 → 이후 득점해도 비자책
+    b=[null,null,null];
+    const be=P(50); resolveBaserunning('ERROR',b,be,{});
+    out.errMark=be._errorRunner===true;
+    const b2=[be,null,null];
+    out.errScore=resolveBaserunning('HR',b2,P(50),{}); // 2득점이지만 자책은 1
+    // 3루 주자 + 뜬공 → 희생플라이 가능 (gbRate 0 = 항상 뜬공)
+    let sf=0;
+    for(let i=0;i<400;i++){ const bb=[null,null,P(80)];
+      const r=resolveBaserunning('OUT',bb,P(50),{outs:0,gbRate:0,batSpeed:50,dpBase:0.09});
+      if(r.type==='SF')sf++; }
+    out.sfRate=+(sf/400).toFixed(3);
+    // 2아웃에서는 희생플라이 불가 (아웃 카운트로 이닝 종료)
+    let sf2=0;
+    for(let i=0;i<400;i++){ const bb=[null,null,P(80)];
+      const r=resolveBaserunning('OUT',bb,P(50),{outs:2,gbRate:0,batSpeed:50,dpBase:0.09});
+      if(r.type==='SF')sf2++; }
+    out.sfAt2Outs=sf2;
+    // 1루 주자 + 땅볼 → 병살 가능 (gbRate 1 = 항상 땅볼)
+    let dp=0;
+    for(let i=0;i<800;i++){ const bb=[P(50),null,null];
+      const r=resolveBaserunning('OUT',bb,P(50),{outs:0,gbRate:1,batSpeed:50,dpBase:0.09});
+      if(r.type==='DP'&&r.outsAdded===2)dp++; }
+    out.dpRate=+(dp/800).toFixed(3);
+    return Object.assign(out,{err:null});
+  }catch(e){return {err:e.message};}
+})()`);
+check('T30: 만루 홈런 = 4득점 4자책',
+  !brProbe.err && brProbe.grandSlam.runs === 4 && brProbe.grandSlam.earned === 4, JSON.stringify(brProbe.grandSlam));
+check('T30: 만루 볼넷 = 1득점 · 주자 없으면 0득점(타자 1루)',
+  brProbe.walkForce.runs === 1 && brProbe.walkEmpty.runs === 0 && brProbe.walkEmptyBase === true,
+  JSON.stringify({f:brProbe.walkForce, e:brProbe.walkEmpty}));
+check('T30: 에러 출루 주자는 비자책 (2득점 중 자책 1)',
+  brProbe.errMark === true && brProbe.errScore.runs === 2 && brProbe.errScore.earned === 1,
+  JSON.stringify(brProbe.errScore));
+check(`T30: 3루 주자 뜬공 → 희생플라이 발생 (${(brProbe.sfRate*100).toFixed(0)}%) · 2아웃선 불가(${brProbe.sfAt2Outs}건)`,
+  brProbe.sfRate > 0.2 && brProbe.sfRate < 0.7 && brProbe.sfAt2Outs === 0, JSON.stringify(brProbe));
+check(`T30: 1루 주자 땅볼 → 병살 발생 (${(brProbe.dpRate*100).toFixed(0)}%, 2아웃 처리)`,
+  brProbe.dpRate > 0.03 && brProbe.dpRate < 0.25, JSON.stringify(brProbe));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
