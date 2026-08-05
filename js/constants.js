@@ -10,7 +10,6 @@ const BAT_POS=['C','1B','2B','3B','SS','LF','CF','RF','DH'];
 const BAT_POS_NAMES={C:'포수','1B':'1루수','2B':'2루수','3B':'3루수',SS:'유격수',LF:'좌익수',CF:'중견수',RF:'우익수',DH:'지명타자'};
 
 // Pitcher roles
-const PITCH_ROLES=['SP','CP','SU','MR','LR']; // Starter, Closer, Setup, Middle Relief, Long Relief
 const PITCH_ROLE_NAMES={SP:'선발',CP:'마무리',SU:'필승조',MR:'추격조',LR:'롱릴리프',RP:'중계'};
 const ALL_POS_NAMES={...BAT_POS_NAMES,...PITCH_ROLE_NAMES};
 
@@ -87,7 +86,6 @@ const STADIUM_MAX_LEVEL = 5;
 const STADIUM_COST_PER_LEVEL = 20;  // stadiumLevel * 20억
 
 const OVERSEAS_COST = 15;       // 억
-const OVERSEAS_DURATION = 5;    // 경기 수
 const OVERSEAS_BOOST_MIN = 3;
 const OVERSEAS_BOOST_MAX = 7;
 
@@ -120,7 +118,6 @@ const FUTURES_PITCHER_DEBUFF = 0.80; // 2군 투수 스탯 20% 하향
 const SLUMP_CONDITION_THRESHOLD = 40; // 컨디션 이하 → 슬럼프 디버프
 const SLUMP_DEBUFF        = 12;   // 슬럼프 시 컨택·파워 패널티
 const REHAB_DEBUFF        = 15;   // 재활 중 스탯 패널티
-const IL_COOLDOWN_ON_RETURN = 5; // IL 복귀 후 콜업 쿨타임
 
 // ── 규정타석/규정이닝 (리더보드 최소 기준) ──
 const QUALIFY_PA_PER_GAME   = 2.0;  // 규정타석 계수 (PA/경기)
@@ -197,7 +194,7 @@ const POSTSEASON_TEAMS=4;         // 포스트시즌 진출 팀 수 (v2 균형 �
 const SEMI_WINS_NEEDED=3;         // 준플레이오프 5전 3선승
 const FINAL_WINS_NEEDED=4;        // 챔피언십 7전 4선승
 const CHAMPIONSHIP_BONUS=50;      // 우승 상금 (억)
-const RETIRE_MIN_AGE_PROXY=8;     // 시즌 수 기준 은퇴 가능 (생성 후 N시즌)
+// (구 RETIRE_MIN_AGE_PROXY 제거 — 은퇴 판정은 RETIRE_MIN_AGE 기반 나이 곡선으로 이관)
 
 // ===================== 구단주 신임도 (P6 '경영 압박' — 성적 기반 2번째 게임오버 축) =====================
 // 매 시즌 프리시즌에 구단주가 목표 순위를 제시하고, 시상식에서 실제 성적·우승·재정으로 신임도를 증감.
@@ -217,6 +214,9 @@ const DRAFT_ROUNDS=6;             // 드래프트 라운드 수 (6라운드 × 8
 // ===================== FA & SALARY CONSTANTS (KBO-style, 단위: 억원) =====================
 // P2-3 설계 정렬: 신인 계약 3년(서비스 0~2) → Arb 서비스 3~5 → FA 서비스 6+
 const FA_SERVICE_TIME_THRESHOLD=6;   // FA 자격 서비스 타임
+// 미계약 FA 이월 한계 — 이 오프시즌 수를 채우도록 계약을 못 하면 은퇴 처리(풀에서 제거).
+// 이전엔 매 시즌 faPool을 통째로 비워 미계약 선수가 소리 없이 소멸했다(관측: 한 시즌 30명).
+const FA_UNSIGNED_MAX_YEARS=2;
 const PRE_ARB_MAX_SERVICE=2;         // 프리Arb: 서비스 0~2 (신인 계약 기간)
 const ARB_MIN_SERVICE=3;             // 연봉조정 시작: 3시즌 (슈퍼2는 2시즌+상위 22%)
 const ARB_MAX_SERVICE=5;             // 연봉조정 종료: 5시즌
@@ -254,8 +254,14 @@ const POS_WEIGHT={
 };
 
 // ===================== RETIREMENT =====================
-const RETIRE_BASE_PROB=10;        // 은퇴 기본 확률 (%)
-const RETIRE_PROB_PER_SEASON=12;  // 초과 시즌당 추가 확률 (%)
+// 은퇴는 **나이** 기반 곡선이다. 이전엔 `_seasonsPlayed`(= applyInitialContract에서 age−18로 세팅)를
+// 썼는데 임계 8을 26세로 환산해 26세부터 판정이 시작되고 34세는 100%였다 —
+// 26세 선수가 33세까지 생존할 확률 1%. S급이 평균 29세로, C·D급 노장이 33~40세로 생성되는
+// 초기 로스터와 정면 충돌해 첫 오프시즌에 팀당 12~17명이 은퇴하고 일부 AI 팀이
+// 조직 26명(1군 최소 정원 27 미달)까지 떨어졌다.
+const RETIRE_MIN_AGE=33;          // 은퇴 판정 시작 나이 (미만은 은퇴 없음)
+const RETIRE_BASE_PROB=10;        // 시작 나이에서의 은퇴 확률 (%)
+const RETIRE_PROB_PER_SEASON=12;  // 초과 1세당 추가 확률 (%) → 35세 34% · 37세 58% · 40세 94%
 
 // ===================== STAT SCALE (1~100) =====================
 // NOTE: v2 설계는 내부 1~100 스케일. P1에서 STAT_MIN/STAT_MAX만 바꾸면
