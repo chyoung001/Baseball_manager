@@ -130,6 +130,12 @@ function shouldHookPitcher(pitcher, inning, runsGivenToday, teamConcept){
 }
 
 // ── 불펜 보직 우선순위 기반 투수 선택 ──
+// 호출부는 전부 "교체 확정" 지점이므로 선택 즉시 `_pitchedThisGame`을 마킹한다(등판 확정 = 후보 제외).
+// 이 마킹이 없으면 `!p._pitchedThisGame` 필터가 항상 통과해 같은 투수가 무한 재선택되고
+// (shouldHookPitcher가 강판을 지시해도 동일 인물이 돌아와 교체가 일어나지 않음) 시뮬 경로에서만
+// 불펜 대부분이 시즌 0이닝 · 특정 릴리버가 등판당 5~8이닝을 던지는 비대칭이 발생한다.
+// 관전 경로의 `matchState.relieversUsed`에 대응하는 시뮬 경로 상태이며, 리셋은 경기 시작 시점
+// (match-flow.startMatch · match-sim._simAIGame/_simMyGame)에서 이미 수행된다.
 function _pickReliever(team, inn, lead){
   const bp=getBullpen(team).filter(p=>
     (p._consecutiveDaysPitched||0)<3 && // 3연투 금지
@@ -137,6 +143,7 @@ function _pickReliever(team, inn, lead){
     !p._pitchedThisGame                  // 이번 경기 미등판
   );
   if(bp.length===0)return null;
+  const _commit=p=>{p._pitchedThisGame=true;return p;};
   let roles;
   if(inn>=9&&lead>=1&&lead<=3)        roles=['CP','SU','MR','LR'];  // 세이브 상황
   else if(inn>=9&&lead>=4)            roles=['MR','LR','SU'];       // 대량리드→CP 아끼기
@@ -146,9 +153,9 @@ function _pickReliever(team, inn, lead){
   else                                roles=['LR','MR','SU','CP'];  // 조기강판/대량 점수차
   for(const role of roles){
     const pick=bp.find(p=>p.pos===role);
-    if(pick)return pick;
+    if(pick)return _commit(pick);
   }
-  return bp[0];
+  return _commit(bp[0]);
 }
 
 // ── OVR 구간별 동적 레벨업 요구 XP (계단식 성장) ──

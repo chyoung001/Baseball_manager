@@ -24,17 +24,22 @@ function _simAIGame(teamA,teamB){
   const spA=getRotation(teamA), spB=getRotation(teamB);
   const pitA=spA.length>0?spA[teamA.rotationIdx%spA.length]:null;
   const pitB=spB.length>0?spB[teamB.rotationIdx%spB.length]:null;
+  // 현재/마지막 투수 — 경기 단위로 유지한다. 이전엔 `curPitA/B` 선언이 이닝 for 루프 안에 있어
+  // 매 이닝 선발로 되돌아갔고(릴리버는 1이닝 초과 불가), 불펜 소진 시 탈진한 선발이 마운드에 복귀했다.
+  let curPitA=pitA, curPitB=pitB;
   let lastPitA=pitA, lastPitB=pitB;
   let runsA=0,runsB=0;
   const _boA={i:0},_boB={i:0}; // 게임 단위 타순 연속
   const spAOutsBefore=pitA&&pitA.ss?(pitA.ss.outs||0):0;
   const spBOutsBefore=pitB&&pitB.ss?(pitB.ss.outs||0):0;
 
-  // 체력 & NP 세팅
+  // 체력 & NP 세팅 (`_simERBase` = 당일 자책 산출 기준선 — 시즌 누적 ss.er에서 차감해 오늘 실점을 얻는다)
   [teamA,teamB].forEach(t=>getPitchers(t).forEach(p=>{
     p.currentStamina=100; // 경기 시작=풀(%). NP식·시즌 리셋과 동일 스케일
-    p._simNP=0;p._pitchedThisGame=false;
+    p._simNP=0;p._pitchedThisGame=false;p._simERBase=(p.ss&&p.ss.er)||0;
   }));
+  // 이닝 선두 강판 판정 — 당일 실점을 실제로 전달 (이전엔 0 고정이라 '대량 실점 조기 강판' 규칙이 사문화)
+  const _todayER=p=>p?(((p.ss&&p.ss.er)||0)-(p._simERBase||0)):0;
 
   // 한 하프이닝 TTO+BABIP 간이 시뮬 (공격팀 vs 수비팀) — simulatePlay 공식 통일
   // walkoffTarget>0: 끝내기 상황, runs>=walkoffTarget이면 즉시 종료
@@ -126,13 +131,12 @@ function _simAIGame(teamA,teamB){
 
   // 9이닝 시뮬 (Away=teamB 선공, Home=teamA 후공)
   for(let inn=1;inn<=9;inn++){
-    let curPitA=pitA, curPitB=pitB;
-    // NP 기반 강판 판정 (shouldHookPitcher 통합)
-    if(shouldHookPitcher(curPitA,inn,0,teamA.concept)){
+    // NP·당일 실점 기반 강판 판정 (shouldHookPitcher 통합)
+    if(shouldHookPitcher(curPitA,inn,_todayER(curPitA),teamA.concept)){
       const pickA=_pickReliever(teamA,inn,runsA-runsB);
       if(pickA){curPitA=pickA;lastPitA=pickA;}
     }
-    if(shouldHookPitcher(curPitB,inn,0,teamB.concept)){
+    if(shouldHookPitcher(curPitB,inn,_todayER(curPitB),teamB.concept)){
       const pickB=_pickReliever(teamB,inn,runsB-runsA);
       if(pickB){curPitB=pickB;lastPitB=pickB;}
     }
@@ -146,12 +150,11 @@ function _simAIGame(teamA,teamB){
   // 연장전 (10~12회)
   if(runsA===runsB){
     for(let inn=10;inn<=12;inn++){
-      let curPitA=pitA, curPitB=pitB;
-      if(shouldHookPitcher(curPitA,inn,0,teamA.concept)){
+      if(shouldHookPitcher(curPitA,inn,_todayER(curPitA),teamA.concept)){
         const pickA=_pickReliever(teamA,inn,runsA-runsB);
         if(pickA){curPitA=pickA;lastPitA=pickA;}
       }
-      if(shouldHookPitcher(curPitB,inn,0,teamB.concept)){
+      if(shouldHookPitcher(curPitB,inn,_todayER(curPitB),teamB.concept)){
         const pickB=_pickReliever(teamB,inn,runsB-runsA);
         if(pickB){curPitB=pickB;lastPitB=pickB;}
       }
@@ -173,11 +176,13 @@ function _simAIGame(teamA,teamB){
   if(aWin)teamA.popularity=clamp(teamA.popularity+rand(0,2),0,100);
   else teamB.popularity=clamp(teamB.popularity+rand(0,2),0,100);
 
-  // 투수 GP 기록
+  // 투수 GP 기록 — 선발 + 실제 등판한 전 불펜(`_pitchedThisGame` 마킹 && 실투구 발생).
+  // 이전엔 '마지막 투수'만 가산해 중간 계투가 IP는 쌓이는데 GP 0으로 남았다
+  // (관전 경로의 relieversUsed 전원 가산과 동일 기준으로 정합).
+  // `_simNP>0` 조건은 9회 초 교체 예약 후 홈팀 승리로 말공격이 생략돼 실제 등판하지 않은 투수를 제외.
   if(pitA&&pitA.ss)pitA.ss.gp++;
   if(pitB&&pitB.ss)pitB.ss.gp++;
-  if(lastPitA&&lastPitA!==pitA&&lastPitA.ss)lastPitA.ss.gp++;
-  if(lastPitB&&lastPitB!==pitB&&lastPitB.ss)lastPitB.ss.gp++;
+  [teamA,teamB].forEach(t=>getBullpen(t).forEach(p=>{if(p._pitchedThisGame&&(p._simNP||0)>0&&p.ss)p.ss.gp++;}));
 
   // W/L 기록 (선발 5이닝=15아웃 조건)
   const spAOuts=pitA&&pitA.ss?(pitA.ss.outs||0)-spAOutsBefore:0;
@@ -207,10 +212,11 @@ function _simAIGame(teamA,teamB){
       else if(pitA&&pitA.ss)pitA.ss.l++;
     }
   }
-  // SV: 승리팀 마지막 투수 (선발이 아니고, 최종 점수차 3점 이하)
+  // SV: 승리팀 마지막 투수 (선발이 아니고, 실제 등판했고, 최종 점수차 3점 이하)
   const _margin=Math.abs(runsA-runsB);
-  if(aWin&&lastPitA&&lastPitA!==pitA&&lastPitA.ss&&_margin<=3)lastPitA.ss.sv++;
-  if(!aWin&&lastPitB&&lastPitB!==pitB&&lastPitB.ss&&_margin<=3)lastPitB.ss.sv++;
+  const _threw=p=>!!p&&(p._simNP||0)>0; // 교체 예약만 되고 등판 전 경기 종료된 투수 배제
+  if(aWin&&lastPitA&&lastPitA!==pitA&&lastPitA.ss&&_threw(lastPitA)&&_margin<=3)lastPitA.ss.sv++;
+  if(!aWin&&lastPitB&&lastPitB!==pitB&&lastPitB.ss&&_threw(lastPitB)&&_margin<=3)lastPitB.ss.sv++;
 }
 
 // ===================== AUTO-SIM (빠른 진행) =====================
@@ -231,10 +237,10 @@ function _simMyGame(){
   const homeTeam=isHome?G.myTeam:opp;
   const awayTeam=isHome?opp:G.myTeam;
 
-  // 체력 & NP 세팅
+  // 체력 & NP 세팅 (`_simERBase` = 당일 자책 산출 기준선 — 시즌 누적 ss.er에서 차감해 오늘 실점을 얻는다)
   [homeTeam,awayTeam].forEach(t=>getPitchers(t).forEach(p=>{
     p.currentStamina=100; // 경기 시작=풀(%). NP식·시즌 리셋과 동일 스케일
-    p._simNP=0;p._pitchedThisGame=false;
+    p._simNP=0;p._pitchedThisGame=false;p._simERBase=(p.ss&&p.ss.er)||0;
   }));
 
   // 선발 투수
@@ -245,10 +251,14 @@ function _simMyGame(){
   const _boHome={i:0},_boAway={i:0}; // 게임 단위 타순 연속 (컨셉 보너스는 resolvePA가 ctx에서 단일 계산)
 
   // 각 팀 TTO+BABIP 간이 시뮬 — simulatePlay 공식 통일 + 체력 소모 + 끝내기
-  function simHalfFull(batTeam,pitcherTeam,curPitcher,walkoffTarget,ord){
+  // `pitRef`({p:현재투수, last:마지막투수})로 교체를 호출부에 전파한다. 이전엔 지역 `pitcher`만 바뀌어
+  // 다음 하프이닝이 강판된 투수로 되돌아가고, W/L·SV·GP도 실제 마지막 투수와 어긋났다.
+  // `inning`/`lead`도 실값을 받는다 — 이전엔 7/0 하드코딩이라 bullpen 컨셉 팀(이닝≥6 조건)이
+  // 1번 타자부터 참이 되어 자동 진행 시 선발이 매 하프이닝 즉시 강판(선발 0이닝)됐다.
+  function simHalfFull(batTeam,pitcherTeam,inning,lead,pitRef,walkoffTarget,ord){
     ord=ord||{i:0}; // 타순 연속 (게임 단위 유지)
     const batters=getStartingBatters(batTeam);
-    let pitcher=curPitcher;
+    let pitcher=pitRef.p;
     if(!pitcher||batters.length===0)return rand(0,4);
     const _pf=getParkFactor(homeTeam); // 홈구장 파크팩터 — 양팀 공통
     const fldStarters=getStartingBatters(pitcherTeam);
@@ -258,10 +268,11 @@ function _simMyGame(){
     let bases=[null,null,null];
     let outs=0,runs=0,pa=0;
     while(outs<3&&pa<50){
-      // NP 기반 불펜 교체 (shouldHookPitcher 통합)
-      if(shouldHookPitcher(pitcher,7,0,pitcherTeam.concept)){
-        const emgPick=_pickReliever(pitcherTeam,7,0);
-        if(emgPick){pitcher=emgPick;pitcher._simNP=0;}
+      // NP·당일 실점 기반 불펜 교체 (shouldHookPitcher 통합) — 교체 시 pitRef로 호출부에 전파
+      const _curER=((pitcher.ss&&pitcher.ss.er)||0)-(pitcher._simERBase||0);
+      if(shouldHookPitcher(pitcher,inning,_curER,pitcherTeam.concept)){
+        const emgPick=_pickReliever(pitcherTeam,inning,lead);
+        if(emgPick){pitcher=emgPick;pitcher._simNP=0;pitRef.p=pitcher;pitRef.last=pitcher;}
       }
       const b=batters[ord.i%batters.length];ord.i++;pa++;
       const bs=b.ss||(initSeasonStats(b),b.ss);
@@ -336,42 +347,38 @@ function _simMyGame(){
 
   const homeOutsBefore=homeSP&&homeSP.ss?(homeSP.ss.outs||0):0;
   const awayOutsBefore=awaySP&&awaySP.ss?(awaySP.ss.outs||0):0;
-  let curPitHome=homeSP, curPitAway=awaySP;
-  let lastPitHome=homeSP, lastPitAway=awaySP;
+  // 투수 참조({p:현재, last:마지막}) — simHalfFull의 이닝 중 교체가 여기로 전파된다
+  const pitHome={p:homeSP,last:homeSP}, pitAway={p:awaySP,last:awaySP};
   let runsHome=0,runsAway=0;
+  // 이닝 선두 강판 판정 — 당일 실점(시즌 누적 − 경기 시작 기준선)을 실제로 전달
+  const _todayER=p=>p?(((p.ss&&p.ss.er)||0)-(p._simERBase||0)):0;
+  const _hook=(ref,inn,lead,team)=>{
+    if(shouldHookPitcher(ref.p,inn,_todayER(ref.p),team.concept)){
+      const pick=_pickReliever(team,inn,lead);
+      if(pick){ref.p=pick;ref.last=pick;}
+    }
+  };
 
   // 9이닝 시뮬 (Away 선공, Home 후공) — shouldHookPitcher 통합
   for(let inn=1;inn<=9;inn++){
-    if(shouldHookPitcher(curPitHome,inn,0,homeTeam.concept)){
-      const pickH=_pickReliever(homeTeam,inn,runsHome-runsAway);
-      if(pickH){curPitHome=pickH;lastPitHome=pickH;}
-    }
-    if(shouldHookPitcher(curPitAway,inn,0,awayTeam.concept)){
-      const pickA=_pickReliever(awayTeam,inn,runsAway-runsHome);
-      if(pickA){curPitAway=pickA;lastPitAway=pickA;}
-    }
-    runsAway+=simHalfFull(awayTeam,homeTeam,curPitHome,0,_boAway);
+    _hook(pitHome,inn,runsHome-runsAway,homeTeam);
+    _hook(pitAway,inn,runsAway-runsHome,awayTeam);
+    runsAway+=simHalfFull(awayTeam,homeTeam,inn,runsHome-runsAway,pitHome,0,_boAway);
     if(inn===9&&runsHome>runsAway) break;
     const wot=inn>=9?(runsAway-runsHome+1):0;
-    runsHome+=simHalfFull(homeTeam,awayTeam,curPitAway,wot,_boHome);
+    runsHome+=simHalfFull(homeTeam,awayTeam,inn,runsAway-runsHome,pitAway,wot,_boHome);
     if(inn>=9&&runsHome>runsAway) break;
   }
 
   // 연장전 (10~12회)
   if(runsHome===runsAway){
     for(let inn=10;inn<=12;inn++){
-      if(shouldHookPitcher(curPitHome,inn,0,homeTeam.concept)){
-        const pickH=_pickReliever(homeTeam,inn,runsHome-runsAway);
-        if(pickH){curPitHome=pickH;lastPitHome=pickH;}
-      }
-      if(shouldHookPitcher(curPitAway,inn,0,awayTeam.concept)){
-        const pickA=_pickReliever(awayTeam,inn,runsAway-runsHome);
-        if(pickA){curPitAway=pickA;lastPitAway=pickA;}
-      }
-      runsAway+=simHalfFull(awayTeam,homeTeam,curPitHome,0,_boAway);
+      _hook(pitHome,inn,runsHome-runsAway,homeTeam);
+      _hook(pitAway,inn,runsAway-runsHome,awayTeam);
+      runsAway+=simHalfFull(awayTeam,homeTeam,inn,runsHome-runsAway,pitHome,0,_boAway);
       if(runsHome>runsAway) break;
       const wot=runsAway-runsHome+1;
-      runsHome+=simHalfFull(homeTeam,awayTeam,curPitAway,wot,_boHome);
+      runsHome+=simHalfFull(homeTeam,awayTeam,inn,runsAway-runsHome,pitAway,wot,_boHome);
       if(runsHome!==runsAway) break;
     }
   }
@@ -391,10 +398,12 @@ function _simMyGame(){
   // 투수 W/L/GP (선발 5이닝=15아웃 조건 + 불펜 연동)
   const homeGameOuts=homeSP&&homeSP.ss?(homeSP.ss.outs||0)-homeOutsBefore:0;
   const awayGameOuts=awaySP&&awaySP.ss?(awaySP.ss.outs||0)-awayOutsBefore:0;
+  // GP: 선발 + 실제 등판한 전 불펜(`_pitchedThisGame` && 실투구 발생) — _simAIGame과 동일 기준
   if(homeSP&&homeSP.ss)homeSP.ss.gp++;
   if(awaySP&&awaySP.ss)awaySP.ss.gp++;
-  if(lastPitHome&&lastPitHome!==homeSP&&lastPitHome.ss)lastPitHome.ss.gp++;
-  if(lastPitAway&&lastPitAway!==awaySP&&lastPitAway.ss)lastPitAway.ss.gp++;
+  [homeTeam,awayTeam].forEach(t=>getBullpen(t).forEach(p=>{if(p._pitchedThisGame&&(p._simNP||0)>0&&p.ss)p.ss.gp++;}));
+  // 마지막 등판 투수 — simHalfFull의 이닝 중 교체까지 반영된 실제 최종 투수 (이전엔 스테일)
+  const lastPitHome=pitHome.last, lastPitAway=pitAway.last;
   if(homeWin){
     if(homeSP&&homeSP.ss&&homeGameOuts>=SP_WIN_MIN_OUTS)homeSP.ss.w++;
     else if(lastPitHome&&lastPitHome!==homeSP&&lastPitHome.ss)lastPitHome.ss.w++;
@@ -418,9 +427,11 @@ function _simMyGame(){
       else if(homeSP&&homeSP.ss)homeSP.ss.l++;
     }
   }
+  // SV: 승리팀 마지막 투수 (선발이 아니고, 실제 등판했고, 최종 점수차 3점 이하)
   const _myMargin=Math.abs(runsHome-runsAway);
-  if(homeWin&&lastPitHome&&lastPitHome!==homeSP&&lastPitHome.ss&&_myMargin>=1&&_myMargin<=3)lastPitHome.ss.sv++;
-  if(!homeWin&&lastPitAway&&lastPitAway!==awaySP&&lastPitAway.ss&&_myMargin>=1&&_myMargin<=3)lastPitAway.ss.sv++;
+  const _threw=p=>!!p&&(p._simNP||0)>0; // 교체 예약만 되고 등판 전 경기 종료된 투수 배제
+  if(homeWin&&lastPitHome&&lastPitHome!==homeSP&&lastPitHome.ss&&_threw(lastPitHome)&&_myMargin>=1&&_myMargin<=3)lastPitHome.ss.sv++;
+  if(!homeWin&&lastPitAway&&lastPitAway!==awaySP&&lastPitAway.ss&&_threw(lastPitAway)&&_myMargin>=1&&_myMargin<=3)lastPitAway.ss.sv++;
 
   // 선발 로테이션 전진
   G.teams.forEach(t=>{const r=getRotation(t).length;if(r>0)t.rotationIdx=(t.rotationIdx+1)%r;});

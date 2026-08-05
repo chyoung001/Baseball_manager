@@ -448,7 +448,11 @@ function simulatePlay(){
 
   matchState.batterIdx[batKey]++;
   matchState.pitchCount[fldKey]++;
-  pt.np++; // 투구수 증가
+  // 투구수: 타석당 실투구수 추정 — 시뮬 경로(match-sim `_simNP`)와 동일 공식으로 단위 정합.
+  // (이전엔 타석당 +1이라 투구수 단위인 getMaxPitches(SP=stamina+40≈90~130)·_fatigueDebuff(50구~)와
+  //  단위가 어긋나 관전 경기에서만 피로 보정·투구수 강판이 영구 미발동 → 완투 남발·불펜 미사용)
+  const _isKorBB=ttoRoll>=_c1&&ttoRoll<_c3; // K(_c1~_c2) 또는 BB(_c2~_c3) — 볼카운트 소모가 큰 타석
+  pt.np+=_isKorBB?rand(4,7):rand(2,4);
   // NP 기반 스태미나 파생 (투구수/한계투구수 비율)
   const _maxNP=getMaxPitches(pitcher);
   pitcher.currentStamina=Math.max(0,Math.round(100*(1-pt.np/_maxNP)));
