@@ -83,7 +83,7 @@ function startMatch(){
     hits:{home:0,away:0},errors:{home:0,away:0},
     batterIdx:{home:0,away:0},
     currentPitcher:{home:homeSP,away:awaySP},
-    pitchCount:{home:0,away:0},_prevOuts:0,
+    _prevOuts:0,
     relieversUsed:{home:[],away:[]},
     startingPitcher:{home:homeSP,away:awaySP},
     spOutsStart:{home:homeSP&&homeSP.ss?(homeSP.ss.outs||0):0,away:awaySP&&awaySP.ss?(awaySP.ss.outs||0):0},
@@ -447,12 +447,14 @@ function simulatePlay(){
   }
 
   matchState.batterIdx[batKey]++;
-  matchState.pitchCount[fldKey]++;
   // 투구수: 타석당 실투구수 추정 — 시뮬 경로(match-sim `_simNP`)와 동일 공식으로 단위 정합.
   // (이전엔 타석당 +1이라 투구수 단위인 getMaxPitches(SP=stamina+40≈90~130)·_fatigueDebuff(50구~)와
   //  단위가 어긋나 관전 경기에서만 피로 보정·투구수 강판이 영구 미발동 → 완투 남발·불펜 미사용)
   const _isKorBB=ttoRoll>=_c1&&ttoRoll<_c3; // K(_c1~_c2) 또는 BB(_c2~_c3) — 볼카운트 소모가 큰 타석
   pt.np+=_isKorBB?rand(4,7):rand(2,4);
+  // `_simNP`에도 미러링 — 경기 단위 투구수를 3경로가 같은 필드로 갖게 해 경기 후 처리(_aiPitcherRest)가
+  // 경로와 무관하게 동작하게 한다. (관전 경로는 today.np를 쓰지만 AI 팀의 today는 갱신되지 않아 스테일)
+  pitcher._simNP=pt.np;
   // NP 기반 스태미나 파생 (투구수/한계투구수 비율)
   const _maxNP=getMaxPitches(pitcher);
   pitcher.currentStamina=Math.max(0,Math.round(100*(1-pt.np/_maxNP)));
@@ -631,7 +633,9 @@ function endMatch(){
     }
   });
 
-  simulateOtherGames();
+  // 오늘 상대는 matchState에서 가져온다 — 이 시점엔 G.gameNum이 이미 증가해 getOpponent()가
+  // 시리즈 경계에서 '내일 상대'를 반환하기 때문(자동 경로와의 스케줄 비대칭 원인이었다).
+  simulateOtherGames(s.home===G.myTeam?s.away:s.home);
   processPostGame();
   $('btnPlayMatch').disabled=false;$('btnPlayMatch').textContent=G.gameNum>=G.totalGames?'🏆 시즌 결과 보기':'▶ 다음 경기 시작';
   updateHeader();drawField();

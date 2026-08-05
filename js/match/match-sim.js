@@ -9,13 +9,46 @@ function _aiILCountdown(t){
     if((p.ilGamesLeft||0)<=0){ p.status='futures'; p.isOnIL=false; p.rehabGamesLeft=0; }
   });
 }
-function simulateOtherGames(){
+// AI 팀 투수 경기 후 처리 (컨디션 · 연투) — endMatch/_simMyGame이 내 팀에만 하던 것의 AI 대응.
+// 이게 없으면 AI 투수는 condition이 생성 시 초깃값에 영구 고정되고 `_consecutiveDaysPitched`가 항상 0이라
+//  ① `_pickReliever`의 필터 2종(3연투 금지 · 컨디션 20 이상)이 AI에겐 완전 사문화되고
+//  ② resolvePA의 condFactor(=condition/100)가 비대칭이 된다(내 팀만 등판/휴식에 따라 변동).
+// 투구수는 `_simNP`를 단일 소스로 쓴다 — 3경로 모두 경기 시작 시 0으로 리셋하고 타석마다 누적한다.
+// (부상 롤은 내 팀 전용 유지 — AI 부상 도입은 별도 밸런스 사안)
+function _aiPitcherRest(t){
+  if(!t||t===G.myTeam)return;
+  getPitchers(t).filter(p=>p.role!=='overseas'&&(p.status||'active')==='active').forEach(p=>{
+    const np=p._simNP||0;
+    const didPitch=!!p._pitchedThisGame||np>0;
+    if(didPitch){
+      const npRatio=np/Math.max(1,getMaxPitches(p));
+      let condDrop=npRatio<=0.5?rand(5,10):npRatio<=1.0?rand(10,20):rand(20,30);
+      p._consecutiveDaysPitched=(p._consecutiveDaysPitched||0)+1;
+      if(p._consecutiveDaysPitched>=3) condDrop+=15;
+      else if(p._consecutiveDaysPitched>=2) condDrop+=5;
+      p.condition=clamp((p.condition||100)-condDrop,0,100);
+    }else{
+      p.condition=clamp((p.condition||100)+15+_restRecoveryBonus(p),0,100);
+      p._consecutiveDaysPitched=0;
+    }
+  });
+}
+
+// `todayOpp` = 오늘 내 팀과 맞붙은 상대. 호출부가 명시적으로 넘긴다.
+// 이전엔 내부에서 getOpponent()를 호출했는데, 관전 경로(endMatch)는 `G.gameNum++` 뒤에,
+// 자동 경로(_simMyGame)는 앞에 이 함수를 부르기 때문에 시리즈 경계(3경기 중 1회)에서
+// 관전 경로만 '내일 상대'를 제외해버렸다 — 그 결과 오늘 상대가 2경기(내 경기+AI 경기),
+// 내일 상대가 0경기를 치르는 스케줄 왜곡이 발생했다.
+function simulateOtherGames(todayOpp){
+  const opp=todayOpp||getOpponent(); // 미지정 시 기존 동작(구세이브·외부 호출 호환)
   // AI IL 카운트다운 + 라인업 유지 — 내 팀 제외 전 구단, 오늘 상대 포함(다음 경기 대비)
   G.teams.forEach(t=>{if(t!==G.myTeam){_aiILCountdown(t);_aiMaintainLineup(t);}});
-  const teams=G.teams.filter(t=>t!==G.myTeam&&t!==getOpponent());
+  const teams=G.teams.filter(t=>t!==G.myTeam&&t!==opp);
   for(let i=0;i<teams.length;i+=2){
     if(i+1<teams.length) _simAIGame(teams[i],teams[i+1]);
   }
+  // 오늘 경기를 마친 전 AI 구단(오늘 내 상대 포함)의 투수 피로 정산
+  G.teams.forEach(t=>{if(t!==G.myTeam)_aiPitcherRest(t);});
 }
 
 // 두 AI팀 간 간이 시뮬 (선수별 기록 누적) — teamA=Home, teamB=Away
@@ -497,7 +530,7 @@ function _simMyGame(){
   if(G.myTeam.eventRevenue>0){G.myTeam.budget+=G.myTeam.eventRevenue;G.myTeam.eventRevenue=0;}
   G.fanEventUsedThisGame=false;
 
-  simulateOtherGames();
+  simulateOtherGames(opp); // 오늘 상대 명시 (여기선 G.gameNum 증가 전이라 값은 동일하나 의도를 고정)
   processPostGame();
   G.gameNum++;
 

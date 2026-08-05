@@ -77,13 +77,17 @@ function showAwards(){
   G.teams.forEach(t=>{
     t.roster=t.roster.filter(p=>{
       const sp=p._seasonsPlayed||0;
-      if(sp<RETIRE_MIN_AGE_PROXY)return true;
-      const prob=RETIRE_BASE_PROB+(sp-RETIRE_MIN_AGE_PROXY)*RETIRE_PROB_PER_SEASON;
+      // 나이 기반 은퇴 곡선 (RETIRE_MIN_AGE부터, 1세당 RETIRE_PROB_PER_SEASON 가산).
+      // `_seasonsPlayed`는 applyInitialContract에서 age−18로 덮여 나이 프록시 역할을 겸하는데,
+      // 그 값을 임계 8과 비교하면 26세부터 판정이 시작돼 초기 로스터의 베테랑이 즉시 소멸했다.
+      const age=p.age||22;
+      if(age<RETIRE_MIN_AGE)return true;
+      const prob=RETIRE_BASE_PROB+(age-RETIRE_MIN_AGE)*RETIRE_PROB_PER_SEASON;
       if(rand(1,100)>prob)return true;
 
       // 은퇴 확정
       const pOvr=ovr(p);
-      const entry={name:p.name,team:t.name,emoji:t.emoji,ovr:pOvr,seasonsPlayed:sp,isPitcher:p.isPitcher,pos:p.pos};
+      const entry={name:p.name,team:t.name,emoji:t.emoji,ovr:pOvr,seasonsPlayed:sp,age,isPitcher:p.isPitcher,pos:p.pos};
       retirees.push(entry);
       return false;
     });
@@ -105,7 +109,7 @@ function showAwards(){
       })()}
       ${retirees.length>0?`
       <div style="margin-top:14px;font-size:0.72rem;color:var(--text-dim);margin-bottom:6px;">👋 은퇴 선수</div>
-      ${retirees.map(r=>'<div style="font-size:0.75rem;padding:3px 0;">'+r.emoji+' '+r.name+' (OVR '+r.ovr+', '+r.seasonsPlayed+'시즌)</div>').join('')}
+      ${retirees.map(r=>'<div style="font-size:0.75rem;padding:3px 0;">'+r.emoji+' '+r.name+' (OVR '+r.ovr+', '+r.age+'세 · '+r.seasonsPlayed+'시즌)</div>').join('')}
       `:''}
       <div class="card" style="background:var(--bg-card-hover);padding:10px;margin-top:14px;">
         <div style="font-size:0.72rem;color:#f59e0b;margin-bottom:4px;">🏛️ 구단주 신임도</div>
