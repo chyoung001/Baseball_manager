@@ -1361,6 +1361,38 @@ check(`D: AI 투수 컨디션이 등판/휴식에 반응 (회복 ${aiRestProbe.f
 check('D: 관전 경로가 _simNP를 미러링 (AI today는 스테일이라 사용 불가)',
   g('simulatePlay.toString()').includes('_simNP=pt.np'));
 
+// ── G. simulateOtherGames의 오늘 상대 제외 타이밍 ──
+// 구 버그: 내부에서 getOpponent()를 호출했는데 관전(endMatch)은 G.gameNum++ 뒤에,
+// 자동(_simMyGame)은 앞에 호출한다. 시리즈 경계(3경기 중 1회)에서 관전 경로만 '내일 상대'를
+// 제외해 오늘 상대가 2경기(내 경기+AI 경기), 내일 상대가 0경기를 치렀다.
+check('G: simulateOtherGames가 오늘 상대를 인자로 받음',
+  /function simulateOtherGames\(\s*todayOpp\s*\)/.test(g('simulateOtherGames.toString()')));
+check('G: endMatch가 matchState 기반으로 오늘 상대를 전달 (gameNum 증가 후라 getOpponent 사용 불가)',
+  /simulateOtherGames\(\s*s\.home===G\.myTeam\s*\?\s*s\.away\s*:\s*s\.home\s*\)/.test(g('endMatch.toString()')));
+const schedProbe = g(`(function(){
+  try{
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0; G.phase='first_half';
+    G.teams.forEach(t=>{t.wins=0;t.losses=0;t.roster.forEach(p=>initSeasonStats(p));});
+    let played=0;
+    for(let i=0;i<7;i++){ // 시리즈 경계(G2→G3, G5→G6)를 반드시 포함
+      __harnessFixRoster();
+      G.matchInProgress=false;
+      const before=G.gameNum;
+      startMatch();
+      if(!G.matchInProgress){ if(G.gameNum===before) break; else continue; }
+      let guard=0; while(G.matchInProgress&&guard++<5000) simulatePlay();
+      if(G.gameNum===before) break;
+      played++;
+    }
+    const gp=G.teams.map(t=>t.wins+t.losses);
+    return {played, gp, min:Math.min(...gp), max:Math.max(...gp), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+// 하루에 8팀이 4경기를 치르므로 전 구단 소화 경기 수는 항상 같아야 한다
+check(`G: 관전 ${schedProbe.played}경기 후 전 구단 소화 경기 수 균등 (편차 ${schedProbe.max - schedProbe.min})`,
+  !schedProbe.err && schedProbe.played >= 5 && schedProbe.max === schedProbe.min,
+  JSON.stringify(schedProbe));
+
 // ── T28. 시즌 사이클 end-to-end (오프시즌 페이즈 실구동) ──
 // 기존 스모크는 인게임 루프만 돌리고 오프시즌 페이즈 함수를 한 번도 실행하지 않았다
 // (showAllStarBreak·_startRookieDraft·showAwards·showPostseason·showGMMeeting·_startNextSeason = 0회 호출.

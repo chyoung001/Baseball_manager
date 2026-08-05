@@ -634,7 +634,9 @@ function endMatch(){
     }
   });
 
-  simulateOtherGames();
+  // 오늘 상대는 matchState에서 가져온다 — 이 시점엔 G.gameNum이 이미 증가해 getOpponent()가
+  // 시리즈 경계에서 '내일 상대'를 반환하기 때문(자동 경로와의 스케줄 비대칭 원인이었다).
+  simulateOtherGames(s.home===G.myTeam?s.away:s.home);
   processPostGame();
   $('btnPlayMatch').disabled=false;$('btnPlayMatch').textContent=G.gameNum>=G.totalGames?'🏆 시즌 결과 보기':'▶ 다음 경기 시작';
   updateHeader();drawField();
