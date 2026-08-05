@@ -10,7 +10,6 @@ const BAT_POS=['C','1B','2B','3B','SS','LF','CF','RF','DH'];
 const BAT_POS_NAMES={C:'포수','1B':'1루수','2B':'2루수','3B':'3루수',SS:'유격수',LF:'좌익수',CF:'중견수',RF:'우익수',DH:'지명타자'};
 
 // Pitcher roles
-const PITCH_ROLES=['SP','CP','SU','MR','LR']; // Starter, Closer, Setup, Middle Relief, Long Relief
 const PITCH_ROLE_NAMES={SP:'선발',CP:'마무리',SU:'필승조',MR:'추격조',LR:'롱릴리프',RP:'중계'};
 const ALL_POS_NAMES={...BAT_POS_NAMES,...PITCH_ROLE_NAMES};
 
@@ -87,7 +86,6 @@ const STADIUM_MAX_LEVEL = 5;
 const STADIUM_COST_PER_LEVEL = 20;  // stadiumLevel * 20억
 
 const OVERSEAS_COST = 15;       // 억
-const OVERSEAS_DURATION = 5;    // 경기 수
 const OVERSEAS_BOOST_MIN = 3;
 const OVERSEAS_BOOST_MAX = 7;
 
@@ -120,7 +118,6 @@ const FUTURES_PITCHER_DEBUFF = 0.80; // 2군 투수 스탯 20% 하향
 const SLUMP_CONDITION_THRESHOLD = 40; // 컨디션 이하 → 슬럼프 디버프
 const SLUMP_DEBUFF        = 12;   // 슬럼프 시 컨택·파워 패널티
 const REHAB_DEBUFF        = 15;   // 재활 중 스탯 패널티
-const IL_COOLDOWN_ON_RETURN = 5; // IL 복귀 후 콜업 쿨타임
 
 // ── 규정타석/규정이닝 (리더보드 최소 기준) ──
 const QUALIFY_PA_PER_GAME   = 2.0;  // 규정타석 계수 (PA/경기)

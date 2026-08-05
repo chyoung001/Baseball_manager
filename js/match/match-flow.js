@@ -83,7 +83,7 @@ function startMatch(){
     hits:{home:0,away:0},errors:{home:0,away:0},
     batterIdx:{home:0,away:0},
     currentPitcher:{home:homeSP,away:awaySP},
-    pitchCount:{home:0,away:0},_prevOuts:0,
+    _prevOuts:0,
     relieversUsed:{home:[],away:[]},
     startingPitcher:{home:homeSP,away:awaySP},
     spOutsStart:{home:homeSP&&homeSP.ss?(homeSP.ss.outs||0):0,away:awaySP&&awaySP.ss?(awaySP.ss.outs||0):0},
@@ -447,7 +447,6 @@ function simulatePlay(){
   }
 
   matchState.batterIdx[batKey]++;
-  matchState.pitchCount[fldKey]++;
   // 투구수: 타석당 실투구수 추정 — 시뮬 경로(match-sim `_simNP`)와 동일 공식으로 단위 정합.
   // (이전엔 타석당 +1이라 투구수 단위인 getMaxPitches(SP=stamina+40≈90~130)·_fatigueDebuff(50구~)와
   //  단위가 어긋나 관전 경기에서만 피로 보정·투구수 강판이 영구 미발동 → 완투 남발·불펜 미사용)

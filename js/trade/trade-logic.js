@@ -8,13 +8,6 @@ let _tradeState={
   theirFilter:'all',
 };
 
-function isTradeWindowOpen(){
-  const playPhases=['first_half','second_half'];
-  if(playPhases.includes(G.phase)&&G.gameNum<=TRADE_DEADLINE_GAME)return true;
-  if(G.phase==='stove_league'||G.phase==='preseason')return true;
-  return false;
-}
-
 function getTradeWindowStatus(){
   if(G.phase==='stove_league'||G.phase==='preseason')return{open:true,label:'스토브리그'};
   if(['first_half','second_half'].includes(G.phase)){

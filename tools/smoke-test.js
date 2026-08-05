@@ -994,8 +994,9 @@ check('J: 부상 교체(pitcher=bpEmg[0])가 타석 판정(resolvePA)보다 앞�
 // T21. 트레이드 데드라인 재확정 (#2) — 설계 v2 후반기 G39 (구 84경기 산식 56 잔재 제거)
 const dl = g(`(function(){
   G.phase='second_half';
-  G.gameNum=39; const at39=isTradeWindowOpen();
-  G.gameNum=40; const at40=isTradeWindowOpen();
+  // 실사용 경로인 getTradeWindowStatus()로 검증 (死함수 isTradeWindowOpen 제거)
+  G.gameNum=39; const at39=getTradeWindowStatus().open;
+  G.gameNum=40; const at40=getTradeWindowStatus().open;
   return { val:TRADE_DEADLINE_GAME, at39, at40 };
 })()`);
 check('T21: TRADE_DEADLINE_GAME=39 (설계 v2 G39)', dl.val===39, JSON.stringify(dl));
