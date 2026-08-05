@@ -217,6 +217,9 @@ const DRAFT_ROUNDS=6;             // 드래프트 라운드 수 (6라운드 × 8
 // ===================== FA & SALARY CONSTANTS (KBO-style, 단위: 억원) =====================
 // P2-3 설계 정렬: 신인 계약 3년(서비스 0~2) → Arb 서비스 3~5 → FA 서비스 6+
 const FA_SERVICE_TIME_THRESHOLD=6;   // FA 자격 서비스 타임
+// 미계약 FA 이월 한계 — 이 오프시즌 수를 채우도록 계약을 못 하면 은퇴 처리(풀에서 제거).
+// 이전엔 매 시즌 faPool을 통째로 비워 미계약 선수가 소리 없이 소멸했다(관측: 한 시즌 30명).
+const FA_UNSIGNED_MAX_YEARS=2;
 const PRE_ARB_MAX_SERVICE=2;         // 프리Arb: 서비스 0~2 (신인 계약 기간)
 const ARB_MIN_SERVICE=3;             // 연봉조정 시작: 3시즌 (슈퍼2는 2시즌+상위 22%)
 const ARB_MAX_SERVICE=5;             // 연봉조정 종료: 5시즌

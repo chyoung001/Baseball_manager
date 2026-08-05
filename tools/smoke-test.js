@@ -1496,6 +1496,7 @@ const rest = g(`(function(){
     out.afterStove=G.teams.map(t=>t.roster.length);
 
     _startNextSeason();
+    out.faPoolAfterRollover=(G.faPool||[]).length;
     out.nextSeason=G.season; out.nextPhase=G.phase; out.nextGameNum=G.gameNum;
     out.afterRollover=G.teams.map(t=>t.roster.length);
     out.budgets=G.teams.map(t=>Math.round(t.budget));
@@ -1513,6 +1514,12 @@ check(`T28: 시즌 롤오버 (season ${rest.nextSeason} · phase ${rest.nextPhas
   rest.nextSeason === 2 && rest.nextPhase === 'preseason' && rest.nextGameNum === 0, JSON.stringify(rest));
 check('T28: 롤오버 시 시즌 스탯·전적 초기화', rest.statsReset === true && rest.recordReset === true,
   JSON.stringify({statsReset:rest.statsReset, recordReset:rest.recordReset}));
+// 미계약 FA는 롤오버에서 소멸하지 않고 다음 스토브리그로 이월된다 (_faYears 한계까지)
+check(`T28: 미계약 FA 롤오버 이월 (스토브 잔여 ${rest.faPoolLeft}명 → 롤오버 후 ${rest.faPoolAfterRollover}명)`,
+  rest.faPoolAfterRollover === rest.faPoolLeft,
+  JSON.stringify({before:rest.faPoolLeft, after:rest.faPoolAfterRollover}));
+check(`T28: FA 이월 한계 상수 정의 (FA_UNSIGNED_MAX_YEARS=${g('FA_UNSIGNED_MAX_YEARS')})`,
+  g('typeof FA_UNSIGNED_MAX_YEARS') === 'number' && g('FA_UNSIGNED_MAX_YEARS') >= 1);
 // 은퇴 기능이 실제로 동작하는지(=0이 아님)와 로스터를 붕괴시키지 않는지만 본다.
 // 비율 자체는 밸런스 사안이라 밴드로 고정하지 않는다 — 초기 로스터는 `_seasonsPlayed=age-18`로
 // 생성돼 30세 58% / 32세 82% / 34세 100% 곡선에 걸리는 베테랑 비중이 커서 첫 오프시즌 유출이 크다.

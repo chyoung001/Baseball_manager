@@ -146,7 +146,14 @@ function showStoveLeague(){
     if(checkBankruptcy()) return;
 
     // 서비스 타임 + 팀 재적 증가 + 계약 만료 처리
-    G.faPool=[];
+    // 미계약 FA는 지우지 않고 이월한다 — 이전엔 여기와 _startNextSeason에서 배열을 비워
+    // 계약하지 못한 방출 선수가 게임에서 통째로 사라졌다(관측: 한 시즌 30명 소멸).
+    // 무한 누적은 _faYears(미계약 오프시즌 수)로 제한한다.
+    G.faPool=(G.faPool||[]).filter(p=>{
+      p._faYears=(p._faYears||0)+1;
+      return p._faYears<FA_UNSIGNED_MAX_YEARS; // 한계 도달 시 은퇴 처리(풀에서 제거)
+    });
+    G._faRetiredCount=0;
     G._aiRenewalLog=[];
     G.teams.forEach(team=>{
       team.roster.forEach(p=>{
@@ -411,7 +418,9 @@ function _startNextSeason(){
   G.season++;G.gameNum=0;G.phase='preseason';
   G.fanEventUsedThisGame=false;G.trainingCooldown=0;G.expandedEntryNotified=false;
   G.allStars=[];G.awards=[];G.postseasonBracket=null;
-  G.faPool=[];G.faBiddingLog=[];G._draftResult=null;
+  // faPool은 비우지 않는다 — 미계약 FA는 다음 스토브리그로 이월된다(소멸 방지).
+  // 정리는 showStoveLeague의 _faYears 한계 필터가 담당한다.
+  G.faBiddingLog=[];G._draftResult=null;
 
   // 드래프트 풀 시즌 초 미리 생성 (48명) + 스카우팅 티켓 12장
   G._scoutTickets=12;
