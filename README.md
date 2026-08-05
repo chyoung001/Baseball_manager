@@ -7,7 +7,7 @@ _감독이 되어 타선·로테이션·불펜부터 드래프트·트레이드�
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white)
 ![Build](https://img.shields.io/badge/Build-None-success)
 ![Storage](https://img.shields.io/badge/Storage-localStorage-orange)
-![Tests](https://img.shields.io/badge/Smoke_Tests-181_passing-brightgreen)
+![Tests](https://img.shields.io/badge/Smoke_Tests-195_passing-brightgreen)
 ![UI](https://img.shields.io/badge/UI-한국어-blue)
 
 🌐 **라이브 데모** : https://chyoung001.github.io/Baseball_manager/
@@ -43,7 +43,7 @@ _감독이 되어 타선·로테이션·불펜부터 드래프트·트레이드�
 | **빌드 도구** | **없음** — `<script>` 로딩 순서로 의존성 관리, 브라우저 직접 실행 |
 | **외부 의존성** | 없음 (Google Fonts CDN만 사용) |
 | **데이터 저장** | `localStorage` (버전 태그 `_v` + 순차 마이그레이션, 현재 `_v:5`) |
-| **테스트** | 헤드리스 스모크 하네스 (`tools/smoke-test.js`, Node `vm`, **181개 어서션**) |
+| **테스트** | 헤드리스 스모크 하네스 (`tools/smoke-test.js`, Node `vm`, **195개 어서션**) |
 | **UI 언어** | 한국어 |
 
 > 대시보드
@@ -147,11 +147,13 @@ resolvePA ──▶ ① TTO 확률   pHR / pK / pBB   (파크팩터 park.hr 곱�
 | 앵커 상수 | HR 2.5% / K 18% / BB 9% / BABIP 0.315 (MLB 근사) |
 | 파크팩터 | 8구장 차등 `{hr, hit}` — 확률 변환 후 곱셈 (HR·BABIP에 적용) |
 | 상황 보정 | 피로(50구~ 선형 감산) · 컨디션 · consistency · RISP 클러치 · 동적 회귀(비현실 성적 억제) |
-| 투수 운용 | 스태미나 기반 투구수 한계, 보직 우선순위(CP/SU/MR/LR) 자동 교체 |
+| 투수 운용 | 스태미나 기반 투구수 한계, 보직 우선순위(CP/SU/MR/LR) 자동 교체. 투구수(NP)는 3경로 모두 **타석당 실투구수 추정**(K·BB 4~7구 / 그 외 2~4구)으로 누적 — 피로 커브·강판·부상 가중이 전부 투구수 단위 |
 | 세이버 지표 | AVG/OBP/SLG/OPS/wOBA/FIP/wRC+/WAR — 시상(MVP·사이영·신인왕) 산정 기반 |
 | 성장(XP) | 경기당 XP → OVR 밴드별 요구치 · 프로의식·야망 시너지 성장 배율 · 잠재력 천장 |
 
 > 확률 모델은 현재 TTO 선형 근사이며, 설계의 **Logit/Softmax 2-stage + MLB 앵커 재타겟**은 아직 구현 전이다. 리그 총합 K%/BB%/BABIP/OPS/ERA 앵커 정합 하니스로 상시 검증한다.
+>
+> **투수 기용 경로 대칭 (fix/#19)**: 확률식은 `resolvePA`로 단일화돼 있었지만 거기에 *입력되는 상태*가 경로마다 달랐다 — ①관전 경로만 NP를 타석당 +1로 세어 **피로·투구수 강판이 영구 미발동**(선발 평균 31.7구·8이닝+ 67%·경기당 불펜 0.9명), ②불펜 후보 필터 `_pitchedThisGame`이 세팅되지 않아 시뮬 경로에서 **동일 릴리버가 무한 재선택**(불펜 9명 중 4명만 등판·단기계투 등판당 8이닝), ③`simHalfFull`이 이닝을 7로 하드코딩해 bullpen 컨셉 팀은 **자동 진행 시 선발 0이닝**. 세 건을 정합해 현재 관전 선발 **88구·5.0IP·완투급 5%**, 불펜 등판당 **≤2.5이닝**, bullpen 컨셉 선발 이닝 정상화. 그 결과 앵커가 MLB 쪽으로 이동했다 — **ERA 델타 +1.18→+0.78 · OPS +.077→+.047 · K% −5.3p→−4.6p**.
 
 > 타자 시즌 성적 (세이버 지표)
 <div align='center'>
@@ -202,7 +204,7 @@ python -m http.server 8000
 node tools/smoke-test.js
 ```
 
-> 커버리지 (T1~T26, **181 어서션**): 모듈 로드 · 63경기 풀시즌 시뮬 · 시리즈 구조 · 4팀 포스트시즌 · 8페이즈 · 스토브리그 멱등성 · 세이브 라운드트립 · 스케일 마이그레이션 · 밸런스 가드 · Z-score OVR · 히든 10종 · 서브포지션 · 3단계 사치세 · 서비스타임 · 3-Tier 스탯 · 특성 엔진 · 로스터 자동 배치 · 8구장 파크팩터 · 세이버 시상 · 경제 유계화 · 구단주 신임도 · `resolvePA` 3경로 공정성.
+> 커버리지 (T1~T27, **195 어서션**): 모듈 로드 · 63경기 풀시즌 시뮬 · 시리즈 구조 · 4팀 포스트시즌 · 8페이즈 · 스토브리그 멱등성 · 세이브 라운드트립 · 스케일 마이그레이션 · 밸런스 가드 · Z-score OVR · 히든 10종 · 서브포지션 · 3단계 사치세 · 서비스타임 · 3-Tier 스탯 · 특성 엔진 · 로스터 자동 배치 · 8구장 파크팩터 · 세이버 시상 · 경제 유계화 · 구단주 신임도 · `resolvePA` 3경로 공정성 · **투수 기용 경로 대칭**(T27 — 관전 경로를 *실제로 구동*해 NP 투구수 단위·완투 억제·불펜 등판 수 검증 + 불펜 로테이션·이닝 중 교체 전파).
 
 ---
 
@@ -281,7 +283,7 @@ Baseball_Manager/
 ├── style.css               # 전역 스타일시트
 ├── image/                  # 이미지 에셋 (경기장 배경, 팀 로고)
 ├── tools/
-│   └── smoke-test.js       # 헤드리스 회귀 테스트 하네스 (181 어서션)
+│   └── smoke-test.js       # 헤드리스 회귀 테스트 하네스 (195 어서션)
 └── js/                     # 게임 로직 (58개 모듈)
     ├── constants.js        # 게임 상수 · 팀 데이터(TEAMS_DATA) · 밸런스 값
     ├── ui.js · dashboard.js · standings.js · training.js · market.js · title.js

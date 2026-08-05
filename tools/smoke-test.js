@@ -1196,6 +1196,137 @@ const apPreseasonProbe = g(`(function(){
 })()`);
 check('프리시즌: 구단주 목표 자동 설정 + 멱등(재진입 불변)', apPreseasonProbe.set && apPreseasonProbe.valid && apPreseasonProbe.idem, JSON.stringify(apPreseasonProbe));
 
+// ── T27. 투수 기용 경로 대칭 — 관전 NP 단위 · 불펜 로테이션 · 이닝 중 교체 전파 ──
+// 기존 T20/T22는 `simulatePlay.toString()` 배선 문자열만 검사해 관전 경로를 한 번도 "실행"하지 않았고,
+// 그래서 관전 경로가 투구수를 타석당 +1로 세던 단위 오류(A)를 통과시켰다. 여기서는 실제로 경기를 돌린다.
+section('T27. 투수 기용 경로 대칭 (NP 단위 · 불펜 로테이션 · 교체 전파)');
+
+// ── A. 관전 경로(startMatch→simulatePlay) 실제 구동 ──
+// NP는 getMaxPitches(투구수)·_fatigueDebuff(50구~)와 같은 단위여야 한다. 타석당 +1이면 NP/IP≈4로 붕괴.
+const watchProbe = g(`(function(){
+  try{
+    G.teamIdx=0; initTeams(0); G.season=1; G.phase='first_half'; G.matchInProgress=false;
+    G.teams.forEach(t=>t.roster.forEach(p=>initSeasonStats(p)));
+    let sp=[], relPerGame=[], games=0;
+    for(let gi=0; gi<12; gi++){
+      G.gameNum=gi; G.phase='first_half'; G.matchInProgress=false;
+      __harnessFixRoster();
+      startMatch();
+      if(!G.matchInProgress) continue;
+      const spH=matchState.startingPitcher.home, spA=matchState.startingPitcher.away;
+      let guard=0;
+      while(G.matchInProgress && guard++<5000) simulatePlay();
+      games++;
+      [spH,spA].forEach(p=>{ if(!p||!p.today) return;
+        sp.push({np:p.today.np||0, outs:p.today.outs||0}); });
+      relPerGame.push((matchState.relieversUsed.home||[]).length+(matchState.relieversUsed.away||[]).length);
+    }
+    const ip=sp.reduce((s,x)=>s+x.outs,0)/3, np=sp.reduce((s,x)=>s+x.np,0);
+    return {games, starts:sp.length,
+      npPerIP:+(np/Math.max(1,ip)).toFixed(2),
+      avgNP:+(np/Math.max(1,sp.length)).toFixed(1),
+      avgIP:+(ip/Math.max(1,sp.length)).toFixed(2),
+      cgRate:+(sp.filter(x=>x.outs>=24).length/Math.max(1,sp.length)).toFixed(2),
+      relPerGame:+(relPerGame.reduce((a,b)=>a+b,0)/Math.max(1,relPerGame.length)).toFixed(2), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check('A: 관전 경로 실제 구동 (경기 완주 + 무예외)',
+  !watchProbe.err && watchProbe.games >= 8, JSON.stringify(watchProbe));
+// 실투구수라면 이닝당 12~22구. 타석당 +1(구 버그)이면 ≈4 → 실패.
+check(`A: 관전 NP가 투구수 단위 (이닝당 12~22구): ${watchProbe.npPerIP}`,
+  watchProbe.npPerIP >= 12 && watchProbe.npPerIP <= 22, JSON.stringify(watchProbe));
+// 투구수 강판이 실제로 작동하는가 — 구 버그에선 8이닝+ 67%
+check(`A: 선발 완투 억제 (8이닝+ 비율 ≤0.30): ${watchProbe.cgRate}`,
+  watchProbe.cgRate <= 0.30, JSON.stringify(watchProbe));
+check(`A: 관전 경기당 불펜 등판(양팀 합) ≥2.0: ${watchProbe.relPerGame}`,
+  watchProbe.relPerGame >= 2.0, JSON.stringify(watchProbe));
+
+// ── B. _pickReliever가 등판 확정을 마킹하는가 (`_pitchedThisGame` 사문화 회귀) ──
+const pickProbe = g(`(function(){
+  try{
+    const T=G.teams[1];
+    getPitchers(T).forEach(p=>{p._pitchedThisGame=false;p._simNP=0;p.currentStamina=100;p._consecutiveDaysPitched=0;p.condition=100;});
+    const picks=[]; for(let i=0;i<5;i++){ const r=_pickReliever(T,8,1); picks.push(r?r._uid:null); }
+    const real=picks.filter(Boolean);
+    return {n:real.length, uniq:new Set(real).size, marked:getBullpen(T).filter(p=>p._pitchedThisGame).length, err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check(`B: _pickReliever 5연속 호출이 서로 다른 투수 반환 (uniq=${pickProbe.uniq}/${pickProbe.n})`,
+  !pickProbe.err && pickProbe.n >= 4 && pickProbe.uniq === pickProbe.n, JSON.stringify(pickProbe));
+check('B: 선택 즉시 _pitchedThisGame 마킹 (등판 확정 = 후보 제외)',
+  pickProbe.marked === pickProbe.n, JSON.stringify(pickProbe));
+
+// ── B. 시뮬 경로 풀시즌 불펜 분산 + GP 집계 정합 ──
+const simBpProbe = g(`(function(){
+  try{
+    G.teams.forEach(t=>t.roster.forEach(p=>initSeasonStats(p)));
+    const A=G.teams[3], B=G.teams[4];
+    for(let i=0;i<63;i++){
+      _simAIGame(A,B);
+      G.teams.forEach(t=>{const r=getRotation(t).length; if(r>0)t.rotationIdx=(t.rotationIdx+1)%r;});
+    }
+    const bp=getBullpen(A);
+    // 등판당 평균 이닝(=IP/GP)이 핵심 지표. 구 버그에선 동일 투수가 무한 재선택돼 SU가 등판당 8이닝을
+    // 던졌다. 최댓값은 '불펜 소진 시 마지막 투수가 계속 던진다'는 정상 폴백을 잡아 플레이크라 쓰지 않는다.
+    const short=bp.filter(p=>p.pos!=='LR'&&(p.ss.gp||0)>0);
+    const shortIP=short.reduce((s,p)=>s+(p.ss.outs||0),0)/3;
+    const shortGP=short.reduce((s,p)=>s+(p.ss.gp||0),0);
+    const bpGP=bp.reduce((s,p)=>s+(p.ss.gp||0),0);
+    return {bpTotal:bp.length, used:bp.filter(p=>(p.ss.outs||0)>0).length,
+      bpAppPerGame:+(bpGP/63).toFixed(2),
+      shortIPperApp:+(shortIP/Math.max(1,shortGP)).toFixed(2),
+      gpGap:getPitchers(A).filter(p=>(p.ss.outs||0)>0&&(p.ss.gp||0)===0).length, err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check('B: 시즌 시뮬 무예외', !simBpProbe.err, JSON.stringify(simBpProbe));
+// NOTE: 시즌 단위 분산 지표(등판 인원·경기당 등판 횟수)는 실측 변동폭이 커(인원 6~8 · 횟수 1.4~3.2)
+// 밴드로 고정하면 플레이크가 된다. 상한이 잔여 결함 D(AI 투수 피로 미적용 — `_consecutiveDaysPitched`가
+// 내 팀 전용이라 보직 우선순위가 정적)에 묶여 있기 때문. B 회귀는 아래 결정적 지표 3종으로 충분히 잡힌다.
+// 밴드 4.0 = 실측 분포(1.6~2.7) 위 여유 + 구 버그 8.0의 절반 → 플레이크 없이 회귀만 잡는다.
+check(`B: 단기 계투 등판당 평균 이닝 (CP/SU/MR ≤4.0IP — 구 버그 8.0): ${simBpProbe.shortIPperApp}`,
+  simBpProbe.shortIPperApp <= 4.0, JSON.stringify(simBpProbe));
+check('B: GP 집계 정합 (IP>0인데 GP=0인 투수 0명)',
+  simBpProbe.gpGap === 0, JSON.stringify(simBpProbe));
+
+// ── C. 이닝 중 교체 전파 · 실이닝 전달 (bullpen 컨셉 팀이 최악 케이스) ──
+// 구 버그: simHalfFull이 `shouldHookPitcher(p, 7, 0, ...)`로 이닝을 7 고정 → bullpen 컨셉의
+// '6회부터 선발 교체' 규칙이 1번 타자부터 참 → 자동 진행 시 선발 0이닝 · 불펜 점유 100%.
+// 또한 교체된 투수가 호출부에 전파되지 않아 다음 하프이닝에 강판된 투수가 되돌아왔다.
+check('C: simHalfFull이 실이닝·당일실점을 전달 (7/0 하드코딩 부재)',
+  !/shouldHookPitcher\(\s*pitcher\s*,\s*7\s*,\s*0\s*,/.test(g('_simMyGame.toString()')));
+check('C: 시뮬 경로가 pitRef로 교체를 호출부에 전파',
+  g('_simMyGame.toString()').includes('pitRef'));
+
+const bullpenConceptProbe = g(`(function(){
+  try{
+    const idx=TEAMS_DATA.findIndex(t=>t.concept==='bullpen');
+    G.teamIdx=idx; initTeams(idx); G.season=1; G.gameNum=0; G.phase='first_half';
+    G.teams.forEach(t=>t.roster.forEach(p=>initSeasonStats(p)));
+    let n=0;
+    for(let i=0;i<20;i++){
+      __harnessFixRoster();
+      const before=G.gameNum;
+      _simMyGame(); // 반환값은 승/패 boolean이라 성공 판정에 쓸 수 없음 — gameNum 전진으로 판정
+      if(G.gameNum===before) break;
+      n++;
+      if(G.gameNum>=FIRST_HALF_END&&G.phase==='first_half')G.phase='second_half';
+    }
+    const T=G.myTeam;
+    const spIP=getRotation(T).reduce((s,p)=>s+(p.ss.outs||0),0)/3;
+    const bpIP=getBullpen(T).reduce((s,p)=>s+(p.ss.outs||0),0)/3;
+    return {concept:TEAMS_DATA[idx].concept, games:n, spIP:+spIP.toFixed(1), bpIP:+bpIP.toFixed(1),
+      bpShare:+(bpIP/Math.max(1,spIP+bpIP)*100).toFixed(1), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+// bullpen 컨셉은 불펜 편중이 정상이나 선발이 사라지면 안 된다 (구 버그: 선발 0IP · 점유 100%).
+check(`C: bullpen 컨셉 팀 자동 진행 — 선발이 실제로 던짐 (불펜 점유 ≤75%): ${bullpenConceptProbe.bpShare}%`,
+  !bullpenConceptProbe.err && bullpenConceptProbe.games >= 5 && bullpenConceptProbe.bpShare <= 75,
+  JSON.stringify(bullpenConceptProbe));
+check(`C: bullpen 컨셉 선발 이닝 > 0 (구 버그: 0IP): ${bullpenConceptProbe.spIP}IP`,
+  bullpenConceptProbe.spIP > 0, JSON.stringify(bullpenConceptProbe));
+check('C: _simAIGame 현재투수가 이닝 간 유지 (curPit 선언이 루프 밖)',
+  !/for\s*\(let inn[^)]*\)\s*\{\s*let curPit/.test(g('_simAIGame.toString()')));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
