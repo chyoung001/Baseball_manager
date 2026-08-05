@@ -1527,13 +1527,17 @@ check(`T28: FA 이월 한계 상수 정의 (FA_UNSIGNED_MAX_YEARS=${g('FA_UNSIGN
 const retired = rest.beforeRetire.map((n, i) => n - rest.afterRetire[i]);
 check(`T28: 은퇴 처리 동작 (전 구단 발생 · 관측 ${JSON.stringify(retired)})`,
   retired.every(x => x >= 0) && retired.some(x => x > 0), JSON.stringify(retired));
-// TODO(은퇴 곡선): 본래 기준은 1군 최소 정원(ACTIVE_MIN_TOTAL=27)이어야 하나, 현재는 첫 오프시즌에
-// 26명까지 떨어지는 팀이 나온다 — 초기 로스터가 `_seasonsPlayed=age-18`로 생성돼 30세 58%/32세 82%/
-// 34세 100% 은퇴 곡선에 걸리는 베테랑 비중이 크기 때문. 곡선 조정 후 이 밴드를 27로 조인다.
-// 지금은 '붕괴 없음' 하한만 지켜 회귀를 막는다.
+// 은퇴 곡선을 나이 기반(RETIRE_MIN_AGE)으로 재조정한 뒤 본래 기준(1군 최소 정원)으로 조였다.
+// 구 곡선에서는 첫 오프시즌에 팀당 12~17명이 은퇴해 조직 26명까지 떨어지는 팀이 나왔다.
 const rollMin = Math.min(...rest.afterRollover);
-check(`T28: 롤오버 후 조직 인원 붕괴 없음 (≥20 · 최소 ${rollMin} / 1군 최소 정원 ${g('ACTIVE_MIN_TOTAL')})`,
-  rest.afterRollover.every(n => n >= 20), JSON.stringify(rest.afterRollover));
+check(`T28: 롤오버 후 전 구단 조직 인원 ≥ 1군 최소 정원(${g('ACTIVE_MIN_TOTAL')}) — 최소 ${rollMin}`,
+  rest.afterRollover.every(n => n >= g('ACTIVE_MIN_TOTAL')), JSON.stringify(rest.afterRollover));
+check(`T28: 은퇴는 ${g('RETIRE_MIN_AGE')}세 미만에서 발생하지 않음`,
+  g(`(function(){
+    // 곡선 자체를 직접 검증 — 32세 이하 0% / 33세 ${'RETIRE_BASE_PROB'} / 나이에 따라 단조 증가
+    const f=a=>a<RETIRE_MIN_AGE?0:RETIRE_BASE_PROB+(a-RETIRE_MIN_AGE)*RETIRE_PROB_PER_SEASON;
+    return f(RETIRE_MIN_AGE-1)===0 && f(RETIRE_MIN_AGE)===RETIRE_BASE_PROB && f(40)>f(35) && f(35)>f(33);
+  })()`));
 check(`T28: 롤오버 후 전 구단 예산 유한·비음수 — 관측 ${JSON.stringify(rest.budgets)}`,
   rest.budgets.every(b => Number.isFinite(b) && b >= 0), JSON.stringify(rest.budgets));
 

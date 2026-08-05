@@ -197,7 +197,7 @@ const POSTSEASON_TEAMS=4;         // 포스트시즌 진출 팀 수 (v2 균형 �
 const SEMI_WINS_NEEDED=3;         // 준플레이오프 5전 3선승
 const FINAL_WINS_NEEDED=4;        // 챔피언십 7전 4선승
 const CHAMPIONSHIP_BONUS=50;      // 우승 상금 (억)
-const RETIRE_MIN_AGE_PROXY=8;     // 시즌 수 기준 은퇴 가능 (생성 후 N시즌)
+// (구 RETIRE_MIN_AGE_PROXY 제거 — 은퇴 판정은 RETIRE_MIN_AGE 기반 나이 곡선으로 이관)
 
 // ===================== 구단주 신임도 (P6 '경영 압박' — 성적 기반 2번째 게임오버 축) =====================
 // 매 시즌 프리시즌에 구단주가 목표 순위를 제시하고, 시상식에서 실제 성적·우승·재정으로 신임도를 증감.
@@ -257,8 +257,14 @@ const POS_WEIGHT={
 };
 
 // ===================== RETIREMENT =====================
-const RETIRE_BASE_PROB=10;        // 은퇴 기본 확률 (%)
-const RETIRE_PROB_PER_SEASON=12;  // 초과 시즌당 추가 확률 (%)
+// 은퇴는 **나이** 기반 곡선이다. 이전엔 `_seasonsPlayed`(= applyInitialContract에서 age−18로 세팅)를
+// 썼는데 임계 8을 26세로 환산해 26세부터 판정이 시작되고 34세는 100%였다 —
+// 26세 선수가 33세까지 생존할 확률 1%. S급이 평균 29세로, C·D급 노장이 33~40세로 생성되는
+// 초기 로스터와 정면 충돌해 첫 오프시즌에 팀당 12~17명이 은퇴하고 일부 AI 팀이
+// 조직 26명(1군 최소 정원 27 미달)까지 떨어졌다.
+const RETIRE_MIN_AGE=33;          // 은퇴 판정 시작 나이 (미만은 은퇴 없음)
+const RETIRE_BASE_PROB=10;        // 시작 나이에서의 은퇴 확률 (%)
+const RETIRE_PROB_PER_SEASON=12;  // 초과 1세당 추가 확률 (%) → 35세 34% · 37세 58% · 40세 94%
 
 // ===================== STAT SCALE (1~100) =====================
 // NOTE: v2 설계는 내부 1~100 스케일. P1에서 STAT_MIN/STAT_MAX만 바꾸면
