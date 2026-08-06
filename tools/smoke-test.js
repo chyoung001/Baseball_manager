@@ -1209,7 +1209,10 @@ const watchProbe = g(`(function(){
     G.teamIdx=0; initTeams(0); G.season=1; G.phase='first_half'; G.matchInProgress=false;
     G.teams.forEach(t=>t.roster.forEach(p=>initSeasonStats(p)));
     let sp=[], relPerGame=[], games=0;
-    for(let gi=0; gi<12; gi++){
+    // 표본 12경기(24선발)는 cgRate 가드에 비해 작다 — 실제 분포는 평균 0.07·최대 0.21인데
+    // 임계가 0.30이라 드문 극단 표본이 임계를 넘어 플레이크가 났다(관측 1/42회).
+    // 28경기(56선발)로 늘려 표준편차를 ~1.5배 줄인다.
+    for(let gi=0; gi<28; gi++){
       G.gameNum=gi; G.phase='first_half'; G.matchInProgress=false;
       __harnessFixRoster();
       startMatch();
@@ -1362,14 +1365,16 @@ check(`D: AI 투수 컨디션이 등판/휴식에 반응 (회복 ${aiRestProbe.f
 check('D: 관전 경로가 _simNP를 미러링 (AI today는 스테일이라 사용 불가)',
   g('simulatePlay.toString()').includes('_simNP=pt.np'));
 
-// ── G. simulateOtherGames의 오늘 상대 제외 타이밍 ──
+// ── G. simulateOtherGames의 오늘 일정 타이밍 ──
 // 구 버그: 내부에서 getOpponent()를 호출했는데 관전(endMatch)은 G.gameNum++ 뒤에,
 // 자동(_simMyGame)은 앞에 호출한다. 시리즈 경계(3경기 중 1회)에서 관전 경로만 '내일 상대'를
 // 제외해 오늘 상대가 2경기(내 경기+AI 경기), 내일 상대가 0경기를 치렀다.
-check('G: simulateOtherGames가 오늘 상대를 인자로 받음',
-  /function simulateOtherGames\(\s*todayOpp\s*\)/.test(g('simulateOtherGames.toString()')));
-check('G: endMatch가 matchState 기반으로 오늘 상대를 전달 (gameNum 증가 후라 getOpponent 사용 불가)',
-  /simulateOtherGames\(\s*s\.home===G\.myTeam\s*\?\s*s\.away\s*:\s*s\.home\s*\)/.test(g('endMatch.toString()')));
+// fix/#22: 상대 하나가 아니라 **오늘의 시리즈 인덱스**를 넘겨 대진표 전체를 단일 소스로 만든다.
+check('G: simulateOtherGames가 오늘 시리즈를 인자로 받음',
+  /function simulateOtherGames\(\s*todaySeries\s*\)/.test(g('simulateOtherGames.toString()')));
+check('G: endMatch가 matchState 기반으로 오늘 시리즈를 전달 (gameNum 증가 후라 getCurrentSeries 사용 불가)',
+  /simulateOtherGames\(\s*s\._seriesIdx\s*\)/.test(g('endMatch.toString()')) &&
+  /_seriesIdx\s*:\s*getCurrentSeries\(\)/.test(g('startMatch.toString()')));
 const schedProbe = g(`(function(){
   try{
     G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0; G.phase='first_half';
@@ -1632,23 +1637,34 @@ const brProbe = g(`(function(){
     const b2=[be,null,null];
     out.errScore=resolveBaserunning('HR',b2,P(50),{}); // 2득점이지만 자책은 1
     // 3루 주자 + 뜬공 → 희생플라이 가능 (gbRate 0 = 항상 뜬공)
-    let sf=0;
-    for(let i=0;i<400;i++){ const bb=[null,null,P(80)];
+    const N=2000;
+    let sf=0, gbLeak=0;
+    for(let i=0;i<N;i++){ const bb=[null,null,P(80)];
       const r=resolveBaserunning('OUT',bb,P(50),{outs:0,gbRate:0,batSpeed:50,dpBase:0.09});
-      if(r.type==='SF')sf++; }
-    out.sfRate=+(sf/400).toFixed(3);
+      if(r.type==='SF')sf++;
+      if(r.type==='GB'||r.type==='DP')gbLeak++; }
+    out.sfRate=+(sf/N).toFixed(3);
+    out.gbLeakAt0=gbLeak;   // gbRate:0인데 땅볼이 나오면 falsy-zero 폴백이 살아있다는 뜻
     // 2아웃에서는 희생플라이 불가 (아웃 카운트로 이닝 종료)
     let sf2=0;
-    for(let i=0;i<400;i++){ const bb=[null,null,P(80)];
+    for(let i=0;i<N;i++){ const bb=[null,null,P(80)];
       const r=resolveBaserunning('OUT',bb,P(50),{outs:2,gbRate:0,batSpeed:50,dpBase:0.09});
       if(r.type==='SF')sf2++; }
     out.sfAt2Outs=sf2;
     // 1루 주자 + 땅볼 → 병살 가능 (gbRate 1 = 항상 땅볼)
-    let dp=0;
-    for(let i=0;i<800;i++){ const bb=[P(50),null,null];
+    let dp=0, fbLeak=0;
+    for(let i=0;i<N*2;i++){ const bb=[P(50),null,null];
       const r=resolveBaserunning('OUT',bb,P(50),{outs:0,gbRate:1,batSpeed:50,dpBase:0.09});
-      if(r.type==='DP'&&r.outsAdded===2)dp++; }
-    out.dpRate=+(dp/800).toFixed(3);
+      if(r.type==='DP'&&r.outsAdded===2)dp++;
+      if(r.type==='FB'||r.type==='SF')fbLeak++; }
+    out.dpRate=+(dp/(N*2)).toFixed(3);
+    out.fbLeakAt1=fbLeak;   // gbRate:1인데 뜬공이 나오면 안 된다
+    // dpBase:0 → 병살 0건 (0이 유효값으로 취급되는지)
+    let dp0=0;
+    for(let i=0;i<N;i++){ const bb=[P(50),null,null];
+      const r=resolveBaserunning('OUT',bb,P(50),{outs:0,gbRate:1,batSpeed:50,dpBase:0});
+      if(r.type==='DP')dp0++; }
+    out.dpAtBase0=dp0;
     return Object.assign(out,{err:null});
   }catch(e){return {err:e.message};}
 })()`);
@@ -1664,6 +1680,164 @@ check(`T30: 3루 주자 뜬공 → 희생플라이 발생 (${(brProbe.sfRate*100
   brProbe.sfRate > 0.2 && brProbe.sfRate < 0.7 && brProbe.sfAt2Outs === 0, JSON.stringify(brProbe));
 check(`T30: 1루 주자 땅볼 → 병살 발생 (${(brProbe.dpRate*100).toFixed(0)}%, 2아웃 처리)`,
   brProbe.dpRate > 0.03 && brProbe.dpRate < 0.25, JSON.stringify(brProbe));
+// ctx 수치 0이 기본값으로 되돌아가지 않는가 (`||` → `!=null` 규약).
+// 구 버그: `ctx.gbRate||0.45`가 gbRate:0을 0.45로 되돌려 "항상 뜬공" 계약이 깨졌고,
+// 그 탓에 위 희생플라이 가드가 표본마다 통과/실패를 오갔다(참 SF율 0.227 vs 임계 0.2).
+check(`T30: gbRate:0 → 땅볼 0건 (falsy-zero 폴백 부재, 관측 ${brProbe.gbLeakAt0}건)`,
+  brProbe.gbLeakAt0 === 0, JSON.stringify(brProbe));
+check(`T30: gbRate:1 → 뜬공 0건 (관측 ${brProbe.fbLeakAt1}건)`,
+  brProbe.fbLeakAt1 === 0, JSON.stringify(brProbe));
+check(`T30: dpBase:0 → 병살 0건 (관측 ${brProbe.dpAtBase0}건)`,
+  brProbe.dpAtBase0 === 0, JSON.stringify(brProbe));
+
+// ── T31. 리그 일정 라운드로빈 (fix/#22) ─────────────────────
+// 구 버그: simulateOtherGames가 `teams.filter(...)`의 배열 인접 인덱스로 짝을 지어
+// 28대진 중 9개만 성립했다(관측: 데빌즈-타이거즈 45경기 = 시즌의 71%, 홈 배정 세이버스 54 / 드림즈 9).
+// AI 순위표가 실력이 아니라 '누구와 묶였는가'로 결정됐고, 드래프트 순서·리그 분배금·
+// 구단주 신임도 목표 순위가 전부 그 순위표를 참조한다.
+section('T31. 리그 일정 라운드로빈 (getSeriesPairings)');
+const schedTable = g(`(function(){
+  try{
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0;
+    const meet={}, home={}, roundSizes=[];
+    let oppOk=true, homeOk=true;
+    G.teams.forEach(t=>home[t.name]=0);
+    for(let s=0;s<TOTAL_SERIES;s++){
+      const ps=getSeriesPairings(s);
+      const seen=new Set();
+      ps.forEach(pr=>{
+        seen.add(pr.home.name); seen.add(pr.away.name);
+        meet[[pr.home.name,pr.away.name].sort().join('|')]=(meet[[pr.home.name,pr.away.name].sort().join('|')]||0)+SERIES_LENGTH;
+        home[pr.home.name]+=SERIES_LENGTH;
+      });
+      roundSizes.push(seen.size);
+      // 회귀: 내 대진이 기존 getOpponent()/isMyTeamHome()과 완전히 일치해야 한다
+      G.gameNum=s*SERIES_LENGTH;
+      const mine=ps.find(pr=>pr.home===G.myTeam||pr.away===G.myTeam);
+      if(!mine){oppOk=false;return;}
+      const opp=(mine.home===G.myTeam)?mine.away:mine.home;
+      if(opp!==getOpponent())oppOk=false;
+      if((mine.home===G.myTeam)!==isMyTeamHome())homeOk=false;
+    }
+    const mv=Object.values(meet), hv=Object.values(home);
+    return {pairs:Object.keys(meet).length, meetMin:Math.min(...mv), meetMax:Math.max(...mv),
+            homeMin:Math.min(...hv), homeMax:Math.max(...hv),
+            allEight:roundSizes.every(x=>x===G.teams.length), oppOk, homeOk, err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check('T31: 매 시리즈 8팀 전원이 정확히 한 대진에 배정',
+  !schedTable.err && schedTable.allEight === true, JSON.stringify(schedTable));
+check(`T31: 28개 대진 전부 성립 (관측 ${schedTable.pairs}/28)`,
+  schedTable.pairs === 28, JSON.stringify(schedTable));
+check(`T31: 대진별 경기 수 균등 9경기 (관측 ${schedTable.meetMin}~${schedTable.meetMax})`,
+  schedTable.meetMin === 9 && schedTable.meetMax === 9, JSON.stringify(schedTable));
+check(`T31: 팀별 홈경기 균형 30~33/63 (관측 ${schedTable.homeMin}~${schedTable.homeMax})`,
+  schedTable.homeMin >= 30 && schedTable.homeMax <= 33, JSON.stringify(schedTable));
+// 내 팀 일정은 한 경기도 바뀌면 안 된다 — circle method의 고정축이 곧 getOpponent()이기 때문
+check('T31: 회귀 — 내 대진이 getOpponent()와 전 시리즈 일치',
+  schedTable.oppOk === true, JSON.stringify(schedTable));
+check('T31: 회귀 — 내 홈/원정이 isMyTeamHome()과 전 시리즈 일치',
+  schedTable.homeOk === true, JSON.stringify(schedTable));
+// 배선: 자동 진행이 실제로 대진표를 따르는가 (구 버그에선 9경기 동안 3개 대진에 고정)
+const schedLive = g(`(function(){
+  try{
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0; G.phase='first_half';
+    G.teams.forEach(t=>{t.wins=0;t.losses=0;});
+    const seenPairs=new Set();
+    const orig=_simAIGame;
+    globalThis._simAIGame=function(a,b){seenPairs.add([a.name,b.name].sort().join('|'));return orig(a,b);};
+    let played=0;
+    for(let i=0;i<12;i++){ __harnessFixRoster(); const before=G.gameNum; _simMyGame(); if(G.gameNum===before)break; played++; }
+    globalThis._simAIGame=orig;
+    const gp=G.teams.map(t=>t.wins+t.losses);
+    return {played, distinctAIPairs:seenPairs.size, gpMin:Math.min(...gp), gpMax:Math.max(...gp), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check(`T31: 자동 진행 ${schedLive.played}경기 후 전 구단 소화 경기 수 균등 (편차 ${schedLive.gpMax - schedLive.gpMin})`,
+  !schedLive.err && schedLive.played >= 9 && schedLive.gpMin === schedLive.gpMax, JSON.stringify(schedLive));
+check(`T31: 12경기 동안 AI 대진이 회전 (구 버그 3개 고정 → 관측 ${schedLive.distinctAIPairs}개)`,
+  schedLive.distinctAIPairs >= 8, JSON.stringify(schedLive));
+
+// ── T32. AI 로스터 편성 정합 (fix/#22) ──────────────────────
+// 구 버그: _aiOptimizeRoster가 상위 13명 타자를 전원 role='starting'으로 두고
+// _aiMaintainLineup은 <9일 때만 채워 줄이는 경로가 없었다 → AI가 13인 타순으로 경기.
+// 주전 타석 희석 · 수비 평균 오염 · _teamStrength 과대계상의 공통 원인.
+section('T32. AI 로스터 편성 정합 (9인 타순 · 5인 로테)');
+const aiRoster = g(`(function(){
+  try{
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0;
+    G.teams.filter(t=>t!==G.myTeam).forEach(t=>_aiOptimizeRoster(t));
+    const ai=G.teams.filter(t=>t!==G.myTeam);
+    const lineups=ai.map(t=>getStartingBatters(t).length);
+    const rots=ai.map(t=>getRotation(t).length);
+    // 자가 치유: 인위로 13인 타순 · 7인 로테를 만든 뒤 _aiMaintainLineup 1회
+    const t0=ai[0];
+    t0.roster.filter(p=>!p.isPitcher&&(p.status||'active')==='active').slice(0,13).forEach(p=>p.role='starting');
+    t0.roster.filter(p=>p.isPitcher&&(p.status||'active')==='active').slice(0,7).forEach(p=>p.role='rotation');
+    const before={lineup:getStartingBatters(t0).length, rot:getRotation(t0).length};
+    _aiMaintainLineup(t0);
+    const after={lineup:getStartingBatters(t0).length, rot:getRotation(t0).length};
+    return {lineups, rots, before, after, err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check(`T32: 전 AI 구단 타순 정확히 9명 (관측 ${JSON.stringify(aiRoster.lineups)})`,
+  !aiRoster.err && aiRoster.lineups.every(x=>x===9), JSON.stringify(aiRoster));
+check(`T32: 전 AI 구단 로테이션 정확히 5명 (관측 ${JSON.stringify(aiRoster.rots)})`,
+  !aiRoster.err && aiRoster.rots.every(x=>x===5), JSON.stringify(aiRoster));
+// 축소 경로 덕분에 구세이브도 첫 경기 진행 시 자가 치유된다 (마이그레이션 불필요)
+check(`T32: _aiMaintainLineup 자가 치유 — 타순 ${aiRoster.before&&aiRoster.before.lineup}→${aiRoster.after&&aiRoster.after.lineup} · 로테 ${aiRoster.before&&aiRoster.before.rot}→${aiRoster.after&&aiRoster.after.rot}`,
+  !aiRoster.err && aiRoster.before.lineup > 9 && aiRoster.before.rot > 5
+  && aiRoster.after.lineup === 9 && aiRoster.after.rot === 5, JSON.stringify(aiRoster));
+
+// ── T33. 전력 지표는 인원 수에 반응하지 않는다 (fix/#22) ─────
+// 구 버그: _teamStrength가 starting+rotation OVR **합**이라 1군 편성 인원이 많을수록 강해졌다
+// (AI 18명 vs 내 팀 14명 → 시리즈 승률 5~11%p 기울음).
+section('T33. _teamStrength 인원 비민감성');
+const strProbe = g(`(function(){
+  try{
+    G.teamIdx=0; initTeams(0);
+    const mk=(n)=>({wins:0,losses:0,roster:Array.from({length:n},(_,i)=>({
+      name:'P'+i, isPitcher:i>=14, pos:i>=14?'SP':'LF', status:'active', role:i<9?'starting':(i>=14?'rotation':'bench'),
+      contact:60,power:60,eye:60,speed:60,fielding:60,arm:60,
+      stuff:60,control:60,velocity:60,movement:60,stamina:60,clutch:60,
+    }))});
+    const small=mk(19), big=mk(34); // 평균 OVR 동일, 1군 인원만 다름
+    const sS=_teamStrength(small), sB=_teamStrength(big);
+    let wins=0; for(let i=0;i<4000;i++){ if(_simSeries(small,big,SEMI_WINS_NEEDED).winner===small)wins++; }
+    return {sS:+sS.toFixed(2), sB:+sB.toFixed(2), winPct:+(wins/40).toFixed(1), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check(`T33: 인원만 다른 동일 전력 팀의 strength 동일 (${strProbe.sS} vs ${strProbe.sB})`,
+  !strProbe.err && Math.abs(strProbe.sS - strProbe.sB) < 0.01, JSON.stringify(strProbe));
+check(`T33: 시리즈 승률이 인원 수에 반응하지 않음 (관측 ${strProbe.winPct}% — 기대 ~50%)`,
+  !strProbe.err && strProbe.winPct > 44 && strProbe.winPct < 56, JSON.stringify(strProbe));
+
+// ── T34. AI 연봉 조정 하한·계약 존중 (fix/#22) ──────────────
+// 구 버그: `Math.round(salary*1.2)`가 최저 연봉 0.3억을 0으로 만들었고(관측 2명),
+// 전 로스터에 매 시즌 적용돼 신인 슬롯·Arb 산정액을 계약 기간 중에 덮어썼다.
+// 페이롤은 사치세·샐러리 플로어 판정의 입력이라 재정 규칙까지 함께 어긋난다.
+section('T34. AI 연봉 조정 — 하한 보장 · 계약 기간 존중');
+const salAdjProbe = g(`(function(){
+  try{
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=TOTAL_REGULAR; G.phase='stove_league';
+    G.teams.forEach(t=>{t.wins=32;t.losses=31;});
+    G._stoveSettledSeason=0; showStoveLeague();
+    // showStoveLeague가 _contractYears를 감산한 **뒤** 스냅샷 → _startNextSeason의 조정만 관측
+    const snap=[];
+    G.teams.filter(t=>t!==G.myTeam).forEach(t=>t.roster.forEach(p=>{
+      if((p._contractYears||0)>0) snap.push({p, sal:p.salary});
+    }));
+    _startNextSeason();
+    const zero=[], moved=[];
+    G.teams.forEach(t=>t.roster.forEach(p=>{ if((p.salary||0)<SALARY_MIN) zero.push(t.name+'/'+p.name+'='+p.salary); }));
+    snap.forEach(s=>{ if(G.teams.some(t=>t.roster.includes(s.p)) && s.p.salary!==s.sal) moved.push(s.p.name+' '+s.sal+'→'+s.p.salary); });
+    return {belowMin:zero.length, belowMinEx:zero.slice(0,4), contracted:snap.length, moved:moved.length, movedEx:moved.slice(0,4), err:null};
+  }catch(e){return {err:e.message};}
+})()`);
+check(`T34: 전 선수 연봉 >= SALARY_MIN (하한 미달 ${salAdjProbe.belowMin}명)`,
+  !salAdjProbe.err && salAdjProbe.belowMin === 0, JSON.stringify(salAdjProbe));
+check(`T34: 계약 기간이 남은 선수의 연봉 불변 (대상 ${salAdjProbe.contracted}명 · 변동 ${salAdjProbe.moved}명)`,
+  !salAdjProbe.err && salAdjProbe.contracted > 0 && salAdjProbe.moved === 0, JSON.stringify(salAdjProbe));
 
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {

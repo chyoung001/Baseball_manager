@@ -2,8 +2,17 @@
 // 준플레이오프(5전3선승): 1위 vs 4위 / 2위 vs 3위 → 챔피언십(7전4선승)
 // (v2 설계: 상위 4팀 균형 토너먼트. 헤드리스 시뮬은 팀 전력 확률 기반 best-of-N)
 
+// 전력 지표는 **평균**이어야 한다. 합계는 1군 편성 인원이 많을수록 자동으로 강해져
+// 역할(role) 편성 버그에 직접 노출된다 — AI가 13인 타순을 쓰던 시절 AI 18명 vs 내 팀 14명이
+// 집계돼 시리즈 승률이 5~11%p 기울었다. 그래서 role이 아니라 **OVR 상위 9+5**로 뽑아
+// 편성 로직과 아예 분리한다.
+// _simSeries는 strA/(strA+strB)라 인원이 같으면 합계와 평균의 비가 동일 → 밸런스 이동 없는 순수 교정.
 function _teamStrength(t){
-  return t.roster ? t.roster.filter(p=>(p.role==='starting'||p.role==='rotation')).reduce((s,p)=>s+ovr(p),0) : t.wins*10;
+  if(!t.roster) return t.wins*10;
+  const act=t.roster.filter(p=>(p.status||'active')==='active'&&p.role!=='overseas');
+  const topN=(pred,n)=>act.filter(pred).sort((a,b)=>ovr(b)-ovr(a)).slice(0,n);
+  const core=[...topN(p=>!p.isPitcher,9), ...topN(p=>p.isPitcher,5)];
+  return core.length ? core.reduce((s,p)=>s+ovr(p),0)/core.length : 50;
 }
 
 // best-of-N 시리즈 (먼저 winsNeeded승). 반환 {winner, a, b}

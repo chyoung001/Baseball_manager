@@ -357,23 +357,37 @@ function _aiOptimizeRoster(team){
   // 먼저 모든 건강한 선수 2군으로 리셋
   healthy.forEach(p=>{p.status='futures';p.role=p.isPitcher?'bullpen':'bench';});
 
-  // 타자 상위 minBat명 1군
+  // 타자 상위 minBat명 1군 — 단, **타순은 상위 LINEUP_SLOTS명만**. 나머지는 벤치 뎁스.
+  // 이전엔 13명 전원 role='starting'이라 AI가 13인 타순으로 경기했다. 파급이 셋:
+  //  ① 주전 타석 희석(AI 1/13 vs 내 팀 1/9) → 리그 기록·시상 기준 왜곡
+  //  ② resolvePA에 들어가는 수비 평균(avgFielding/avgArm)이 13명 평균으로 오염
+  //  ③ _teamStrength가 starting+rotation 합이라 AI 18명 vs 내 팀 14명 → 포스트시즌 승률 5~11%p 손해
+  const LINEUP_SLOTS=9; // 타순 9명 (내 팀 autoArrangeRoster와 동일 규칙)
   let activeSlots=ACTIVE_ROSTER_MAX;
-  batters.slice(0,minBat).forEach(p=>{
+  batters.slice(0,minBat).forEach((p,i)=>{
     if(activeSlots<=0)return;
-    p.status='active';p.role='starting';activeSlots--;
+    p.status='active';p.role=(i<LINEUP_SLOTS)?'starting':'bench';activeSlots--;
   });
-  // 투수 상위 minPit명 1군
-  pitchers.slice(0,minPit).forEach(p=>{
+  // 투수 상위 minPit명 1군 — 로테이션은 정확히 ACTIVE_MIN_SP명(SP 적성 우선, 부족분만 스태미나순 승격).
+  // 이전엔 `pos==='SP'`인 선수를 전부 rotation으로 넣어 오프시즌 직후 로테이션이 3~6명으로 흔들렸다.
+  const pitPool=pitchers.slice(0,minPit);
+  const rot=pitPool.filter(p=>p.pos==='SP').slice(0,ACTIVE_MIN_SP);
+  if(rot.length<ACTIVE_MIN_SP){
+    pitPool.filter(p=>!rot.includes(p))
+      .sort((a,b)=>statRaw(b,'stamina')-statRaw(a,'stamina'))
+      .slice(0,ACTIVE_MIN_SP-rot.length).forEach(p=>rot.push(p));
+  }
+  pitPool.forEach(p=>{
     if(activeSlots<=0)return;
-    p.status='active';p.role=p.pos==='SP'?'rotation':'bullpen';activeSlots--;
+    p.status='active';p.role=rot.includes(p)?'rotation':'bullpen';activeSlots--;
   });
-  // 남은 슬롯: 전체 OVR 순으로 채움
+  // 남은 슬롯은 **뎁스로만** 채운다 — 타순/로테이션에는 넣지 않는다
+  // (이전엔 여분 SP가 rotation으로 들어가 6인 로테이션이 생겨 선발 등판 간격이 왜곡됐다)
   if(activeSlots>0){
     const remaining=healthy.filter(p=>p.status==='futures').sort((a,b)=>ovr(b)-ovr(a));
     remaining.slice(0,activeSlots).forEach(p=>{
       p.status='active';
-      p.role=p.isPitcher?(p.pos==='SP'?'rotation':'bullpen'):'bench';
+      p.role=p.isPitcher?'bullpen':'bench';
     });
   }
 
@@ -477,11 +491,17 @@ function _startNextSeason(){
       team.roster.push(add);
       if(!add.ss)initSeasonStats(add);
     }
-    // AI 연봉 자동 조정
+    // AI 연봉 자동 조정 — **계약이 만료된 선수만**.
+    // 이전엔 전 로스터에 매 시즌 적용돼 ① 계약 기간 중인 신인 슬롯·Arb 산정액을 덮어썼고
+    // ② Math.round가 최저 연봉 0.3억을 0으로 만들어(관측 2명) 페이롤이 과소 계상됐다
+    //    — 페이롤은 사치세·샐러리 플로어 판정의 입력이라 재정 규칙까지 함께 어긋난다.
+    // 정밀도도 프로젝트 전반의 0.1억 단위(toFixed(1))에 맞춘다.
     team.roster.forEach(p=>{
+      if((p._contractYears||0)>0) return; // 계약 유효 → 산정액 유지
       const pOvr=ovr(p);
-      if(pOvr>=70)p.salary=Math.round((p.salary||3)*1.2);
-      else if(pOvr<31)p.salary=Math.max(1,Math.round((p.salary||3)*0.8));
+      const mult=pOvr>=70?1.2:pOvr<31?0.8:0;
+      if(!mult) return;
+      p.salary=Math.max(SALARY_MIN,+((p.salary||SALARY_MIN)*mult).toFixed(1));
     });
   });
 
