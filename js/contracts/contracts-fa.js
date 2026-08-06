@@ -93,12 +93,61 @@ function _runAIFreeAgentBidding(){
 }
 
 // ── FA 시장 (유저용: 계약 만료 + 보충 FA) ────────────────────────
+// `G.marketPlayers`는 **매 개장마다 초기화되는 표시용 배열**이고, 선수의 영속 보관소는 `G.faPool`이다.
+// 이전엔 타 구단에서 빼낸 선수와 신규 생성 FA를 marketPlayers에만 넣어서
+//  ① 계약되지 않은 채 시장을 다시 열면 게임에서 통째로 사라지고(관측: 5회 개장에 AI 조직 5명 감소),
+//  ② 매 개장마다 AI 로스터를 다시 훑어 20%씩 추가 유출 + 신규 FA 5명이 새로 생성돼
+//     원하는 선수가 나올 때까지 시장을 여닫으며 리롤할 수 있었다.
+// → 시장 **구성**은 스토브리그당 1회(`_faMarketSeason` 가드)로 묶고 결과를 faPool에 적재하며,
+//   marketPlayers는 매번 faPool에서 다시 그린다.
 function _showFAMarket(){
-  G.marketPlayers=[];
   const faMult=G.myTeam.concept==='pitching'?1.05:G.myTeam.concept==='prospect'?1.10:1.0;
+  G.faPool=G.faPool||[];
 
-  // 1. 계약 만료로 FA 풀에 남은 선수 (AI가 안 가져간 것)
-  (G.faPool||[]).forEach(fa=>{
+  if(G._faMarketSeason!==G.season){
+    G._faMarketSeason=G.season;
+
+    // 1. 서비스 타임 달성 선수 추가 FA (다른 팀에서 20% 확률)
+    //    얕은 복사({...p})가 아니라 **원본을 이관**한다 — 복사본은 ss/_traits를 원본과 공유해
+    //    스탯이 유령 객체와 얽히고, faPool을 거치지 않아 재개장 시 소멸했다.
+    G.teams.filter(team=>team!==G.myTeam).forEach(team=>{
+      const candidates=team.roster.filter(p=>
+        (p._serviceTime||0)>=FA_SERVICE_TIME_THRESHOLD && (p._contractYears||0)<=1
+      );
+      candidates.forEach(p=>{
+        if(rand(1,100)<=20&&team.roster.length>ORG_MIN_TOTAL){
+          p._fromTeam=team.name;
+          p._fromTeamEmoji=team.emoji;
+          p._teamTenure=0;
+          p.status='futures';
+          if(!p.ss)initSeasonStats(p);
+          team.roster=team.roster.filter(tp=>tp!==p);
+          G.faPool.push(p);
+        }
+      });
+    });
+
+    // 2. 랜덤 FA 보충 (등급 분포 기반, 최소 26세)
+    for(let i=0;i<3;i++){
+      const p=genBatter(pick(BAT_POS),null);
+      if(p.age<26)p.age=rand(26,33);
+      p.role='bench';p.status='futures';
+      p._serviceTime=rand(7,12);
+      G.faPool.push(p);
+    }
+    for(let i=0;i<2;i++){
+      const role=['SP','CP'][i];
+      const p=genPitcher(role,null);
+      if(p.age<26)p.age=rand(26,33);
+      p.role=role==='SP'?'rotation':'bullpen';p.status='futures';
+      p._serviceTime=rand(7,12);
+      G.faPool.push(p);
+    }
+  }
+
+  // 3. faPool → 표시용 marketPlayers 재구성 (개장할 때마다 수행, 부작용 없음)
+  G.marketPlayers=[];
+  G.faPool.forEach(fa=>{
     fa.price=+(fa.price||((ovr(fa)*0.3+rand(5,15))*faMult)).toFixed(1);
     if(!fa.salary) fa.salary=Math.max(SALARY_MIN,+_calcSalary(ovr(fa),fa._serviceTime||FA_SERVICE_TIME_THRESHOLD).toFixed(1));
     if(!fa._contractYears) fa._contractYears=_calcContractYears(ovr(fa));
@@ -106,43 +155,6 @@ function _showFAMarket(){
     if(!fa.ss)initSeasonStats(fa);
     G.marketPlayers.push(fa);
   });
-
-  // 2. 기존: 서비스 타임 달성 선수 추가 FA (다른 팀에서 30% 확률)
-  G.teams.filter(team=>team!==G.myTeam).forEach(team=>{
-    const candidates=team.roster.filter(p=>
-      (p._serviceTime||0)>=FA_SERVICE_TIME_THRESHOLD && (p._contractYears||0)<=1
-    );
-    candidates.forEach(p=>{
-      if(rand(1,100)<=20&&team.roster.length>ORG_MIN_TOTAL){
-        const fa={...p};
-        fa.price=+((ovr(fa)*0.3+rand(5,15))*faMult).toFixed(1);
-        fa.status='futures';
-        fa._fromTeam=team.name;
-        if(!fa.ss)initSeasonStats(fa);
-        G.marketPlayers.push(fa);
-        team.roster=team.roster.filter(tp=>tp!==p);
-      }
-    });
-  });
-
-  // 3. 랜덤 FA 보충 (등급 분포 기반, 최소 26세)
-  for(let i=0;i<3;i++){
-    const p=genBatter(pick(BAT_POS),null);
-    if(p.age<26)p.age=rand(26,33);
-    p.price=+((ovrBatter(p)*0.25+rand(3,10))*faMult).toFixed(1);
-    p.role='bench';p.status='futures';
-    p._serviceTime=rand(7,12);
-    G.marketPlayers.push(p);
-  }
-  for(let i=0;i<2;i++){
-    const role=['SP','CP'][i];
-    const p=genPitcher(role,null);
-    if(p.age<26)p.age=rand(26,33);
-    p.price=+((ovrPitcher(p)*0.25+rand(3,10))*faMult).toFixed(1);
-    p.role=role==='SP'?'rotation':'bullpen';p.status='futures';
-    p._serviceTime=rand(7,12);
-    G.marketPlayers.push(p);
-  }
 
   $('seasonModal').classList.remove('active');
   switchTab('market');

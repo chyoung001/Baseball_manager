@@ -277,6 +277,15 @@ const SCOUT_CAMP_COST=30;        // 중남미 스카우팅 캠프 비용 (억)
 const SCOUT_CAMP_MAX_PER_SEASON=2; // 시즌당 최대 사용 횟수
 const MEDICAL_CENTER_COST=15;    // 독일 의료 센터 비용 (억)
 const MEDICAL_MIN_AGE=34;        // 의료 대상 최소 나이
+// 의료 센터 결과 테이블 — **확률표 UI와 실제 적용 로직의 단일 소스**.
+// 이전엔 두 곳에 수치가 따로 박혀 있어 화면은 +2/+5/-3인데 실제로는 +3/+8/-5가 적용됐고
+// 잠재력 증가는 아예 표기되지 않았다(15~30억을 거는 도박인데 기대값 판단 근거가 전부 틀렸다).
+const MEDICAL_OUTCOMES=[
+  {key:'fail',     label:'실패',       chance:50, stat:0,  pot:0,  color:'var(--text-dim)', emoji:'😔'},
+  {key:'partial',  label:'부분 성공',  chance:35, stat:3,  pot:5,  color:'#f59e0b',         emoji:'💪'},
+  {key:'great',    label:'대성공',     chance:5,  stat:8,  pot:15, color:'#10b981',         emoji:'🌟', immunity:2},
+  {key:'accident', label:'의료 사고',  chance:10, stat:-5, pot:0,  color:'#ef4444',         emoji:'⚠️'},
+];
 const FOREIGN_PLAYER_MAX=3;      // 1군 외국인 선수 최대 등록 수
 
 // ===================== POSTSEASON =====================

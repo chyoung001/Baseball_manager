@@ -1839,6 +1839,110 @@ check(`T34: 전 선수 연봉 >= SALARY_MIN (하한 미달 ${salAdjProbe.belowMi
 check(`T34: 계약 기간이 남은 선수의 연봉 불변 (대상 ${salAdjProbe.contracted}명 · 변동 ${salAdjProbe.moved}명)`,
   !salAdjProbe.err && salAdjProbe.contracted > 0 && salAdjProbe.moved === 0, JSON.stringify(salAdjProbe));
 
+// ── T35~T38. FA 시장·의료센터 무결성 (fix/#23) ───────────────
+section('T35. FA 영입 시 faPool 동시 제거 (중복 보유 방지)');
+const FA_SETUP = `G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=TOTAL_REGULAR; G.phase='stove_league';
+  G.faPool=[]; G._faMarketSeason=0; G.marketPlayers=[];
+  G.teams.forEach(t=>{t.wins=32;t.losses=31;}); G._stoveSettledSeason=0; showStoveLeague();`;
+// 구 버그: _showFAMarket이 faPool 원소를 **참조로** marketPlayers에 싣는데 buyPlayer는
+// marketPlayers에서만 제거해, 영입한 선수가 풀에 남아 다음 스토브의 AI 입찰이 같은 객체를
+// 다른 구단에 계약시켰다 → 동일 선수가 두 팀 로스터에 동시 존재(role·ss 공유·페이롤 이중 계상).
+const faDup = g(`(function(){try{
+  ${FA_SETUP}
+  _showFAMarket();
+  const target=G.faPool.find(p=>G.marketPlayers.includes(p));
+  if(!target) return {err:'faPool 원소가 시장에 없음(전제 불성립)'};
+  target.salary=5; target._contractYears=3;
+  G.myTeam.roster.push(target); _removeFromMarket(target);   // buyPlayer(onAccept)와 동일 경로
+  const stillPool=G.faPool.includes(target);
+  _startNextSeason(); G.gameNum=TOTAL_REGULAR; G.phase='stove_league';
+  G.teams.forEach(t=>{t.wins=32;t.losses=31;}); G._stoveSettledSeason=0; showStoveLeague();
+  const owners=G.teams.filter(t=>t.roster.includes(target)).map(t=>t.name);
+  return {name:target.name, stillPool, owners, err:null};
+}catch(e){return {err:e.message}}})()`);
+check('T35: 영입 즉시 faPool에서 제거',
+  !faDup.err && faDup.stillPool === false, JSON.stringify(faDup));
+check(`T35: 다음 시즌 중복 보유 없음 (보유 구단 ${faDup.owners ? faDup.owners.length : '?'}곳)`,
+  !faDup.err && faDup.owners.length === 1, JSON.stringify(faDup));
+check('T35: buyPlayer가 _removeFromMarket 경유 (faPool 제거 배선)',
+  g('buyPlayer.toString()').includes('_removeFromMarket'));
+
+section('T36. FA 시장 재개장 멱등 (AI 로스터 유출·리롤 방지)');
+// 구 버그: 개장마다 AI 로스터를 다시 훑어 20%씩 유출 + 신규 FA 5명 생성. 게다가 유출 선수를
+// marketPlayers(매 개장 초기화)에만 담아 재개장 시 게임에서 소멸했다(관측: 5회 개장에 AI 5명 감소).
+const faIdem = g(`(function(){try{
+  ${FA_SETUP}
+  const tot=()=>G.teams.filter(t=>t!==G.myTeam).reduce((s,t)=>s+t.roster.length,0);
+  const uids=()=>new Set(G.faPool.map(p=>p._uid));
+  _showFAMarket(); const a1=tot(), u1=uids(), m1=G.marketPlayers.length;
+  _showFAMarket(); const a2=tot(), u2=uids(), m2=G.marketPlayers.length;
+  _showFAMarket(); const a3=tot(), m3=G.marketPlayers.length;
+  return {ai:[a1,a2,a3], pool:[u1.size,u2.size], lost:[...u1].filter(u=>!u2.has(u)).length,
+          mkt:[m1,m2,m3], err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T36: 재개장해도 AI 조직 인원 불변 (관측 ${faIdem.ai})`,
+  !faIdem.err && faIdem.ai[0] === faIdem.ai[1] && faIdem.ai[1] === faIdem.ai[2], JSON.stringify(faIdem));
+check(`T36: 재개장 시 FA 소멸 0건 (관측 ${faIdem.lost})`,
+  !faIdem.err && faIdem.lost === 0, JSON.stringify(faIdem));
+check(`T36: 재개장 리롤 없음 — 시장 구성 동일 (관측 ${faIdem.mkt})`,
+  !faIdem.err && faIdem.mkt[0] === faIdem.mkt[1] && faIdem.mkt[1] === faIdem.mkt[2], JSON.stringify(faIdem));
+
+section('T37. 의료센터 — 표시 테이블과 실제 효과 단일 소스');
+// 구 버그: 확률표는 +2/+5/-3, 실제 적용은 +3/+8/-5, 잠재력 증가는 아예 미표기.
+// MEDICAL_OUTCOMES 상수로 단일화했으므로 각 결과 구간을 결정론적으로 강제해 대조한다.
+const medProbe = g(`(function(){try{
+  ${FA_SETUP}
+  G.phase='preseason';
+  const _rand=rand; const rows=[];
+  let acc=0;
+  for(const o of MEDICAL_OUTCOMES){
+    const lo=acc+1; acc+=o.chance; const roll=lo;      // 해당 구간의 첫 값으로 고정
+    const t=G.myTeam;
+    const p=t.roster.find(x=>!x.isMedicalTreated&&((x.age||22)>=MEDICAL_MIN_AGE||x.status==='il'));
+    if(!p){rows.push({key:o.key,skip:true});continue;}
+    const key=p.isPitcher?'stuff':'contact';
+    const b=p[key], bp=p._potential||50;
+    globalThis.rand=(a,z)=>(a===1&&z===100)?roll:_rand(a,z);  // roll만 고정, 나머지는 원본
+    t.budget=99999; t.medicalUsedThisSeason=0;
+    executeMedicalCenter(t.roster.indexOf(p));
+    globalThis.rand=_rand;
+    rows.push({key:o.key, dStat:p[key]-b, wantStat:o.stat,
+               dPot:(p._potential||50)-bp, wantPot:o.pot,
+               imm:p.agingImmunityYears||0, wantImm:o.immunity||0});
+  }
+  return {rows, err:null};
+}catch(e){globalThis.rand=undefined;return {err:e.message}}})()`);
+const medOk = !medProbe.err && medProbe.rows.length > 0
+  && medProbe.rows.every(r => r.skip || (r.dStat === r.wantStat && r.dPot === r.wantPot && r.imm === r.wantImm));
+check(`T37: 4개 결과 구간의 스탯·잠재력·면역이 MEDICAL_OUTCOMES와 일치`,
+  medOk, JSON.stringify(medProbe));
+// 표시 테이블이 상수에서 생성되는가 (수치 하드코딩 재발 차단)
+check('T37: 확률표가 MEDICAL_OUTCOMES에서 렌더 (수치 하드코딩 부재)',
+  g('renderInvestMedicalCenter.toString()').includes('MEDICAL_OUTCOMES'));
+
+section('T38. faPool 세이브 라운드트립 (미계약 FA 이월 영속화)');
+// 구 버그: _buildSnapshot에 faPool이 아예 없어 재로드마다 미계약 FA가 통째로 사라졌다
+// — fix/#20이 _faYears로 만든 '이월'이 저장을 거치는 순간 무효화됐다.
+const faSave = g(`(function(){try{
+  ${FA_SETUP}
+  _showFAMarket();
+  const before=G.faPool.map(p=>p._uid).sort();
+  saveGame();
+  G.faPool=[]; G.marketPlayers=[]; G._faMarketSeason=0;   // 페이지 재로드 흉내
+  const ok=loadGame();
+  const after=G.faPool.map(p=>p._uid).sort();
+  return {ok, n:[before.length,after.length], same:JSON.stringify(before)===JSON.stringify(after),
+          shared:G.marketPlayers.filter(m=>G.faPool.includes(m)).length, mkt:G.marketPlayers.length,
+          guard:G._faMarketSeason, err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T38: 로드 후 faPool 보존 (${faSave.n} · uid 동일 ${faSave.same})`,
+  !faSave.err && faSave.ok && faSave.n[0] > 0 && faSave.same === true, JSON.stringify(faSave));
+// 저장된 marketPlayers를 따로 복원하면 같은 선수가 두 객체로 갈라진다 — 참조를 재사용해야 한다
+check(`T38: marketPlayers가 faPool과 동일 객체 참조 (${faSave.shared}/${faSave.mkt})`,
+  !faSave.err && faSave.shared === faSave.mkt, JSON.stringify(faSave));
+check(`T38: 시장 구성 멱등 가드도 복원 (관측 ${faSave.guard})`,
+  !faSave.err && faSave.guard === 1, JSON.stringify(faSave));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
