@@ -16,9 +16,13 @@ function _teamStrength(t){
 }
 
 // best-of-N 시리즈 (먼저 winsNeeded승). 반환 {winner, a, b}
+// 경기당 승률은 전력 **차이**를 로지스틱으로 변환한다(POSTSEASON_SPREAD 주석에 유도 근거).
+// 구 공식 `strA/(strA+strB)`는 전력을 **비율**로 봤는데, 평균 OVR이 55~65 구간이라
+// 비가 늘 1에 가까워 4점 차가 경기당 1.6%p(시리즈 3%p)로 뭉개졌다. 같은 두 팀을
+// 매치엔진으로 붙이면 실제로는 58%가 나온다 — 정규시즌과 포스트시즌이 어긋나 있었다.
 function _simSeries(teamA,teamB,winsNeeded){
-  const strA=_teamStrength(teamA), strB=_teamStrength(teamB);
-  const pA=strA/(strA+strB||1);
+  const d=_teamStrength(teamA)-_teamStrength(teamB);
+  const pA=clamp(1/(1+Math.pow(10,-d/POSTSEASON_SPREAD)), 0.05, 0.95); // 극단 대진도 5% 이변 여지
   let a=0,b=0;
   while(a<winsNeeded&&b<winsNeeded){ if(Math.random()<pA) a++; else b++; }
   return { winner: a>=winsNeeded?teamA:teamB, a, b };
