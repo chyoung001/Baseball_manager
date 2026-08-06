@@ -2002,6 +2002,58 @@ check(`T40: 이탈 선수가 실제로 AI 구단에 입단 (${snatch.winner || '
 check('T40: 시장·FA 풀에서는 제거 (중복 보유 없음)',
   !snatch.err && snatch.inMkt === false && snatch.inPool === false, JSON.stringify(snatch));
 
+// ── T41. 포스트시즌 전력비 — 매치엔진 정합 (fix/#25) ─────────
+section('T41. _simSeries 로지스틱 — 매치엔진 실측 기울기 정합');
+// 구 공식 strA/(strA+strB)는 전력을 '비율'로 봐서, 평균 OVR 55~65 구간에선 4점 차가
+// 경기당 1.6%p(시리즈 3%p)로 뭉개졌다. 같은 두 팀을 _simAIGame으로 붙이면 58%가 나온다
+// — 정규시즌과 포스트시즌이 서로 다른 답을 내던 정합성 결함.
+const psProbe = g(`(function(){try{
+  G.teamIdx=0; initTeams(0);
+  // 평균 OVR만 다른 합성 팀 (인원 동일 — T33이 인원 비민감성을 별도로 검증)
+  const mkT=(v)=>({wins:0,losses:0,roster:Array.from({length:20},(_,i)=>{
+    const p={name:'P'+i,isPitcher:i>=14,pos:i>=14?'SP':'LF',status:'active',
+             role:i<9?'starting':(i>=14?'rotation':'bench')};
+    ['contact','power','eye','speed','fielding','arm','stuff','control','velocity','movement','stamina','clutch']
+      .forEach(k=>p[k]=v);
+    return p;})});
+  const run=(A,B,w,n)=>{let x=0;for(let i=0;i<n;i++){if(_simSeries(A,B,w).winner===A)x++;}return x/n;};
+  const seriesP=(p,w)=>{let s=0;const C=(a,k)=>{let r=1;for(let i=0;i<k;i++)r=r*(a-i)/(i+1);return r;};
+    for(let k=0;k<w;k++)s+=C(w-1+k,k)*Math.pow(p,w)*Math.pow(1-p,k);return s;};
+  const out={rows:[]};
+  // Δ=0 (동일 전력) → 시리즈 승률 50%
+  const E=mkT(60);
+  out.even=+run(E,mkT(60),SEMI_WINS_NEEDED,6000).toFixed(3);
+  // 여러 전력차에서 실측 승률이 로지스틱 예측과 일치하는가
+  [[60,64],[60,68],[64,60]].forEach(([va,vb])=>{
+    const A=mkT(va), B=mkT(vb);
+    const d=_teamStrength(A)-_teamStrength(B);
+    const pGame=1/(1+Math.pow(10,-d/POSTSEASON_SPREAD));
+    out.rows.push({d:+d.toFixed(2), pGame:+pGame.toFixed(3),
+      semiObs:+run(A,B,SEMI_WINS_NEEDED,6000).toFixed(3), semiExp:+seriesP(pGame,SEMI_WINS_NEEDED).toFixed(3),
+      finalObs:+run(A,B,FINAL_WINS_NEEDED,6000).toFixed(3), finalExp:+seriesP(pGame,FINAL_WINS_NEEDED).toFixed(3)});
+  });
+  // 엔진 실측 기울기(0.0664/OVR ≈ 경기당 1.66%p)를 상수가 재현하는가
+  out.slopePerOvr=+((1/(1+Math.pow(10,-1/POSTSEASON_SPREAD))-0.5)*100).toFixed(2);
+  // MLB 대조: 실제 대진 평균 Δ≈3.8에서 7전 승률
+  out.mlbCheck=+(seriesP(1/(1+Math.pow(10,-3.8/POSTSEASON_SPREAD)),FINAL_WINS_NEEDED)*100).toFixed(1);
+  return Object.assign(out,{err:null});
+}catch(e){return {err:e.message}}})()`);
+check(`T41: 동일 전력 팀은 시리즈 승률 50% (관측 ${psProbe.even})`,
+  !psProbe.err && Math.abs(psProbe.even - 0.5) < 0.03, JSON.stringify(psProbe));
+check('T41: 시뮬 승률이 로지스틱 예측과 일치 (오차 <3%p, 방향 대칭 포함)',
+  !psProbe.err && psProbe.rows.every(r =>
+    Math.abs(r.semiObs - r.semiExp) < 0.03 && Math.abs(r.finalObs - r.finalExp) < 0.03),
+  JSON.stringify(psProbe));
+// 구 공식은 이 기울기가 0.4%p였다 — 4배 차이가 회귀의 핵심
+check(`T41: 전력 1점당 경기 승률 기울기가 엔진 실측(1.66%p) 근방 (관측 ${psProbe.slopePerOvr}%p)`,
+  !psProbe.err && psProbe.slopePerOvr > 1.3 && psProbe.slopePerOvr < 2.0, JSON.stringify(psProbe));
+// Lopez/Matthews/Baumer(2018): MLB 7전 시리즈 강팀 승률 "just above 60%"
+check(`T41: 평균 대진(Δ≈3.8) 7전 승률이 MLB 밴드 55~70% (관측 ${psProbe.mlbCheck}%)`,
+  !psProbe.err && psProbe.mlbCheck > 55 && psProbe.mlbCheck < 70, JSON.stringify(psProbe));
+check('T41: _simSeries가 POSTSEASON_SPREAD 사용 (구 비율식 부재)',
+  g('_simSeries.toString()').includes('POSTSEASON_SPREAD') &&
+  !/strA\s*\/\s*\(\s*strA\s*\+\s*strB/.test(g('_simSeries.toString()')));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
