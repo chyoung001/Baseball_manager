@@ -1943,6 +1943,65 @@ check(`T38: marketPlayers가 faPool과 동일 객체 참조 (${faSave.shared}/${
 check(`T38: 시장 구성 멱등 가드도 복원 (관측 ${faSave.guard})`,
   !faSave.err && faSave.guard === 1, JSON.stringify(faSave));
 
+// ── T39~T40. AI 라인업 포지션 배치 · FA 이탈 입단 (fix/#24) ──
+section('T39. AI 타순 포지션 유효성 (8포지션 + DH)');
+// 구 버그: AI가 OVR 상위 9명을 그대로 세워 포수 2명·1루수 0명 같은 라인업이 나왔다
+// (관측: 오프시즌 편성 후 7/7 구단 전부 규정 위반, 시즌 내내 유지).
+// 내 팀은 autoArrangeRoster의 greedy가 8포지션+DH를 보장하므로 같은 규칙을 AI에도 적용.
+const aiLineup = g(`(function(){try{
+  G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0;
+  const REQ=['C','1B','2B','3B','SS','LF','CF','RF'];
+  const audit=()=>{
+    const bad=[];
+    G.teams.filter(t=>t!==G.myTeam).forEach(t=>{
+      const st=getStartingBatters(t); const c={};
+      st.forEach(p=>{c[p.pos]=(c[p.pos]||0)+1;});
+      const miss=REQ.filter(x=>!c[x]), dup=REQ.filter(x=>(c[x]||0)>1);
+      if(st.length!==9||miss.length||dup.length)
+        bad.push(t.name+'(n='+st.length+' 결손'+miss.length+' 중복'+dup.length+')');
+    });
+    return bad;
+  };
+  G.teams.filter(t=>t!==G.myTeam).forEach(t=>_aiOptimizeRoster(t));
+  const optBad=audit();
+  // 인위로 라인업을 망가뜨린 뒤 _aiMaintainLineup 1회 → 자가 치유되는가
+  const t0=G.teams.find(t=>t!==G.myTeam);
+  t0.roster.filter(p=>!p.isPitcher&&(p.status||'active')==='active').slice(0,12)
+    .forEach(p=>{p.role='starting';p.pos='SS';});
+  const brokeN=getStartingBatters(t0).length;
+  _aiMaintainLineup(t0);
+  const healed=_aiLineupValid(t0);
+  // 시즌 진행 후에도 유지되는가
+  G.phase='first_half';
+  for(let i=0;i<24;i++){ __harnessFixRoster(); const gn=G.gameNum; _simMyGame(); if(G.gameNum===gn)break; }
+  const seasonBad=audit();
+  return {optBad, brokeN, healed, seasonBad, err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T39: 오프시즌 편성 후 전 AI 구단 타순 규정 충족 (위반 ${aiLineup.optBad ? aiLineup.optBad.length : '?'}팀)`,
+  !aiLineup.err && aiLineup.optBad.length === 0, JSON.stringify(aiLineup));
+check(`T39: 망가진 라인업 자가 치유 (주전 ${aiLineup.brokeN}명·전원 SS → _aiMaintainLineup 1회)`,
+  !aiLineup.err && aiLineup.brokeN > 9 && aiLineup.healed === true, JSON.stringify(aiLineup));
+check(`T39: 시즌 진행 중에도 유지 (위반 ${aiLineup.seasonBad ? aiLineup.seasonBad.length : '?'}팀)`,
+  !aiLineup.err && aiLineup.seasonBad.length === 0, JSON.stringify(aiLineup));
+
+section('T40. FA 협상 이탈 시 실제 입단 (연출↔상태 정합)');
+// 구 버그: "다른 구단이 더 좋은 조건을 제시했습니다"라고 알리고는 시장에서 지우기만 해
+// 선수가 어느 로스터에도 없이 사라졌다.
+const snatch = g(`(function(){try{
+  ${FA_SETUP}
+  _showFAMarket();
+  const p=G.marketPlayers[0]; if(!p)return {err:'시장 비어 있음'};
+  const w=_snatchFAWinner(p);
+  _removeFromMarket(p);
+  const owners=G.teams.filter(t=>t.roster.includes(p)).map(t=>t.name);
+  return {name:p.name, winner:w?w.name:null, owners,
+          inMkt:G.marketPlayers.includes(p), inPool:(G.faPool||[]).includes(p), err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T40: 이탈 선수가 실제로 AI 구단에 입단 (${snatch.winner || '?'})`,
+  !snatch.err && snatch.owners.length === 1 && snatch.owners[0] === snatch.winner, JSON.stringify(snatch));
+check('T40: 시장·FA 풀에서는 제거 (중복 보유 없음)',
+  !snatch.err && snatch.inMkt === false && snatch.inPool === false, JSON.stringify(snatch));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');

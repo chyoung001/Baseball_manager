@@ -357,16 +357,15 @@ function _aiOptimizeRoster(team){
   // 먼저 모든 건강한 선수 2군으로 리셋
   healthy.forEach(p=>{p.status='futures';p.role=p.isPitcher?'bullpen':'bench';});
 
-  // 타자 상위 minBat명 1군 — 단, **타순은 상위 LINEUP_SLOTS명만**. 나머지는 벤치 뎁스.
+  // 타자 상위 minBat명 1군 — 타순 확정은 아래 _arrangeAILineup이 담당한다.
   // 이전엔 13명 전원 role='starting'이라 AI가 13인 타순으로 경기했다. 파급이 셋:
   //  ① 주전 타석 희석(AI 1/13 vs 내 팀 1/9) → 리그 기록·시상 기준 왜곡
   //  ② resolvePA에 들어가는 수비 평균(avgFielding/avgArm)이 13명 평균으로 오염
   //  ③ _teamStrength가 starting+rotation 합이라 AI 18명 vs 내 팀 14명 → 포스트시즌 승률 5~11%p 손해
-  const LINEUP_SLOTS=9; // 타순 9명 (내 팀 autoArrangeRoster와 동일 규칙)
   let activeSlots=ACTIVE_ROSTER_MAX;
-  batters.slice(0,minBat).forEach((p,i)=>{
+  batters.slice(0,minBat).forEach(p=>{
     if(activeSlots<=0)return;
-    p.status='active';p.role=(i<LINEUP_SLOTS)?'starting':'bench';activeSlots--;
+    p.status='active';p.role='bench';activeSlots--;
   });
   // 투수 상위 minPit명 1군 — 로테이션은 정확히 ACTIVE_MIN_SP명(SP 적성 우선, 부족분만 스태미나순 승격).
   // 이전엔 `pos==='SP'`인 선수를 전부 rotation으로 넣어 오프시즌 직후 로테이션이 3~6명으로 흔들렸다.
@@ -390,6 +389,9 @@ function _aiOptimizeRoster(team){
       p.role=p.isPitcher?'bullpen':'bench';
     });
   }
+  // 타순 9명을 **포지션 유효하게** 확정 (8포지션 각 1명 + DH). OVR 상위 9명을 그대로 세우면
+  // 포수 0명·유격수 4명 같은 라인업이 나온다 — 내 팀 autoArrangeRoster와 동일 규칙을 적용.
+  _arrangeAILineup(team);
 
   // ── 2. 명시적 방출: 정원 60명 이상이면 선제 정리 (드래프트 6명 여유) ──
   const releaseThreshold=FUTURES_ORG_MAX-6; // 59명까지 정리

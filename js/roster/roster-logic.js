@@ -286,6 +286,52 @@ function autoArrangeRoster(){
 }
 
 // ═══════════════════════════════════════════════════════
+// AI 타순 포지션 배치 (내 팀 autoArrangeRoster ③단계의 AI 대응)
+// 이전엔 AI가 **OVR 상위 9명을 그대로** 세워서 포수 0명·유격수 4명 같은 라인업이 가능했다.
+// 내 팀은 greedy 배치가 8포지션+DH를 보장하므로, 같은 규칙을 AI에도 적용해 대칭을 맞춘다.
+// ═══════════════════════════════════════════════════════
+const _AI_LINEUP_ORDER=['C','SS','CF','2B','3B','RF','LF','1B']; // 희소·수비 중요 포지션 우선
+
+// 현재 타순이 규정을 만족하는가 (9명 · 8포지션 각 1명 · DH 최대 1명)
+// 매 경기 재배치하면 pos가 매일 흔들리므로, **깨졌을 때만** 다시 짠다.
+function _aiLineupValid(team){
+  const st=getStartingBatters(team);
+  if(st.length!==9)return false;
+  const c={};
+  st.forEach(p=>{c[p.pos]=(c[p.pos]||0)+1;});
+  return _AI_LINEUP_ORDER.every(pos=>c[pos]===1)&&(c['DH']||0)<=1;
+}
+
+function _arrangeAILineup(team){
+  const bats=team.roster.filter(p=>!p.isPitcher&&(p.status||'active')==='active'&&p.role!=='overseas');
+  if(bats.length===0)return;
+  bats.forEach(p=>{p.role='bench';});
+  const used=new Set();
+  // 적합도 = OVR − 전환 페널티×1.5 (내 팀 greedy와 동일 산식)
+  const fit=(p,pos)=>{const pen=getPosSwitchPenalty(p,pos);return pen===null?-Infinity:ovr(p)-pen*1.5;};
+  const assign=(p,pos)=>{
+    if(p._naturalPos==null&&p.pos!=='DH')p._naturalPos=p.pos; // 본 포지션 보존
+    p.pos=pos;p.role='starting';used.add(p);
+  };
+  _AI_LINEUP_ORDER.forEach(pos=>{
+    const pool=bats.filter(p=>!used.has(p));
+    if(pool.length===0)return;
+    const cand=pool.slice().sort((a,b)=>fit(b,pos)-fit(a,pos))[0];
+    if(cand&&fit(cand,pos)>-Infinity){assign(cand,pos);return;}
+    // 전환 불가 슬롯(사실상 포수)에 자원이 없으면 최선의 잔여 자원으로 메운다 —
+    // AI는 콜업 UI가 없어 비워두면 라인업이 영구히 규정 미달로 남는다.
+    const any=pool.slice().sort((a,b)=>ovr(b)-ovr(a))[0];
+    if(any)assign(any,pos);
+  });
+  const dh=bats.filter(p=>!used.has(p)).sort((a,b)=>ovr(b)-ovr(a))[0];
+  if(dh)assign(dh,'DH');
+  // 벤치는 본 포지션으로 복원 — 다음 재배치에서 원 포지션 후보로 돌아오게 한다
+  bats.filter(p=>!used.has(p)).forEach(p=>{
+    if(p._naturalPos&&p._naturalPos!=='DH')p.pos=p._naturalPos;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
 // AI 라인업 자동 유지 (부상으로 빠진 주전을 벤치/2군에서 보충)
 // 미유지 시 라인업이 시즌 내내 감소 → 잔존 타자에게 타석이 몰려 개인 기록 왜곡
 // ═══════════════════════════════════════════════════════
@@ -302,22 +348,15 @@ function _aiMaintainLineup(t){
     if(c){c.status='active';c.role=c.isPitcher?'bullpen':'bench';}
     return c||null;
   };
-  // 1) 타자 주전 9명 유지: 벤치 승격 → 부족 시 콜업
+  // 1) 타자 9명 확보 후 **포지션 유효 라인업**으로 재구성.
+  // 규정이 깨졌을 때만 재배치한다 — 매 경기 다시 짜면 pos가 매일 흔들린다.
+  // 이 경로가 인원 과부족(구 13인 타순)과 포지션 결손을 함께 자가 치유하므로
+  // 구세이브도 첫 경기 진행 시 정상화된다(마이그레이션 불필요).
   let guard=0;
-  while(activeBat().filter(p=>p.role==='starting').length<9&&guard++<20){
-    const bench=activeBat().filter(p=>p.role==='bench').sort((a,b)=>ovr(b)-ovr(a))[0];
-    if(bench){bench.role='starting';continue;}
+  while(activeBat().length<9&&guard++<20){
     if(!callUp(p=>!p.isPitcher)) break;
   }
-  // 1b) 주전 9명 **초과분 정리**: 하위 OVR을 벤치로.
-  // 채우기만 하고 줄이지 못해 오프시즌에 생긴 13인 타순이 시즌 내내 고착됐다.
-  // 이 축소 경로가 있으면 구세이브도 첫 경기 진행 시 자가 치유된다(마이그레이션 불필요).
-  guard=0;
-  while(activeBat().filter(p=>p.role==='starting').length>9&&guard++<20){
-    const worst=activeBat().filter(p=>p.role==='starting').sort((a,b)=>ovr(a)-ovr(b))[0];
-    if(!worst)break;
-    worst.role='bench';
-  }
+  if(!_aiLineupValid(t)) _arrangeAILineup(t);
   // 2) 로테이션 5 유지: 불펜 승격 → 부족 시 콜업
   guard=0;
   while(activePit().filter(p=>p.role==='rotation').length<5&&guard++<12){
