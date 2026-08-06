@@ -43,9 +43,13 @@ function renderInvestOverseas() {
           <tbody>
             ${eligible.map(p => {
               const idx = t.roster.indexOf(p);
-              const canAfford = t.budget >= OVERSEAS_COST;
+              // 버튼 활성 조건은 investSendOverseas의 실행 조건과 **동일해야** 한다 —
+              // 이전엔 t.budget(총자본)으로 판정해 유지비·페이롤 차감 후 가용 예산이 모자라도
+              // 버튼이 켜졌고, 나이/OVR 자격도 빠져 있어 눌러야만 거부 사유를 알 수 있었다.
+              const canAfford = canSpend(t, OVERSEAS_COST);
               const pOverseas = p._overseasCount||0;
-              const canSend = isOffseason && canAfford && overseasUsed < 3 && pOverseas < 3 && !G.matchInProgress;
+              const ageOk = !((p.age||22) > 24 && ovr(p) >= 67); // 24세 초과 + OVR 67↑ 불가
+              const canSend = isOffseason && canAfford && ageOk && overseasUsed < 3 && pOverseas < 3 && !G.matchInProgress;
               const roleLabel = p.role==='starting'?'선발타자':p.role==='bench'?'후보':p.role==='rotation'?'선발투수':'불펜';
               return `<tr>
                 <td><span class="player-name">${p.name}</span> <span style="font-size:0.58rem;color:var(--text-dim);">(${pOverseas}/3)</span></td>
@@ -55,7 +59,7 @@ function renderInvestOverseas() {
                 <td>
                   <button class="btn btn-secondary btn-sm" onclick="investSendOverseas(${idx})"
                     ${canSend ? '' : 'disabled'}
-                    title="${!isOffseason?'비시즌에만 가능':!canAfford?'예산 부족':overseasUsed>=3?'시즌 3명 제한':'파견'}">
+                    title="${!isOffseason?'비시즌에만 가능':!canAfford?'가용 예산 부족':!ageOk?'24세 이하 또는 OVR 67 미만만 가능':overseasUsed>=3?'시즌 3명 제한':pOverseas>=3?'커리어 3회 소진':'파견'}">
                     ✈️ ${won(OVERSEAS_COST)}
                   </button>
                 </td>
@@ -139,10 +143,14 @@ function renderInvestMedicalCenter() {
         <table class="data-table" style="font-size:0.72rem;">
           <thead><tr><th>결과</th><th>확률</th><th>효과</th></tr></thead>
           <tbody>
-            <tr><td style="color:var(--text-dim);">실패</td><td>50%</td><td>효과 없음 (비용만 소모)</td></tr>
-            <tr><td style="color:#f59e0b;">부분 성공</td><td>35%</td><td>전체 스탯 <b>+2</b> 영구 상승</td></tr>
-            <tr><td style="color:#10b981;">대성공</td><td>5%</td><td>전체 스탯 <b>+5</b> + 2년간 에이징 면역</td></tr>
-            <tr><td style="color:#ef4444;">의료 사고</td><td>10%</td><td>전체 스탯 <b>-3</b> 영구 하락</td></tr>
+            ${MEDICAL_OUTCOMES.map(o=>`<tr>
+              <td style="color:${o.color};">${o.label}</td><td>${o.chance}%</td>
+              <td>${o.stat===0&&o.pot===0?'효과 없음 (비용만 소모)':[
+                o.stat!==0?`전체 스탯 <b>${o.stat>0?'+':''}${o.stat}</b> 영구 ${o.stat>0?'상승':'하락'}`:'',
+                o.pot>0?`잠재력 <b>+${o.pot}</b>`:'',
+                o.immunity?`${o.immunity}년간 에이징 면역`:'',
+              ].filter(Boolean).join(' · ')}</td>
+            </tr>`).join('')}
           </tbody>
         </table>
       </div>
@@ -154,7 +162,7 @@ function renderInvestMedicalCenter() {
                const idx = t.roster.indexOf(p);
                const o = ovr(p);
                const medCost = o >= 84 ? 30 : o >= 67 ? 22 : MEDICAL_CENTER_COST;
-               const canAfford = t.budget >= medCost;
+               const canAfford = canSpend(t, medCost); // 실행부(executeMedicalCenter)와 동일 기준
                const canTreat = isOffseason && canAfford && medicalUsed < 3;
                return `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-card-hover);border-radius:8px;">
                  <span class="player-name" style="font-size:0.78rem;flex:1;">${p.name}</span>
@@ -194,36 +202,29 @@ function executeMedicalCenter(rosterIdx) {
     ? ['stuff','control','velocity','movement','stamina','clutch']
     : ['contact','power','eye','speed','fielding','arm'];
 
-  // 확률 롤 (하이 리스크: 대성공 5%, 사고 10%)
+  // 확률 롤 — MEDICAL_OUTCOMES의 chance 누적으로 선택 (표시 테이블과 동일 소스)
   const roll = rand(1, 100);
-  let result, resultColor, resultEmoji, resultDesc;
+  let acc = 0;
+  const out = MEDICAL_OUTCOMES.find(o => (acc += o.chance) >= roll) || MEDICAL_OUTCOMES[0];
 
-  if (roll <= 50) {
-    // 실패 (50%)
-    result = '실패'; resultColor = 'var(--text-dim)'; resultEmoji = '😔';
+  if (out.pot > 0) p._potential = Math.min(100, (p._potential||50) + out.pot);
+  if (out.stat !== 0) stats.forEach(s => { p[s] = clamp((p[s] || 18) + out.stat, STAT_MIN, STAT_MAX); });
+  if (out.immunity) p.agingImmunityYears = out.immunity;
+
+  const result = out.label, resultColor = out.color, resultEmoji = out.emoji;
+  let resultDesc;
+  if (out.stat === 0 && out.pot === 0) {
     resultDesc = '치료가 효과를 발휘하지 못했습니다. 비용만 소모되었습니다.';
-  } else if (roll <= 85) {
-    // 부분 성공 (35%): +2 영구 + POT +1
-    result = '부분 성공'; resultColor = '#f59e0b'; resultEmoji = '💪';
-    p._potential = Math.min(100, (p._potential||50) + 5);
-    stats.forEach(s => { p[s] = clamp((p[s] || 18) + 3, STAT_MIN, STAT_MAX); });
-    resultDesc = `전체 스탯 +2 영구 상승! 잠재력 확장 (최대 ${maxOvrFromPot(p._potential)} OVR)`;
-  } else if (roll <= 90) {
-    // 대성공 (5%): +5 영구 + POT +3 + 에이징 면역 2년
-    result = '대성공'; resultColor = '#10b981'; resultEmoji = '🌟';
-    p._potential = Math.min(100, (p._potential||50) + 15);
-    stats.forEach(s => { p[s] = clamp((p[s] || 18) + 8, STAT_MIN, STAT_MAX); });
-    p.agingImmunityYears = 2;
-    resultDesc = `전체 스탯 +5 영구 상승! 잠재력 대폭 확장 (최대 ${maxOvrFromPot(p._potential)} OVR)! 2년간 에이징 면역!`;
-    if (p.status === 'il') {
-      p.status = 'futures'; p.isOnIL = false; p.ilGamesLeft = 0; p.rehabGamesLeft = 0;
-      resultDesc += ' 부상도 완치되었습니다!';
-    }
   } else {
-    // 의료 사고 (10%): -3 영구
-    result = '의료 사고'; resultColor = '#ef4444'; resultEmoji = '⚠️';
-    stats.forEach(s => { p[s] = clamp((p[s] || 18) - 5, STAT_MIN, STAT_MAX); });
-    resultDesc = '의료 사고 발생! 전체 스탯이 -3 영구 하락했습니다...';
+    resultDesc = [
+      out.stat !== 0 ? `전체 스탯 ${out.stat>0?'+':''}${out.stat} 영구 ${out.stat>0?'상승':'하락'}!` : '',
+      out.pot > 0 ? `잠재력 +${out.pot} (최대 ${maxOvrFromPot(p._potential)} OVR)` : '',
+      out.immunity ? `${out.immunity}년간 에이징 면역!` : '',
+    ].filter(Boolean).join(' ');
+  }
+  if (out.immunity && p.status === 'il') {
+    p.status = 'futures'; p.isOnIL = false; p.ilGamesLeft = 0; p.rehabGamesLeft = 0;
+    resultDesc += ' 부상도 완치되었습니다!';
   }
 
   const o = ovr(p);

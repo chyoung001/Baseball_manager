@@ -125,6 +125,18 @@ function renderMarket(){
   $('marketGrid').innerHTML=rdBanner+capWarn+budgetHTML+filterHTML+tableHTML;
 }
 
+// 시장에서 선수를 빼낼 때는 **faPool에서도** 제거해야 한다.
+// _showFAMarket이 faPool 원소를 참조 그대로 marketPlayers에 싣기 때문에, 표시용 배열에서만
+// 지우면 영입한 선수가 풀에 남아 다음 스토브리그의 AI 입찰이 같은 객체를 다른 구단에 계약시킨다
+// → 동일 선수가 두 팀 로스터에 동시 존재(role·ss·condition 공유, 페이롤 이중 계상,
+//   세이브 후 재로드 시 별개 객체로 갈라져 영구 고착).
+function _removeFromMarket(p){
+  const mi=G.marketPlayers.indexOf(p);
+  if(mi>=0) G.marketPlayers.splice(mi,1);
+  const fi=(G.faPool||[]).indexOf(p);
+  if(fi>=0) G.faPool.splice(fi,1);
+}
+
 function buyPlayer(idx){
   const p=G.marketPlayers[idx];
   if(!canSpend(G.myTeam,p.price)){showToast('🚫 사용 가능 자금 부족!');return;}
@@ -145,18 +157,21 @@ function buyPlayer(idx){
       if(typeof p.ilGamesLeft==='undefined')p.ilGamesLeft=0;
       if(typeof p.rehabGamesLeft==='undefined')p.rehabGamesLeft=0;
       G.myTeam.roster.push(p);
-      G.marketPlayers.splice(G.marketPlayers.indexOf(p),1);
+      _removeFromMarket(p);
       showToast(`✅ ${p.name} 영입! (${won(salary)} × ${years}년)`);
       updateHeader();renderMarket();saveGame();
     },
     function onFail(reason){
       if(reason==='snatched'){
-        // AI가 빼앗음 → 시장에서 삭제
-        G.marketPlayers.splice(G.marketPlayers.indexOf(p),1);
+        // AI가 빼앗음 → 시장·FA 풀에서 삭제 (다른 구단과 계약한 것으로 처리)
+        _removeFromMarket(p);
         showToast(`🚫 ${p.name}이(가) 다른 구단과 계약했습니다!`);
       }
       if(reason==='exhausted'){
-        G.marketPlayers.splice(G.marketPlayers.indexOf(p),1);
+        // 협상 결렬 — 이번 시장에서만 내린다. faPool에는 남겨 다음 스토브리그로 이월
+        // (fix/#20의 '미계약 FA 소멸 방지'와 동일 취지)
+        const mi=G.marketPlayers.indexOf(p);
+        if(mi>=0) G.marketPlayers.splice(mi,1);
         showToast(`❌ ${p.name} 협상 결렬 — 시장에서 이탈`);
       }
       renderMarket();

@@ -51,6 +51,8 @@ function _buildSnapshot(){
     testMode:G.testMode,
     phase:G.phase,
     _stoveSettledSeason:G._stoveSettledSeason||0,
+    _faMarketSeason:G._faMarketSeason||0, // FA 시장 구성 멱등 가드 (미저장 시 재로드로 리롤 부활)
+    faPool:(G.faPool||[]).map(_compressPlayer), // 미계약 FA 이월 — 저장 누락 시 로드마다 소멸
     _traitsEvaluatedSeason:G._traitsEvaluatedSeason||0, // P3-2 시상 특성 평가 멱등 가드
     previousSeasonStandings:G.previousSeasonStandings,
     draftPool:(G.draftPool||[]).map(_compressPlayer),
@@ -103,6 +105,7 @@ function _restoreFromData(d){
   // Phase & new fields 복원
   G.phase=d.phase||'preseason';
   G._stoveSettledSeason=d._stoveSettledSeason||0;
+  G._faMarketSeason=d._faMarketSeason||0;
   G._traitsEvaluatedSeason=d._traitsEvaluatedSeason||0;
   G._lastSeasonRev=d._lastSeasonRev||null; // 미보유 세이브 로드 시 이전 게임 잔재도 초기화
   G._lastReserveDrain=d._lastReserveDrain||0; // 준비금 감가 스냅샷 복원 (미보유 세이브는 0)
@@ -116,8 +119,14 @@ function _restoreFromData(d){
   // v2+ 압축 포맷 vs v1 원본 포맷 호환
   if(d._v>=2){
     G.teams=d.teams.map((c,i)=>_expandTeam(c,i));
-    G.marketPlayers=(d.marketPlayers||[]).map(_expandPlayer);
     G.draftPool=(d.draftPool||[]).map(_expandPlayer);
+    // faPool은 스냅샷에 없던 필드다(fix/#23 이전 세이브) — 미보유 시 빈 배열.
+    // 저장되지 않던 동안엔 재로드마다 미계약 FA가 통째로 사라져 fix/#20의 이월이 무효화됐다.
+    G.faPool=(d.faPool||[]).map(_expandPlayer);
+    // marketPlayers는 faPool을 참조로 싣는 표시용 배열이라 따로 복원하면 **같은 선수가
+    // 두 객체로 갈라진다**. 저장된 항목 중 faPool에 대응이 있으면 그 참조를 재사용한다.
+    const _faByUid=new Map(G.faPool.map(p=>[p._uid,p]));
+    G.marketPlayers=(d.marketPlayers||[]).map(c=>_faByUid.get(c._uid)||_expandPlayer(c));
   }else{
     // v1: 원본 그대로 (하위 호환)
     G.teams=d.teams;
