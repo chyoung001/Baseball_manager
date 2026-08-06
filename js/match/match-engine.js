@@ -105,6 +105,116 @@ function resolvePA(batter, pitcher, ctx){
           adjContact, adjEye, effStuff, effControl};
 }
 
+// ── 주루·아웃 판정 (관전·AI·자동 3경로 공유) ──
+// resolvePA가 확률만 단일화한 뒤에도 주루는 3중 복제로 남아 경로별 규칙이 갈려 있었다.
+// 시뮬 경로엔 송구 페널티(armPenalty)·희생플라이·자책/비자책 분리·단타 시 1루→3루가 통째로 없었다.
+// 관전 경로를 정본으로 이식한다(이미 검증된 분포라 시뮬을 여기로 끌어올린다).
+//
+// `bases`(길이 3 배열)를 제자리 변경하고 결과만 반환한다.
+// 스탯 누적(ss/today)·로그·수비수 하이라이트는 경로별 관심사라 호출부에 남긴다.
+//   kind : 'HR' | 'BB' | 'HIT' | 'ERROR' | 'OUT'
+//   ctx  : {outs, armPenalty, xbhRate, tripleRate, gbRate, batSpeed, dpBase}
+//   반환 : {runs, earned, outsAdded, type, sfRunner}
+//          type — 'HR' | 'BB' | '1B' | '2B' | '3B' | 'E' | 'DP' | 'GB' | 'FB' | 'SF'
+function resolveBaserunning(kind, bases, batter, ctx){
+  ctx=ctx||{};
+  const armPen=ctx.armPenalty!=null?ctx.armPenalty:1;
+  const spd=p=>statEff(p,'speed');
+  let runs=0, earned=0, outsAdded=0;
+
+  if(kind==='HR'){
+    runs=1; earned=1;
+    bases.forEach((b,i)=>{if(b){runs++; if(!b._errorRunner)earned++; bases[i]=null;}});
+    return {runs, earned, outsAdded, type:'HR'};
+  }
+
+  if(kind==='BB'){
+    batter._errorRunner=false;
+    if(bases[0]&&bases[1]&&bases[2]){
+      runs=1; if(!bases[2]._errorRunner)earned=1;
+      bases[2]=bases[1]; bases[1]=bases[0]; bases[0]=batter;
+    }else{
+      if(bases[1]&&bases[0])bases[2]=bases[1];
+      if(bases[0])bases[1]=bases[0];
+      bases[0]=batter;
+    }
+    return {runs, earned, outsAdded, type:'BB'};
+  }
+
+  if(kind==='ERROR'){
+    if(bases[2]){runs++; if(!bases[2]._errorRunner)earned++; bases[2]=null;}
+    if(bases[1]){bases[2]=bases[1];bases[1]=null;}
+    if(bases[0]){bases[1]=bases[0];bases[0]=null;}
+    batter._errorRunner=true; // 에러 출루 주자는 이후 득점해도 비자책
+    bases[0]=batter;
+    return {runs, earned, outsAdded, type:'E'};
+  }
+
+  if(kind==='HIT'){
+    batter._errorRunner=false;
+    const tripleRate=ctx.tripleRate||0, xbhRate=ctx.xbhRate||0;
+    const hitRoll=Math.random();
+    if(hitRoll<tripleRate){
+      bases.forEach((b,i)=>{if(b){runs++; if(!b._errorRunner)earned++; bases[i]=null;}});
+      bases[2]=batter;
+      return {runs, earned, outsAdded, type:'3B'};
+    }
+    if(hitRoll<xbhRate){
+      if(bases[2]){runs++; if(!bases[2]._errorRunner)earned++; bases[2]=null;}
+      if(bases[1]){runs++; if(!bases[1]._errorRunner)earned++; bases[1]=null;}
+      if(bases[0]){
+        const r0=bases[0];
+        if(spd(r0)>59&&Math.random()*100<spd(r0)*armPen*0.55){runs++; if(!r0._errorRunner)earned++; bases[0]=null;}
+        else{bases[2]=bases[0]; bases[0]=null;}
+      }
+      bases[1]=batter;
+      return {runs, earned, outsAdded, type:'2B'};
+    }
+    // 단타
+    if(bases[2]){runs++; if(!bases[2]._errorRunner)earned++; bases[2]=null;}
+    if(bases[1]){
+      const r1=bases[1];
+      if(Math.random()*100<Math.min(75,spd(r1)*armPen*1.5)){runs++; if(!r1._errorRunner)earned++; bases[1]=null;}
+      else if(!bases[2]){bases[2]=bases[1]; bases[1]=null;}
+    }
+    if(bases[0]){
+      const r0=bases[0];
+      if(spd(r0)>75&&Math.random()*100<spd(r0)*armPen*0.35&&!bases[2]) bases[2]=r0;
+      else bases[1]=r0;
+      bases[0]=null;
+    }
+    bases[0]=batter;
+    return {runs, earned, outsAdded, type:'1B'};
+  }
+
+  // ── 범타 아웃 — 땅볼(병살 체크) / 뜬공(희생플라이 체크) ──
+  const outs=ctx.outs||0;
+  if(Math.random()<(ctx.gbRate||0.45)){
+    const bs=ctx.batSpeed!=null?ctx.batSpeed:50;
+    const speedDpMod=bs<=42?1.4:bs>=75?0.6:1.0;
+    if(outs<2&&bases[0]&&Math.random()<(ctx.dpBase||0.09)*speedDpMod){
+      if(outs===0&&bases[2]){runs++; if(!bases[2]._errorRunner)earned++; bases[2]=null;}
+      if(bases[1]&&!bases[2]){bases[2]=bases[1];bases[1]=null;}
+      bases[0]=null;
+      return {runs, earned, outsAdded:2, type:'DP'};
+    }
+    return {runs, earned, outsAdded:1, type:'GB'};
+  }
+  // 뜬공 — 라인드라이브(30%)는 태그업 불가
+  const isLine=Math.random()<0.3;
+  outsAdded=1;
+  if(!isLine&&bases[2]&&outs+1<3){
+    const sfRunner=bases[2];
+    const sfChance=clamp(0.50+(spd(sfRunner)-50)/330, 0.30, 0.70);
+    if(Math.random()<sfChance){
+      runs++; if(!sfRunner._errorRunner)earned++;
+      bases[2]=null;
+      return {runs, earned, outsAdded, type:'SF', sfRunner};
+    }
+  }
+  return {runs, earned, outsAdded, type:'FB', isLine};
+}
+
 // ── 투구수 한계 산정 (스태미나 스탯 기반) ──
 function getMaxPitches(pitcher){
   const base=statEff(pitcher,'stamina');

@@ -76,16 +76,24 @@ function _simAIGame(teamA,teamB){
 
   // 한 하프이닝 TTO+BABIP 간이 시뮬 (공격팀 vs 수비팀) — simulatePlay 공식 통일
   // walkoffTarget>0: 끝내기 상황, runs>=walkoffTarget이면 즉시 종료
-  function simHalf(batTeam,batters,pitcher,fldTeam,walkoffTarget,ord){
+  // `inning`/`lead`는 고레버리지 판정용 — 관전 경로(match-flow)와 동일 공식을 쓰기 위해 받는다.
+  // `lead`는 **수비(투수)팀 기준** 점수차 (simHalfFull·_pickReliever와 동일 기준으로 통일).
+  function simHalf(batTeam,batters,pitcher,fldTeam,inning,lead,walkoffTarget,ord){
     ord=ord||{i:0}; // 타순 연속 (게임 단위 유지 — 이닝마다 1번부터 리셋 금지)
     let outs=0,runs=0,pa=0;
     if(!pitcher||batters.length===0)return rand(0,3);
     const _pf=getParkFactor(teamA); // 홈구장(teamA) 파크팩터 — 양팀 공통
     // 팀 컨셉 보너스는 resolvePA가 ctx.batConcept/fldConcept에서 단일 계산
+    // P2-5 멘탈 코칭 증폭 — 관전 경로에만 전달되던 것을 시뮬에도 배선(투자한 시설이 자동 진행에서 무효였다)
+    const _mcBat=1+(MENTAL_COACH_AMP[batTeam.mentalCoachLevel||0]||0);
+    const _mcPit=1+(MENTAL_COACH_AMP[fldTeam.mentalCoachLevel||0]||0);
 
     // 수비력 평균 (전환 페널티 반영)
     const fldStarters=fldTeam?getStartingBatters(fldTeam):[];
     const avgFld=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effFielding(p),0)/fldStarters.length:50;
+    // 송구 페널티 — 관전 경로와 동일 산식. 시뮬 경로엔 없어 주자 진루가 과대평가되고 있었다.
+    const avgArm=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effArm(p),0)/fldStarters.length:50;
+    const armPenalty=Math.max(0.4,1-avgArm/200);
 
     // 주루 상태 간이 추적
     let bases=[null,null,null];
@@ -95,65 +103,45 @@ function _simAIGame(teamA,teamB){
       const bs=b.ss||(initSeasonStats(b),b.ss);
       const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
 
-      // ── 통합 타석 판정 (관전·자동과 동일 resolvePA) — 시뮬 경로도 피로(NP)/RISP 클러치/consistency/재활 반영 → 공정성 ──
-      // (고레버리지 bigGame은 이닝/점수차 미추적으로 이 경로 미적용 = 잔여, #18 예정)
+      // ── 통합 타석 판정 (관전·자동과 동일 resolvePA) ──
+      // 고레버리지 판정은 관전 경로(match-flow)와 동일 공식. 진행 중 득점을 반영해 lead를 갱신한다.
+      const _hasRISP=!!(bases[1]||bases[2]);
+      const _diff=Math.abs((lead||0)-runs); // 공격팀 득점만큼 수비팀 리드가 감소
+      const _tieRunner=!!(bases[0]||bases[1]||bases[2])&&_diff<=1;
+      const _hiLev=(inning||1)>=7&&(_diff<=3||_hasRISP||_tieRunner);
       const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:fldTeam.concept,
-        np:pitcher._simNP||0, hasRISP:!!(bases[1]||bases[2]), isHighLeverage:false, avgFielding:avgFld, park:_pf});
-      const adjPow=_r.adjPower; // 주루 인플레율(xbh) 재계산 호환
+        np:pitcher._simNP||0, hasRISP:_hasRISP, isHighLeverage:_hiLev,
+        batMentalAmp:_mcBat, pitMentalAmp:_mcPit, avgFielding:avgFld, park:_pf});
       const _rr=Math.random();
       const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'
         : (function(){const ip=Math.random();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
 
       if(result==='HR'){
+        const _b=resolveBaserunning('HR',bases,b,{});
         bs.ab++;bs.h++;bs.hr++;ps.ha++;ps.phr++;
-        let r=1;bases.forEach((bb,i)=>{if(bb){r++;bases[i]=null;}});
-        bs.rbi+=r;ps.er+=r;runs+=r;
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
       }else if(result==='K'){
         bs.ab++;bs.k++;ps.pk++;outs++;ps.outs=(ps.outs||0)+1;
       }else if(result==='BB'){
         bs.bb++;ps.pbb++;
-        if(bases[2]&&bases[1]&&bases[0]){runs++;bs.rbi++;ps.er++;}
-        if(bases[1]&&bases[0])bases[2]=bases[1];
-        if(bases[0])bases[1]=bases[0];
-        bases[0]=b;
-      }else if(result==='HIT'||result==='ERROR'){
+        const _b=resolveBaserunning('BB',bases,b,{});
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
+      }else if(result==='ERROR'){
         bs.ab++;
-        if(result==='HIT'){bs.h++;ps.ha++;}
-        const xbhChance=clamp(0.20+(adjPow-50)/330,0.10,0.40);
-        const tripleChance=(statEff(b,'speed'))>75?0.025:(statEff(b,'speed'))>51?0.012:0.004;
-        const hitRoll=Math.random();
-        if(hitRoll<tripleChance){
-          bs.xbh++;let r=0;bases.forEach((bb,i)=>{if(bb){r++;bases[i]=null;}});
-          bases[2]=b;bs.rbi+=r;if(r)ps.er+=r;runs+=r;
-        }else if(hitRoll<xbhChance){
-          bs.xbh++;let r=0;
-          if(bases[2]){r++;bases[2]=null;}
-          if(bases[1]){r++;bases[1]=null;}
-          if(bases[0]){const _r0s=(statEff(bases[0],'speed'));if(_r0s>55&&Math.random()*100<_r0s*0.55){r++;bases[0]=null;}else{bases[2]=bases[0];bases[0]=null;}}
-          bases[1]=b;bs.rbi+=r;if(r)ps.er+=r;runs+=r;
-        }else{
-          let r=0;
-          if(bases[2]){r++;bases[2]=null;}
-          if(bases[1]){const _r1s=(statEff(bases[1],'speed'));if(Math.random()*100<Math.min(75,_r1s*1.5)){r++;bases[1]=null;}else if(!bases[2]){bases[2]=bases[1];bases[1]=null;}}
-          if(bases[0]){if(!bases[1])bases[1]=bases[0];else bases[1]=bases[0];bases[0]=null;}
-          bases[0]=b;bs.rbi+=r;if(r)ps.er+=r;runs+=r;
-        }
+        const _b=resolveBaserunning('ERROR',bases,b,{});
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
+      }else if(result==='HIT'){
+        bs.ab++;bs.h++;ps.ha++;
+        const _b=resolveBaserunning('HIT',bases,b,{armPenalty, xbhRate:_r.xbhRate, tripleRate:_r.tripleRate});
+        if(_b.type!=='1B')bs.xbh++;
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
         if((statEff(b,'speed'))>67&&bases[0]===b&&!bases[1]&&Math.random()<0.12)bs.sb++;
       }else{
-        // 범타 아웃 — 땅볼/DP 판정
         bs.ab++;
-        const gbRate=_r.gbRate; // 컨셉 gbAdj 포함 — 관전 경로와 병살·땅볼 분포 통일
-        if(Math.random()<gbRate){
-          const baseDpChance=fldTeam.concept==='defense'?0.14:0.09;
-          const speedDpMod=(statEff(b,'speed'))<=42?1.4:(statEff(b,'speed'))>=75?0.6:1.0;
-          if(outs<2&&bases[0]&&Math.random()<baseDpChance*speedDpMod){
-            let dpRuns=0;
-            if(outs===0&&bases[2]){dpRuns++;bases[2]=null;}
-            if(bases[1]&&!bases[2]){bases[2]=bases[1];bases[1]=null;}
-            bases[0]=null;outs+=2;ps.outs=(ps.outs||0)+2;
-            if(dpRuns){ps.er+=dpRuns;runs+=dpRuns;}
-          }else{outs++;ps.outs=(ps.outs||0)+1;}
-        }else{outs++;ps.outs=(ps.outs||0)+1;}
+        const _b=resolveBaserunning('OUT',bases,b,{outs, gbRate:_r.gbRate, batSpeed:_r.batSpeed,
+          dpBase:fldTeam.concept==='defense'?0.14:0.09});
+        outs+=_b.outsAdded;ps.outs=(ps.outs||0)+_b.outsAdded;
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
       }
       pitcher._simNP=(pitcher._simNP||0)+((result==='K'||result==='BB')?rand(4,7):rand(2,4)); // PA당 투구수 추정 — maxNp(투구수)와 단위 정합(간이 경로 강판·피로)
       pitcher.currentStamina=Math.max(0,Math.round(100*(1-pitcher._simNP/getMaxPitches(pitcher))));
@@ -173,10 +161,10 @@ function _simAIGame(teamA,teamB){
       const pickB=_pickReliever(teamB,inn,runsB-runsA);
       if(pickB){curPitB=pickB;lastPitB=pickB;}
     }
-    runsB+=simHalf(teamB,batB,curPitA,teamA,0,_boB);
+    runsB+=simHalf(teamB,batB,curPitA,teamA,inn,runsA-runsB,0,_boB);
     if(inn===9&&runsA>runsB) break;
     const wotA=inn>=9?(runsB-runsA+1):0;
-    runsA+=simHalf(teamA,batA,curPitB,teamB,wotA,_boA);
+    runsA+=simHalf(teamA,batA,curPitB,teamB,inn,runsB-runsA,wotA,_boA);
     if(inn>=9&&runsA>runsB) break;
   }
 
@@ -191,10 +179,10 @@ function _simAIGame(teamA,teamB){
         const pickB=_pickReliever(teamB,inn,runsB-runsA);
         if(pickB){curPitB=pickB;lastPitB=pickB;}
       }
-      runsB+=simHalf(teamB,batB,curPitA,teamA,0,_boB);
+      runsB+=simHalf(teamB,batB,curPitA,teamA,inn,runsA-runsB,0,_boB);
       if(runsA>runsB) break;
       const wotA=runsB-runsA+1;
-      runsA+=simHalf(teamA,batA,curPitB,teamB,wotA,_boA);
+      runsA+=simHalf(teamA,batA,curPitB,teamB,inn,runsB-runsA,wotA,_boA);
       if(runsA!==runsB) break;
     }
   }
@@ -296,6 +284,12 @@ function _simMyGame(){
     const _pf=getParkFactor(homeTeam); // 홈구장 파크팩터 — 양팀 공통
     const fldStarters=getStartingBatters(pitcherTeam);
     const avgFld=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effFielding(p),0)/fldStarters.length:50;
+    // 송구 페널티 — 관전 경로와 동일 산식
+    const avgArm=fldStarters.length>0?fldStarters.reduce((s,p)=>s+effArm(p),0)/fldStarters.length:50;
+    const armPenalty=Math.max(0.4,1-avgArm/200);
+    // P2-5 멘탈 코칭 증폭 — 관전 경로에만 전달되던 것을 시뮬에도 배선
+    const _mcBat=1+(MENTAL_COACH_AMP[batTeam.mentalCoachLevel||0]||0);
+    const _mcPit=1+(MENTAL_COACH_AMP[pitcherTeam.mentalCoachLevel||0]||0);
 
     // 주루 상태 간이 추적
     let bases=[null,null,null];
@@ -311,65 +305,45 @@ function _simMyGame(){
       const bs=b.ss||(initSeasonStats(b),b.ss);
       const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
 
-      // ── 통합 타석 판정 (관전·AI와 동일 resolvePA) — 시뮬 경로도 피로(NP)/RISP 클러치/consistency/재활 반영 → 공정성 ──
-      // 컨셉 보너스(불펜 포함)는 resolvePA가 컨셉에서 단일 계산(기존 batBonus/pitBonus arg·bpBonus 대체).
+      // ── 통합 타석 판정 (관전·AI와 동일 resolvePA) ──
+      // 컨셉 보너스(불펜 포함)는 resolvePA가 컨셉에서 단일 계산. 고레버리지 판정도 관전과 동일 공식.
+      const _hasRISP=!!(bases[1]||bases[2]);
+      const _diff=Math.abs((lead||0)-runs); // 공격팀 득점만큼 수비팀 리드가 감소
+      const _tieRunner=!!(bases[0]||bases[1]||bases[2])&&_diff<=1;
+      const _hiLev=(inning||1)>=7&&(_diff<=3||_hasRISP||_tieRunner);
       const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:pitcherTeam.concept,
-        np:pitcher._simNP||0, hasRISP:!!(bases[1]||bases[2]), isHighLeverage:false, avgFielding:avgFld, park:_pf});
-      const adjPow=_r.adjPower; // 주루 인플레율(xbh) 재계산 호환
+        np:pitcher._simNP||0, hasRISP:_hasRISP, isHighLeverage:_hiLev,
+        batMentalAmp:_mcBat, pitMentalAmp:_mcPit, avgFielding:avgFld, park:_pf});
       const _rr=Math.random();
       const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'
         : (function(){const ip=Math.random();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
 
       if(result==='HR'){
+        const _b=resolveBaserunning('HR',bases,b,{});
         bs.ab++;bs.h++;bs.hr++;ps.ha++;ps.phr++;
-        let r=1;bases.forEach((bb,i)=>{if(bb){r++;bases[i]=null;}});
-        bs.rbi+=r;ps.er+=r;runs+=r;
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
       }else if(result==='K'){
         bs.ab++;bs.k++;ps.pk++;outs++;ps.outs=(ps.outs||0)+1;
       }else if(result==='BB'){
         bs.bb++;ps.pbb++;
-        if(bases[2]&&bases[1]&&bases[0]){runs++;bs.rbi++;ps.er++;}
-        if(bases[1]&&bases[0])bases[2]=bases[1];
-        if(bases[0])bases[1]=bases[0];
-        bases[0]=b;
-      }else if(result==='HIT'||result==='ERROR'){
+        const _b=resolveBaserunning('BB',bases,b,{});
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
+      }else if(result==='ERROR'){
         bs.ab++;
-        if(result==='HIT'){bs.h++;ps.ha++;}
-        const xbhChance=clamp(0.20+(adjPow-50)/330,0.10,0.40);
-        const tripleChance=(statEff(b,'speed'))>75?0.025:(statEff(b,'speed'))>51?0.012:0.004;
-        const hitRoll=Math.random();
-        if(hitRoll<tripleChance){
-          bs.xbh++;let r=0;bases.forEach((bb,i)=>{if(bb){r++;bases[i]=null;}});
-          bases[2]=b;bs.rbi+=r;if(r)ps.er+=r;runs+=r;
-        }else if(hitRoll<xbhChance){
-          bs.xbh++;let r=0;
-          if(bases[2]){r++;bases[2]=null;}
-          if(bases[1]){r++;bases[1]=null;}
-          if(bases[0]){const _r0s=(statEff(bases[0],'speed'));if(_r0s>55&&Math.random()*100<_r0s*0.55){r++;bases[0]=null;}else{bases[2]=bases[0];bases[0]=null;}}
-          bases[1]=b;bs.rbi+=r;if(r)ps.er+=r;runs+=r;
-        }else{
-          let r=0;
-          if(bases[2]){r++;bases[2]=null;}
-          if(bases[1]){const _r1s=(statEff(bases[1],'speed'));if(Math.random()*100<Math.min(75,_r1s*1.5)){r++;bases[1]=null;}else if(!bases[2]){bases[2]=bases[1];bases[1]=null;}}
-          if(bases[0]){if(!bases[1])bases[1]=bases[0];else bases[1]=bases[0];bases[0]=null;}
-          bases[0]=b;bs.rbi+=r;if(r)ps.er+=r;runs+=r;
-        }
+        const _b=resolveBaserunning('ERROR',bases,b,{});
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
+      }else if(result==='HIT'){
+        bs.ab++;bs.h++;ps.ha++;
+        const _b=resolveBaserunning('HIT',bases,b,{armPenalty, xbhRate:_r.xbhRate, tripleRate:_r.tripleRate});
+        if(_b.type!=='1B')bs.xbh++;
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
         if((statEff(b,'speed'))>67&&bases[0]===b&&!bases[1]&&Math.random()<0.12)bs.sb++;
       }else{
-        // 범타 아웃 — 땅볼/DP 판정
         bs.ab++;
-        const gbRate=_r.gbRate; // 컨셉 gbAdj 포함 — 관전 경로와 병살·땅볼 분포 통일
-        if(Math.random()<gbRate){
-          const baseDpChance=pitcherTeam.concept==='defense'?0.14:0.09;
-          const speedDpMod=(statEff(b,'speed'))<=42?1.4:(statEff(b,'speed'))>=75?0.6:1.0;
-          if(outs<2&&bases[0]&&Math.random()<baseDpChance*speedDpMod){
-            let dpRuns=0;
-            if(outs===0&&bases[2]){dpRuns++;bases[2]=null;}
-            if(bases[1]&&!bases[2]){bases[2]=bases[1];bases[1]=null;}
-            bases[0]=null;outs+=2;ps.outs=(ps.outs||0)+2;
-            if(dpRuns){ps.er+=dpRuns;runs+=dpRuns;}
-          }else{outs++;ps.outs=(ps.outs||0)+1;}
-        }else{outs++;ps.outs=(ps.outs||0)+1;}
+        const _b=resolveBaserunning('OUT',bases,b,{outs, gbRate:_r.gbRate, batSpeed:_r.batSpeed,
+          dpBase:pitcherTeam.concept==='defense'?0.14:0.09});
+        outs+=_b.outsAdded;ps.outs=(ps.outs||0)+_b.outsAdded;
+        bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
       }
       pitcher._simNP=(pitcher._simNP||0)+((result==='K'||result==='BB')?rand(4,7):rand(2,4)); // PA당 투구수 추정 — maxNp(투구수)와 단위 정합(간이 경로 강판·피로)
       pitcher.currentStamina=Math.max(0,Math.round(100*(1-pitcher._simNP/getMaxPitches(pitcher))));

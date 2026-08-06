@@ -301,7 +301,8 @@ function simulatePlay(){
 
   if(ttoRoll<_c1){
     // ── 홈런 ──
-    let runs=1,_earnedRuns=1;matchState.bases.forEach((b,i)=>{if(b){runs++;if(!b._errorRunner)_earnedRuns++;matchState.bases[i]=null;}});
+    const _bl=resolveBaserunning('HR',matchState.bases,batter,{});
+    const runs=_bl.runs,_earnedRuns=_bl.earned;
     matchState.score[scoreKey][ii]+=runs;matchState.hits[scoreKey]++;
     bs.ab++;bs.h++;bs.hr++;bs.rbi+=runs; ps.ha++; ps.phr++; ps.er+=_earnedRuns;
     bt.ab++;bt.h++;bt.hr++;bt.rbi+=runs; pt.h++; pt.er+=_earnedRuns;
@@ -316,20 +317,13 @@ function simulatePlay(){
     _flashField('flash-red');
   }else if(ttoRoll<_c3){
     // ── 볼넷 ──
-    batter._errorRunner=false;
     bs.bb++; ps.pbb++; bt.bb++; pt.bb++;
-    if(matchState.bases[0]&&matchState.bases[1]&&matchState.bases[2]){
-      matchState.score[scoreKey][ii]++;bs.rbi++;bt.rbi++;
-      if(!matchState.bases[2]._errorRunner){ps.er++;pt.er++;}
-      matchState.bases[2]=matchState.bases[1];
-      matchState.bases[1]=matchState.bases[0];
-      matchState.bases[0]=batter;
+    const _bw=resolveBaserunning('BB',matchState.bases,batter,{});
+    if(_bw.runs){
+      matchState.score[scoreKey][ii]+=_bw.runs;bs.rbi+=_bw.runs;bt.rbi+=_bw.runs;
+      ps.er+=_bw.earned;pt.er+=_bw.earned;
       addLog(`🚶 ${batter.name} 볼넷 (밀어내기!)`,'run');
-    }else{
-      if(matchState.bases[1]&&matchState.bases[0])matchState.bases[2]=matchState.bases[1];
-      if(matchState.bases[0])matchState.bases[1]=matchState.bases[0];
-      matchState.bases[0]=batter;addLog(`🚶 ${batter.name} 볼넷`,'hit');
-    }
+    }else addLog(`🚶 ${batter.name} 볼넷`,'hit');
   }else{
     // ═══════ 인플레이 2차 판정 (BABIP + 수비) ═══════
     const ipRoll=Math.random();
@@ -337,110 +331,54 @@ function simulatePlay(){
       // ── 수비 에러 → 출루 (에러 기인 주자는 비자책점 처리) ──
       bs.ab++;bt.ab++;
       matchState.errors[fldKey]++;
-      if(matchState.bases[2]){
-        matchState.score[scoreKey][ii]++;bs.rbi++;bt.rbi++;
-        if(!matchState.bases[2]._errorRunner){ps.er++;pt.er++;}
-        matchState.bases[2]=null;
+      const _be=resolveBaserunning('ERROR',matchState.bases,batter,{});
+      if(_be.runs){
+        matchState.score[scoreKey][ii]+=_be.runs;bs.rbi+=_be.runs;bt.rbi+=_be.runs;
+        ps.er+=_be.earned;pt.er+=_be.earned;
       }
-      if(matchState.bases[1]){matchState.bases[2]=matchState.bases[1];matchState.bases[1]=null;}
-      if(matchState.bases[0]){matchState.bases[1]=matchState.bases[0];matchState.bases[0]=null;}
-      batter._errorRunner=true;
-      matchState.bases[0]=batter;
       const _errPos=['SS','2B','3B','1B'][rand(0,3)];
       addLog(`⚠️ ${_errPos} 수비 에러! ${batter.name} 출루`,'hit');
       highlightDefender(_errPos);
     }else if(ipRoll<pError+babip){
-      // ── BABIP 안타 → 타구 유형 판정 ──
-      batter._errorRunner=false;
+      // ── BABIP 안타 → 타구 유형·주루 (엔진 위임) ──
       matchState.hits[scoreKey]++;
-      const hitRoll=Math.random();
-      if(hitRoll<tripleRate){
-        // ── 3루타 ──
-        bs.ab++;bs.h++;bs.xbh++; ps.ha++;
-        bt.ab++;bt.h++; pt.h++;
-        let r=0,_er=0;matchState.bases.forEach((b,i)=>{if(b){r++;if(!b._errorRunner)_er++;matchState.bases[i]=null;}});
-        matchState.bases[2]=batter;matchState.score[scoreKey][ii]+=r;bs.rbi+=r;if(r){ps.er+=_er;bt.rbi+=r;pt.er+=_er;}
-        addLog(`🔵 ${batter.name} 3루타!${r?' '+r+'점!':' 진루'}`,r?'run':'hit');
-      }else if(hitRoll<tripleRate+doubleRate){
-        // ── 2루타 ──
-        bs.ab++;bs.h++;bs.xbh++; ps.ha++;
-        bt.ab++;bt.h++; pt.h++;
-        let r=0,_er2=0;
-        if(matchState.bases[2]){r++;if(!matchState.bases[2]._errorRunner)_er2++;matchState.bases[2]=null;}
-        if(matchState.bases[1]){r++;if(!matchState.bases[1]._errorRunner)_er2++;matchState.bases[1]=null;}
-        if(matchState.bases[0]){
-          const _r0=matchState.bases[0];
-          if((statEff(_r0,'speed'))>59&&Math.random()*100<(statEff(_r0,'speed'))*armPenalty*0.55){r++;if(!_r0._errorRunner)_er2++;matchState.bases[0]=null;}
-          else{matchState.bases[2]=matchState.bases[0];matchState.bases[0]=null;}
-        }
-        matchState.bases[1]=batter;matchState.score[scoreKey][ii]+=r;bs.rbi+=r;if(r){ps.er+=_er2;bt.rbi+=r;pt.er+=_er2;}
-        addLog(`🟡 ${batter.name} 2루타!${r?' '+r+'점!':' 진루'}`,r?'run':'hit');
-      }else{
-        // ── 단타 ──
-        bs.ab++;bs.h++; ps.ha++;
-        bt.ab++;bt.h++; pt.h++;
-        let r=0,_er1=0;
-        if(matchState.bases[2]){r++;if(!matchState.bases[2]._errorRunner)_er1++;matchState.bases[2]=null;}
-        if(matchState.bases[1]){
-          const _r1=matchState.bases[1];
-          if(Math.random()*100<Math.min(75,(statEff(_r1,'speed'))*armPenalty*1.5)){r++;if(!_r1._errorRunner)_er1++;matchState.bases[1]=null;}
-          else if(!matchState.bases[2]){matchState.bases[2]=matchState.bases[1];matchState.bases[1]=null;}
-        }
-        if(matchState.bases[0]){
-          const _r0=matchState.bases[0];
-          if((statEff(_r0,'speed'))>75&&Math.random()*100<(statEff(_r0,'speed'))*armPenalty*0.35&&!matchState.bases[2]){
-            matchState.bases[2]=_r0;
-          }else if(!matchState.bases[1]){
-            matchState.bases[1]=_r0;
-          }else{
-            matchState.bases[1]=_r0;
-          }
-          matchState.bases[0]=null;
-        }
-        matchState.bases[0]=batter;matchState.score[scoreKey][ii]+=r;bs.rbi+=r;if(r){ps.er+=_er1;bt.rbi+=r;pt.er+=_er1;}
-        addLog(`🟢 ${batter.name} 안타!${r?' '+r+'점 득점!':' 출루'}`,r?'run':'hit');
+      const _bh=resolveBaserunning('HIT',matchState.bases,batter,
+        {armPenalty, xbhRate:_r.xbhRate, tripleRate});
+      bs.ab++;bs.h++; ps.ha++;
+      bt.ab++;bt.h++; pt.h++;
+      if(_bh.type!=='1B')bs.xbh++;
+      if(_bh.runs){
+        matchState.score[scoreKey][ii]+=_bh.runs;bs.rbi+=_bh.runs;bt.rbi+=_bh.runs;
+        ps.er+=_bh.earned;pt.er+=_bh.earned;
       }
+      const _hitLabel=_bh.type==='3B'?'🔵 %s 3루타!':_bh.type==='2B'?'🟡 %s 2루타!':'🟢 %s 안타!';
+      const _hitTail=_bh.type==='1B'
+        ? (_bh.runs?' '+_bh.runs+'점 득점!':' 출루')
+        : (_bh.runs?' '+_bh.runs+'점!':' 진루');
+      addLog(_hitLabel.replace('%s',batter.name)+_hitTail, _bh.runs?'run':'hit');
     }else{
-      // ── 범타 (아웃) — 땅볼/플라이 판정 ──
+      // ── 범타 (아웃) — 땅볼/플라이·병살·희생플라이 (엔진 위임) ──
       bs.ab++;bt.ab++;
-      const outRoll=Math.random();
-      if(outRoll<gbRate){
-        // ── 땅볼 → 병살타 체크 (타자 Speed ≤45이면 DP 확률 1.4배) ──
-        const baseDpChance=fldTeam.concept==='defense'?0.14:0.09;
-        const speedDpMod=batSpeed<=42?1.4:batSpeed>=75?0.6:1.0;
-        if(matchState.outs<2&&matchState.bases[0]&&Math.random()<baseDpChance*speedDpMod){
-          let dpRuns=0,dpER=0;
-          if(matchState.outs===0&&matchState.bases[2]){dpRuns++;if(!matchState.bases[2]._errorRunner)dpER++;matchState.bases[2]=null;}
-          if(matchState.bases[1]&&!matchState.bases[2]){matchState.bases[2]=matchState.bases[1];matchState.bases[1]=null;}
-          matchState.bases[0]=null;
-          matchState.outs+=2;
-          if(dpRuns){matchState.score[scoreKey][ii]+=dpRuns;bs.rbi+=dpRuns;bt.rbi+=dpRuns;ps.er+=dpER;pt.er+=dpER;}
-          addLog(`✌️ ${batter.name} 병살타! 순식간에 2아웃${dpRuns?' ('+dpRuns+'점 허용)':''}`,'out');
-          highlightDefender('SS');highlightDefender('2B');
-        }else{
-          const _gbTo=['SS','2B','3B','1B'][rand(0,3)];
-          matchState.outs++;addLog(`❌ ${batter.name} 땅볼 아웃 (${_gbTo})`,'out');
-          highlightDefender(_gbTo);
-        }
+      const _bo=resolveBaserunning('OUT',matchState.bases,batter,
+        {outs:matchState.outs, gbRate, batSpeed,
+         dpBase:fldTeam.concept==='defense'?0.14:0.09});
+      matchState.outs+=_bo.outsAdded;
+      if(_bo.runs){
+        matchState.score[scoreKey][ii]+=_bo.runs;bs.rbi+=_bo.runs;bt.rbi+=_bo.runs;
+        ps.er+=_bo.earned;pt.er+=_bo.earned;
+      }
+      if(_bo.type==='DP'){
+        addLog(`✌️ ${batter.name} 병살타! 순식간에 2아웃${_bo.runs?' ('+_bo.runs+'점 허용)':''}`,'out');
+        highlightDefender('SS');highlightDefender('2B');
+      }else if(_bo.type==='GB'){
+        const _gbTo=['SS','2B','3B','1B'][rand(0,3)];
+        addLog(`❌ ${batter.name} 땅볼 아웃 (${_gbTo})`,'out');
+        highlightDefender(_gbTo);
       }else{
-        matchState.outs++;
         const _flyTo=['LF','CF','RF'][rand(0,2)];
-        const fbType=Math.random()<0.3?'라인드라이브':'플라이';
-        addLog(`❌ ${batter.name} ${fbType} 아웃 (${_flyTo})`,'out');
+        addLog(`❌ ${batter.name} ${_bo.isLine?'라인드라이브':'플라이'} 아웃 (${_flyTo})`,'out');
         highlightDefender(_flyTo);
-        // ── 희생 플라이: 3루 주자 태그업 득점 (라인드라이브 제외, 2아웃 미만) ──
-        if(fbType==='플라이'&&matchState.bases[2]&&matchState.outs<3){
-          const _sfRunner=matchState.bases[2];
-          const _sfSpd=statEff(_sfRunner,'speed');
-          const _sfChance=clamp(0.50+(_sfSpd-50)/330, 0.30, 0.70);
-          if(Math.random()<_sfChance){
-            matchState.score[scoreKey][ii]++;
-            bs.rbi++;bt.rbi++;
-            if(!_sfRunner._errorRunner){ps.er++;pt.er++;}
-            matchState.bases[2]=null;
-            addLog(`✈️ ${batter.name} 희생플라이! ${_sfRunner.name} 홈인`,'run');
-          }
-        }
+        if(_bo.type==='SF')addLog(`✈️ ${batter.name} 희생플라이! ${_bo.sfRunner.name} 홈인`,'run');
       }
       // 도루는 TTO 판정 전에 독립적으로 처리됨 (위쪽 코드 참조)
     }
