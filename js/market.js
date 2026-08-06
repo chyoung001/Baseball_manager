@@ -137,6 +137,27 @@ function _removeFromMarket(p){
   if(fi>=0) G.faPool.splice(fi,1);
 }
 
+// FA 협상 중 '선수 이탈'(snatched) 시 실제로 데려갈 AI 구단을 고른다.
+// 조건은 _runAIFreeAgentBidding과 같은 계열 — 가용 예산으로 계약을 감당할 수 있고
+// 사치세 라인을 넘기지 않는 팀 중 예산이 가장 큰 곳. 없으면 null(입단 없이 시장에서만 이탈).
+function _snatchFAWinner(p){
+  const sal=p.salary||SALARY_MIN, yrs=p._contractYears||1, fee=p.price||0;
+  const cand=G.teams.filter(t=>t!==G.myTeam
+    &&t.roster.length<FUTURES_ORG_MAX
+    &&getPayroll(t)+sal<=getLuxuryTaxLine()*1.05
+    &&(t.budget||0)>sal*yrs+fee);
+  if(cand.length===0)return null;
+  cand.sort((a,b)=>(b.budget||0)-(a.budget||0));
+  const w=cand[0];
+  p._teamTenure=0;p._contractEvent=null;p._faYears=0;
+  p.status='futures';
+  p.role=p.isPitcher?(p.pos==='SP'?'rotation':'bullpen'):'bench';
+  if(!p.ss)initSeasonStats(p);
+  w.roster.push(p);
+  w.budget=+((w.budget||0)-fee).toFixed(1);
+  return w;
+}
+
 function buyPlayer(idx){
   const p=G.marketPlayers[idx];
   if(!canSpend(G.myTeam,p.price)){showToast('🚫 사용 가능 자금 부족!');return;}
@@ -163,9 +184,13 @@ function buyPlayer(idx){
     },
     function onFail(reason){
       if(reason==='snatched'){
-        // AI가 빼앗음 → 시장·FA 풀에서 삭제 (다른 구단과 계약한 것으로 처리)
+        // "다른 구단이 더 좋은 조건을 제시했습니다" — 실제로 그 구단에 입단시킨다.
+        // 이전엔 시장에서 지우기만 해서 선수가 어느 로스터에도 없는 채로 사라졌다(연출과 상태 불일치).
+        const taker=_snatchFAWinner(p);
         _removeFromMarket(p);
-        showToast(`🚫 ${p.name}이(가) 다른 구단과 계약했습니다!`);
+        showToast(taker
+          ? `🚫 ${p.name}이(가) ${taker.emoji} ${taker.name}과(와) 계약했습니다!`
+          : `🚫 ${p.name}이(가) 협상을 접었습니다.`);
       }
       if(reason==='exhausted'){
         // 협상 결렬 — 이번 시장에서만 내린다. faPool에는 남겨 다음 스토브리그로 이월
