@@ -118,7 +118,11 @@ function resolvePA(batter, pitcher, ctx){
 //          type — 'HR' | 'BB' | '1B' | '2B' | '3B' | 'E' | 'DP' | 'GB' | 'FB' | 'SF'
 function resolveBaserunning(kind, bases, batter, ctx){
   ctx=ctx||{};
-  const armPen=ctx.armPenalty!=null?ctx.armPenalty:1;
+  // ctx 수치 기본값은 `!=null` 규약으로 통일한다 — `||`는 **0을 기본값으로 되돌린다**.
+  // (gbRate:0을 넘겨도 45%가 땅볼로 새어 "항상 뜬공" 계약이 성립하지 않았고,
+  //  그 탓에 스모크 T30의 희생플라이 가드가 표본마다 통과/실패를 오갔다.)
+  const _n=(v,d)=>v!=null?v:d;
+  const armPen=_n(ctx.armPenalty,1);
   const spd=p=>statEff(p,'speed');
   let runs=0, earned=0, outsAdded=0;
 
@@ -152,7 +156,7 @@ function resolveBaserunning(kind, bases, batter, ctx){
 
   if(kind==='HIT'){
     batter._errorRunner=false;
-    const tripleRate=ctx.tripleRate||0, xbhRate=ctx.xbhRate||0;
+    const tripleRate=_n(ctx.tripleRate,0), xbhRate=_n(ctx.xbhRate,0);
     const hitRoll=Math.random();
     if(hitRoll<tripleRate){
       bases.forEach((b,i)=>{if(b){runs++; if(!b._errorRunner)earned++; bases[i]=null;}});
@@ -188,11 +192,11 @@ function resolveBaserunning(kind, bases, batter, ctx){
   }
 
   // ── 범타 아웃 — 땅볼(병살 체크) / 뜬공(희생플라이 체크) ──
-  const outs=ctx.outs||0;
-  if(Math.random()<(ctx.gbRate||0.45)){
-    const bs=ctx.batSpeed!=null?ctx.batSpeed:50;
+  const outs=_n(ctx.outs,0);
+  if(Math.random()<_n(ctx.gbRate,0.45)){
+    const bs=_n(ctx.batSpeed,50);
     const speedDpMod=bs<=42?1.4:bs>=75?0.6:1.0;
-    if(outs<2&&bases[0]&&Math.random()<(ctx.dpBase||0.09)*speedDpMod){
+    if(outs<2&&bases[0]&&Math.random()<_n(ctx.dpBase,0.09)*speedDpMod){
       if(outs===0&&bases[2]){runs++; if(!bases[2]._errorRunner)earned++; bases[2]=null;}
       if(bases[1]&&!bases[2]){bases[2]=bases[1];bases[1]=null;}
       bases[0]=null;

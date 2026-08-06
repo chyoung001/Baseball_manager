@@ -309,12 +309,28 @@ function _aiMaintainLineup(t){
     if(bench){bench.role='starting';continue;}
     if(!callUp(p=>!p.isPitcher)) break;
   }
+  // 1b) 주전 9명 **초과분 정리**: 하위 OVR을 벤치로.
+  // 채우기만 하고 줄이지 못해 오프시즌에 생긴 13인 타순이 시즌 내내 고착됐다.
+  // 이 축소 경로가 있으면 구세이브도 첫 경기 진행 시 자가 치유된다(마이그레이션 불필요).
+  guard=0;
+  while(activeBat().filter(p=>p.role==='starting').length>9&&guard++<20){
+    const worst=activeBat().filter(p=>p.role==='starting').sort((a,b)=>ovr(a)-ovr(b))[0];
+    if(!worst)break;
+    worst.role='bench';
+  }
   // 2) 로테이션 5 유지: 불펜 승격 → 부족 시 콜업
   guard=0;
   while(activePit().filter(p=>p.role==='rotation').length<5&&guard++<12){
     const bp=activePit().filter(p=>p.role==='bullpen');
     if(bp.length>4){bp.sort((a,b)=>ovr(b)-ovr(a))[0].role='rotation';continue;}
     if(!callUp(p=>p.isPitcher)) break;
+  }
+  // 2b) 로테이션 5 **초과분 정리**: 하위 OVR을 불펜으로 (6인 로테 → 선발 등판 간격 왜곡 방지)
+  guard=0;
+  while(activePit().filter(p=>p.role==='rotation').length>5&&guard++<12){
+    const worst=activePit().filter(p=>p.role==='rotation').sort((a,b)=>ovr(a)-ovr(b))[0];
+    if(!worst)break;
+    worst.role='bullpen';
   }
   // 3) 불펜 최소 4명: 콜업으로 보충
   guard=0;

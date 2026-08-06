@@ -12,6 +12,41 @@ function getOpponent(){
   return o[getCurrentSeries()%o.length];
 }
 
+// ── 시리즈 대진표 (8팀 라운드로빈) ──
+// 내 팀을 고정축으로 한 circle method. 나머지 7팀을 시리즈마다 한 칸씩 회전시키면
+// arr[n]이 항상 others[sIdx%7]가 되어 **getOpponent()와 정의상 일치** → 내 팀 일정은 완전히 보존된다.
+// 21시리즈 = 3회 완전 순환 → 28개 대진이 각 3시리즈(9경기)로 균등.
+//
+// 이전엔 simulateOtherGames가 `teams.filter(...)`의 **배열 인접 인덱스**로 짝을 지어
+// 28대진 중 9개만 성립했다(관측: 데빌즈-타이거즈가 한 시즌 45경기 = 시즌의 71%,
+// 홈 배정도 세이버스 54 / 드림즈 9). AI 순위표가 실력이 아니라 '누구와 묶였는가'로 결정됐고,
+// 드래프트 순서·리그 분배금·구단주 신임도 목표 순위가 전부 그 순위표를 참조한다.
+//
+// 홈 배정: 내 대진은 기존 isMyTeamHome()을 그대로 쓰고, AI 대진은 3회 맞대결을
+// lo → hi → (인덱스합 패리티)로 배분한다 → 팀별 홈 30~33/63 (이상 31.5).
+// (전 대진에 `(sIdx+i)` 패리티를 쓰면 팀의 링 위치 k가 라운드 r에 반비례해 (sIdx+k)가
+//  라운드로빈 내내 상수가 되어 21~39로 흩어진다 — degenerate.)
+function getSeriesPairings(sIdx){
+  const others=G.teams.filter(t=>t!==G.myTeam);
+  const n=others.length;                            // 7
+  const r=((sIdx%n)+n)%n;
+  const arr=[G.myTeam];
+  for(let k=1;k<=n;k++) arr.push(others[(r+k)%n]);  // arr[n] === getOpponent()
+  const idx=t=>G.teams.indexOf(t);
+  const pairs=[];
+  for(let i=0;i<(n+1)/2;i++){
+    const a=arr[i], b=arr[n-i];
+    if(i===0){
+      pairs.push(sIdx%2===0?{home:a,away:b}:{home:b,away:a}); // = isMyTeamHome()
+    }else{
+      const lo=idx(a)<idx(b)?a:b, hi=(lo===a)?b:a, m=Math.floor(sIdx/n);
+      const home=(m===0)?lo:(m===1)?hi:(((idx(lo)+idx(hi))%2===0)?lo:hi);
+      pairs.push({home, away:(home===a)?b:a});
+    }
+  }
+  return pairs;
+}
+
 function getStartingPitcher(team){
   const rot=getRotation(team);
   if(rot.length>0) return rot[team.rotationIdx%rot.length];
@@ -85,6 +120,7 @@ function startMatch(){
     currentPitcher:{home:homeSP,away:awaySP},
     _prevOuts:0,
     relieversUsed:{home:[],away:[]},
+    _seriesIdx:getCurrentSeries(), // 오늘의 시리즈 — endMatch는 G.gameNum++ 뒤라 재계산 불가
     startingPitcher:{home:homeSP,away:awaySP},
     spOutsStart:{home:homeSP&&homeSP.ss?(homeSP.ss.outs||0):0,away:awaySP&&awaySP.ss?(awaySP.ss.outs||0):0},
   };
@@ -571,9 +607,9 @@ function endMatch(){
     }
   });
 
-  // 오늘 상대는 matchState에서 가져온다 — 이 시점엔 G.gameNum이 이미 증가해 getOpponent()가
-  // 시리즈 경계에서 '내일 상대'를 반환하기 때문(자동 경로와의 스케줄 비대칭 원인이었다).
-  simulateOtherGames(s.home===G.myTeam?s.away:s.home);
+  // 오늘의 시리즈는 matchState에서 가져온다 — 이 시점엔 G.gameNum이 이미 증가해
+  // getCurrentSeries()가 시리즈 경계에서 '내일 대진표'를 반환하기 때문(자동 경로와의 스케줄 비대칭 원인).
+  simulateOtherGames(s._seriesIdx);
   processPostGame();
   $('btnPlayMatch').disabled=false;$('btnPlayMatch').textContent=G.gameNum>=G.totalGames?'🏆 시즌 결과 보기':'▶ 다음 경기 시작';
   updateHeader();drawField();
