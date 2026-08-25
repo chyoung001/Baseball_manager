@@ -112,9 +112,9 @@ function _simAIGame(teamA,teamB){
       const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:fldTeam.concept,
         np:pitcher._simNP||0, hasRISP:_hasRISP, isHighLeverage:_hiLev,
         batMentalAmp:_mcBat, pitMentalAmp:_mcPit, avgFielding:avgFld, park:_pf});
-      const _rr=Math.random();
+      const _rr=rnd();
       const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'
-        : (function(){const ip=Math.random();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
+        : (function(){const ip=rnd();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
 
       if(result==='HR'){
         const _b=resolveBaserunning('HR',bases,b,{});
@@ -135,7 +135,7 @@ function _simAIGame(teamA,teamB){
         const _b=resolveBaserunning('HIT',bases,b,{armPenalty, xbhRate:_r.xbhRate, tripleRate:_r.tripleRate});
         if(_b.type!=='1B')bs.xbh++;
         bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
-        if((statEff(b,'speed'))>67&&bases[0]===b&&!bases[1]&&Math.random()<0.12)bs.sb++;
+        if((statEff(b,'speed'))>67&&bases[0]===b&&!bases[1]&&rnd()<0.12)bs.sb++;
       }else{
         bs.ab++;
         const _b=resolveBaserunning('OUT',bases,b,{outs, gbRate:_r.gbRate, batSpeed:_r.batSpeed,
@@ -187,7 +187,7 @@ function _simAIGame(teamA,teamB){
     }
   }
   // 12회까지 동점 → 랜덤 승패 (KBO 무승부 방지)
-  if(runsA===runsB){if(Math.random()<0.5)runsA++;else runsB++;}
+  if(runsA===runsB){if(rnd()<0.5)runsA++;else runsB++;}
 
   // 승패 기록
   const aWin=runsA>runsB;
@@ -314,9 +314,9 @@ function _simMyGame(){
       const _r=resolvePA(b,pitcher,{batConcept:batTeam.concept, fldConcept:pitcherTeam.concept,
         np:pitcher._simNP||0, hasRISP:_hasRISP, isHighLeverage:_hiLev,
         batMentalAmp:_mcBat, pitMentalAmp:_mcPit, avgFielding:avgFld, park:_pf});
-      const _rr=Math.random();
+      const _rr=rnd();
       const result = _rr<_r.pHR?'HR' : _rr<_r.pHR+_r.pK?'K' : _rr<_r.pHR+_r.pK+_r.pBB?'BB'
-        : (function(){const ip=Math.random();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
+        : (function(){const ip=rnd();return ip<_r.pError?'ERROR':ip<_r.pError+_r.babip?'HIT':'OUT';})();
 
       if(result==='HR'){
         const _b=resolveBaserunning('HR',bases,b,{});
@@ -337,7 +337,7 @@ function _simMyGame(){
         const _b=resolveBaserunning('HIT',bases,b,{armPenalty, xbhRate:_r.xbhRate, tripleRate:_r.tripleRate});
         if(_b.type!=='1B')bs.xbh++;
         bs.rbi+=_b.runs;ps.er+=_b.earned;runs+=_b.runs;
-        if((statEff(b,'speed'))>67&&bases[0]===b&&!bases[1]&&Math.random()<0.12)bs.sb++;
+        if((statEff(b,'speed'))>67&&bases[0]===b&&!bases[1]&&rnd()<0.12)bs.sb++;
       }else{
         bs.ab++;
         const _b=resolveBaserunning('OUT',bases,b,{outs, gbRate:_r.gbRate, batSpeed:_r.batSpeed,
@@ -389,7 +389,7 @@ function _simMyGame(){
       if(runsHome!==runsAway) break;
     }
   }
-  if(runsHome===runsAway){if(Math.random()<0.5)runsHome++;else runsAway++;}
+  if(runsHome===runsAway){if(rnd()<0.5)runsHome++;else runsAway++;}
 
   // 승패 기록
   const homeWin=runsHome>runsAway;
@@ -499,10 +499,6 @@ function _simMyGame(){
       p.overseasUntil=null;p.prevRole=null;
     }
   });
-
-  // 팬 이벤트 수익 정산
-  if(G.myTeam.eventRevenue>0){G.myTeam.budget+=G.myTeam.eventRevenue;G.myTeam.eventRevenue=0;}
-  G.fanEventUsedThisGame=false;
 
   simulateOtherGames(getCurrentSeries()); // 오늘 시리즈 명시 (여기선 G.gameNum 증가 전이라 값은 동일하나 의도를 고정)
   processPostGame();

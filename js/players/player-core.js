@@ -24,10 +24,10 @@ function _gradeAge(grade){
   if(grade==='B') return randGauss(27,4,22,36);     // 1군 레귤러
   if(grade==='C'){
     // 50% 콜업 유망주(20~24), 50% 노장(33~38)
-    return Math.random()<0.5 ? randGauss(22,1,20,24) : randGauss(35,1,33,38);
+    return rnd()<0.5 ? randGauss(22,1,20,24) : randGauss(35,1,33,38);
   }
   // D급: 80% 원석(18~22), 20% 은퇴 직전(37~40)
-  return Math.random()<0.8 ? randGauss(20,1,18,22) : randGauss(38,1,37,40);
+  return rnd()<0.8 ? randGauss(20,1,18,22) : randGauss(38,1,37,40);
 }
 
 // 나이 기반 서비스 타임

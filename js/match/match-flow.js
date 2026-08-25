@@ -80,13 +80,6 @@ function startMatch(){
   G.matchInProgress=true;
   $('btnPlayMatch').disabled=true;$('btnPlayMatch').textContent='경기 진행 중...';$('playLog').innerHTML='';
 
-  // 팬 이벤트 사기 부스트 적용
-  if(G.myTeam.moralBoost>0){
-    G.myTeam.roster.filter(p=>p.role!=='overseas').forEach(p=>p.condition=clamp(p.condition+G.myTeam.moralBoost,30,100));
-    addLog(`🎉 팬 이벤트 효과! 선수단 컨디션 +${G.myTeam.moralBoost}`,'hit');
-    G.myTeam.moralBoost=0;
-  }
-
   const opp=getOpponent();const isHome=isMyTeamHome();
   const homeTeam=isHome?G.myTeam:opp;const awayTeam=isHome?opp:G.myTeam;
 
@@ -227,7 +220,7 @@ function simulatePlay(){
       // 돌발 부상: 매우 낮은 확률 (0.05%)
       injuryChance=0.0005;
     }
-    if(Math.random()<injuryChance){
+    if(rnd()<injuryChance){
       const _inj=rollInjuryDuration();
       pitcher.status='il';pitcher.isOnIL=true;pitcher.ilGamesLeft=_inj.games;
       addLog(`🤕 ${pitcher.name} 투구 중 ${_inj.label}! IL ${_inj.games}경기`,'out');
@@ -332,7 +325,7 @@ function simulatePlay(){
   }
 
   // ═══════ TTO 1차 판정 ═══════
-  const ttoRoll=Math.random();
+  const ttoRoll=rnd();
   const _c1=pHR, _c2=_c1+pK, _c3=_c2+pBB;
 
   if(ttoRoll<_c1){
@@ -362,7 +355,7 @@ function simulatePlay(){
     }else addLog(`🚶 ${batter.name} 볼넷`,'hit');
   }else{
     // ═══════ 인플레이 2차 판정 (BABIP + 수비) ═══════
-    const ipRoll=Math.random();
+    const ipRoll=rnd();
     if(ipRoll<pError){
       // ── 수비 에러 → 출루 (에러 기인 주자는 비자책점 처리) ──
       bs.ab++;bt.ab++;
@@ -585,14 +578,6 @@ function endMatch(){
     }
     if((p._recentILReturn||0)>0) p._recentILReturn--;
   });
-
-  // 팬 이벤트 수익 정산
-  if(G.myTeam.eventRevenue>0){
-    G.myTeam.budget+=G.myTeam.eventRevenue;
-    addLog(`💰 팬 이벤트 수익 +${won(G.myTeam.eventRevenue)}`,'hit');
-    G.myTeam.eventRevenue=0;
-  }
-  G.fanEventUsedThisGame=false;
 
   // 해외연수 복귀 처리 (POT 확장 + 스탯 부스트)
   G.myTeam.roster.forEach(p=>{

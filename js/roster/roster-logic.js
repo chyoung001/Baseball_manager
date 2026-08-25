@@ -215,7 +215,7 @@ function autoArrangeRoster(){
 
   // ② 투수 보직: 로테이션 정원 맞추기 (초과분 OVR 낮은 순 불펜行, 부족분 SP 적성·스태미나순 승격)
   const pits=()=>activeOf(p=>p.isPitcher);
-  guard=0;
+  let guard=0;
   while(pits().filter(p=>p.role==='rotation').length>ACTIVE_MIN_SP&&guard++<20){
     const worst=pits().filter(p=>p.role==='rotation').sort((a,b)=>ovr(a)-ovr(b))[0];
     if(!worst)break;worst.role='bullpen';

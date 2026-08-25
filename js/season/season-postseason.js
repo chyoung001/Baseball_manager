@@ -24,7 +24,7 @@ function _simSeries(teamA,teamB,winsNeeded){
   const d=_teamStrength(teamA)-_teamStrength(teamB);
   const pA=clamp(1/(1+Math.pow(10,-d/POSTSEASON_SPREAD)), 0.05, 0.95); // 극단 대진도 5% 이변 여지
   let a=0,b=0;
-  while(a<winsNeeded&&b<winsNeeded){ if(Math.random()<pA) a++; else b++; }
+  while(a<winsNeeded&&b<winsNeeded){ if(rnd()<pA) a++; else b++; }
   return { winner: a>=winsNeeded?teamA:teamB, a, b };
 }
 

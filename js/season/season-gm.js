@@ -12,7 +12,7 @@ function _pickGMProposals(){
 // 8표(유저+AI7) 집계. 반환 {passed, yes, no}
 function _resolveGMProposal(prop, userYes){
   let yes = userYes?1:0;
-  for(let i=0;i<7;i++){ if(Math.random()<(prop.aiSupport!=null?prop.aiSupport:0.5)) yes++; }
+  for(let i=0;i<7;i++){ if(rnd()<(prop.aiSupport!=null?prop.aiSupport:0.5)) yes++; }
   return { passed: yes>=5, yes, no: 8-yes };
 }
 // 가결 안건들의 effect를 seasonModifiers에 적용 (매 회의마다 초기화 후 재적용)

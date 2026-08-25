@@ -223,7 +223,7 @@ function _startRookieDraft(){
   // 드래프트 순서: 전년 최종 순위 역순 (1년차: 랜덤)
   let draftOrder;
   if(G.season===1||!G.previousSeasonStandings||G.previousSeasonStandings.length===0){
-    draftOrder=[...G.teams].sort(()=>Math.random()-0.5);
+    draftOrder=shuffle([...G.teams]);
   }else{
     draftOrder=[...G.previousSeasonStandings].reverse().map(idx=>G.teams[idx]);
   }

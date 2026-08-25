@@ -154,7 +154,7 @@ function calcTradeValueForAI(p,aiTeam){
   const isProspect=st<=PRE_ARB_MAX_SERVICE;
   if(hasBetterStarter&&!isProspect){
     // 이미 더 좋은 주전이 있으면 30~50% 삭감
-    tv=Math.round(tv*(0.5+Math.random()*0.2));
+    tv=Math.round(tv*(0.5+rnd()*0.2));
   }
 
   // ── 3단계: 계약 기간 및 렌탈 프리미엄 ──
@@ -180,7 +180,7 @@ function calcTradeValueForAI(p,aiTeam){
   const expectedWar=pOvr>=75?3:pOvr>=59?1.5:pOvr>=42?0.5:0;
   if(war>expectedWar+1.5){
     // OVR 대비 시즌 성적이 뛰어남 → 15~20% 프리미엄
-    tv=Math.round(tv*(1.15+Math.random()*0.05));
+    tv=Math.round(tv*(1.15+rnd()*0.05));
   }
 
   // ── 6단계: 프랜차이즈 스타 언터처블 프리미엄 ──

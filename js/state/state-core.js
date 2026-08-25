@@ -1,6 +1,6 @@
 // ===================== STATE CORE (Global State + Roster Getters) =====================
 // ===================== GAME STATE =====================
-let G={season:1,gameNum:0,totalGames:TOTAL_REGULAR,teamIdx:0,myTeam:null,teams:[],marketPlayers:[],trainingCooldown:0,matchInProgress:false,matchSpeed:500,currentMarketTab:'bat',fanEventUsedThisGame:false,testMode:false,
+let G={season:1,gameNum:0,totalGames:TOTAL_REGULAR,teamIdx:0,myTeam:null,teams:[],marketPlayers:[],trainingCooldown:0,matchInProgress:false,matchSpeed:500,currentMarketTab:'bat',testMode:false,
   seasonModifiers:{},           // GM 회의로 통과된 이번 시즌 룰 (SeasonModifiers)
   // Season phase system (8-phase: preseason·first_half·allstar·second_half·postseason·awards·gm_meeting·stove_league)
   phase:'preseason',            // current phase id

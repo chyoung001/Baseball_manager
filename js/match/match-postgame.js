@@ -35,7 +35,7 @@ function runFuturesMiniGame(team) {
   const opp_stuff = 55 * FUTURES_PITCHER_DEBUFF; // weaker minor-league opposition
   const hits = fb.filter(p=>{
     const hc = (p.contact||40)/((p.contact||40)+opp_stuff);
-    return Math.random() < hc;
+    return rnd() < hc;
   }).length;
   const oppRuns = rand(1,5);
   const runs = hits + rand(0,2);
