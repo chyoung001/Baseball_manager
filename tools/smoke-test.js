@@ -2126,6 +2126,101 @@ check('T42: 편향 셔플 소스 부재 (generateDraftPool·_startRookieDraft가
   g('generateDraftPool.toString()').includes('shuffle(') &&
   g('_startRookieDraft.toString()').includes('shuffle('));
 
+section('T43. AI 재투자 — 육성 티어 돌파 (fix/#27)');
+// 결함 C(전력 런어웨이): floor(devLevel/30) 성장티어가 baseDevLevel 그대로 12시즌 고정돼
+// 최종 전력 순위가 티어와 완전히 일치했다(전력SD 3.45→11.14 발산). 원인은 코치 9종×5레벨
+// (완주 1,080억)이 재투자 루프의 첫 분기를 독점해 육성·시설 분기에 영구 미도달한 것.
+// 티어 경계가 사정권일 때 육성을 최우선으로 집행해 뒤처진 팀이 스스로 인양되게 한다.
+const reinv = g(`(function(){try{
+  const out=[];
+  [4242, 777, 31337].forEach(function(sd){
+    srand(sd);
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=TOTAL_REGULAR; G.phase='stove_league';
+    const ai=G.teams.filter(t=>t!==G.myTeam);
+    ai.forEach(t=>{ t.budget=300; });   // war=(300-120)*0.45=81억 — 육성 투자 6~10억을 충분히 감당
+    ai[0].devLevel=55;                  // 경계 60까지 5p → 사정권 → 티어 1→2로 올라야 한다
+    _startNextSeason();
+    const a0=G.teams.filter(t=>t!==G.myTeam)[0];
+    out.push({dev:a0.devLevel, tier:Math.floor(a0.devLevel/30)});
+  });
+  return {out:out, err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T43: 티어 경계 사정권(dev 55) 팀이 육성 투자를 집행 — 3시드 모두 티어 1→2 (관측 ${reinv.out ? reinv.out.map(o=>o.dev+'/'+o.tier).join(' · ') : '—'})`,
+  !reinv.err && reinv.out.length === 3 && reinv.out.every(o => o.dev >= 60 && o.tier >= 2), JSON.stringify(reinv));
+// 순서가 핵심이다 — 코치 분기 뒤에 두면 1,080억을 다 쓸 때까지 도달하지 못해 처방이 무효가 된다
+const _sf = g('_startNextSeason.toString()');
+const _iEdge = _sf.indexOf('_edge'), _iCoach = _sf.indexOf('Object.keys(team.coachStaff)');
+check('T43: 육성 티어 분기가 코치 분기보다 앞 (순서가 뒤집히면 처방이 무효)',
+  _iEdge >= 0 && _iCoach >= 0 && _iEdge < _iCoach, JSON.stringify({edge:_iEdge, coach:_iCoach}));
+// 사정권 밖(경계까지 25~30p)은 종전 순서를 타야 한다 — 무제한 우선이면 AI 전 팀이 dev 90으로
+// 몰려 '육성 명가' 컨셉이 사라지고 절대능력 인플레가 커진다(계측: raw 41.9 → 47.9).
+check('T43: 사정권 상한 12p·경계 90 유지 (무제한 육성 우선 아님)',
+  /_edge\s*<=\s*90/.test(_sf) && /_edge\s*-\s*_dev\s*<=\s*12/.test(_sf));
+
+section('T44. 상태 영속·불펜 경로 정합 (fix/#27 후속)');
+
+// ── A-1. 스카우팅 티켓이 새 세션 로드 후 보존되는가 ──
+// _scoutTickets가 스냅샷에 없어 새 세션에서 undefined가 됐고, 소비처가 둘 다 `||0`으로 읽어
+// 0장이 됐다. renderDraft의 12장 폴백은 draftPool이 빈 경우에만 도는데 draftPool은 저장되므로
+// 도달하지 않는다. ⚠️ 같은 컨텍스트에서 G를 비우지 않고 라운드트립하면 기존 값이 남아
+// 가드가 그냥 통과해 버린다 — 반드시 필드를 지우고 복원해야 한다.
+const tick = g(`(function(){try{
+  srand(555); G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=5; G.phase='first_half';
+  G._scoutTickets=12; G.draftPool=generateDraftPool(); G._scoutTickets=3;   // 9장 소비
+  const snap=JSON.parse(JSON.stringify(_buildSnapshot()));
+  const inSnap=('_scoutTickets' in snap);
+  delete G._scoutTickets; G.draftPool=[]; G.teams=[]; G.myTeam=null;        // 새 세션 흉내
+  _restoreFromData(snap);
+  const afterLoad=G._scoutTickets;
+  renderDraft();
+  const afterRender=G._scoutTickets, ui=(G._scoutTickets||0);
+  // 구 세이브(필드 없음) 폴백 — 시즌 초 지급량으로 복원돼야 한다
+  const old=JSON.parse(JSON.stringify(snap)); delete old._scoutTickets;
+  delete G._scoutTickets; G.teams=[]; G.myTeam=null;
+  _restoreFromData(old);
+  return {inSnap:inSnap, afterLoad:afterLoad, afterRender:afterRender, ui:ui, legacy:G._scoutTickets, err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T44: _scoutTickets가 스냅샷에 포함 (관측 ${tick.inSnap})`, !tick.err && tick.inSnap === true, JSON.stringify(tick));
+check(`T44: 새 세션 로드 후 잔여 티켓 보존 — 3장 (로드 ${tick.afterLoad} · 드래프트 진입 후 ${tick.afterRender} · UI ${tick.ui})`,
+  !tick.err && tick.afterLoad === 3 && tick.afterRender === 3 && tick.ui === 3, JSON.stringify(tick));
+check(`T44: 구 세이브(_scoutTickets 없음)는 12장 폴백 (관측 ${tick.legacy})`,
+  !tick.err && tick.legacy === 12, JSON.stringify(tick));
+
+// ── A-2. 불펜 선택이 단일 소스인가 ──
+// 관전 경로에 45줄 인라인 규칙이 따로 있어, 상황별 '첫 역할'만 찾고 없으면 다음 규칙으로
+// 흘러 폴백 bp[0](아무나)에 닿았다. _pickReliever는 역할 우선순위 배열로 순차 폴백한다.
+const _sp = g('simulatePlay.toString()');
+check('T44: 관전 경로가 _pickReliever를 사용 (인라인 역할 탐색 부재)',
+  _sp.includes('_pickReliever(') && !/bp\.find\(\s*p\s*=>\s*p\.pos\s*===/.test(_sp),
+  JSON.stringify({usesPick:_sp.includes('_pickReliever('), hasInline:/bp\.find\(\s*p\s*=>\s*p\.pos\s*===/.test(_sp)}));
+// 같은 상황·같은 불펜이면 두 경로가 같은 투수를 골라야 한다 (SU 없이 MR만 있는 7회 동점)
+const same = g(`(function(){try{
+  srand(31337); G.teamIdx=0; initTeams(0);
+  const t=G.teams[1];
+  getPitchers(t).forEach(p=>{p._pitchedThisGame=false;p.condition=100;p._consecutiveDaysPitched=0;});
+  const bp=getBullpen(t);
+  bp.forEach(p=>{p.pos='MR';});          // SU·CP·LR 없음 — 인라인 규칙이 폴백으로 새던 조합
+  const a=_pickReliever(t,7,0);          // 7회 동점
+  bp.forEach(p=>{p._pitchedThisGame=false;});
+  const b=_pickReliever(t,7,0);
+  return {a:a?a.name:null, b:b?b.name:null, tag:_relieverTag(a,7,0), err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T44: 7회 동점·MR만 있는 불펜에서 결정론적 동일 선택 (관측 ${same.a} / ${same.b} · ${same.tag})`,
+  !same.err && same.a !== null && same.a === same.b, JSON.stringify(same));
+
+// ── A-3. AI 경기에도 이닝 중 강판이 있는가 ──
+// 관전·자동시뮬은 타석마다 판정하는데 _simAIGame이 쓰는 simHalf에는 판정 자체가 없어,
+// 한 이닝에 대량 실점이 나도 그 이닝이 끝날 때까지 같은 투수가 던졌다. 리그 8경기 중 7경기가
+// 이 경로라 실점 분포·순위·전력지표가 다른 경로와 어긋나 있었다.
+const _ai = g('_simAIGame.toString()');
+const _iHalf = _ai.indexOf('function simHalf('), _iLoop = _ai.indexOf('for(let inn=1');
+const _halfBody = (_iHalf >= 0 && _iLoop > _iHalf) ? _ai.slice(_iHalf, _iLoop) : '';
+check('T44: simHalf(AI 반이닝) 안에 이닝 중 강판 판정 존재',
+  _halfBody.includes('shouldHookPitcher') && _halfBody.includes('_pickReliever'),
+  JSON.stringify({found:_iHalf>=0, hasHook:_halfBody.includes('shouldHookPitcher')}));
+check('T44: 교체가 pitRef로 호출부에 전파 (값 전달이면 이닝 밖에서 유실)',
+  _halfBody.includes('pitRef.p') && _ai.includes('pitRefA') && _ai.includes('pitRefB'));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');

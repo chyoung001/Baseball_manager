@@ -453,6 +453,17 @@ function _startNextSeason(){
     team.coachStaff=team.coachStaff||{};
     let guard=0;
     while(war>=8 && guard++<60){
+      // ① 육성 티어 돌파 — floor(devLevel/30)이 오르면 소속 전 선수의 연간 성장이 +1이 된다
+      //    (season-core의 baseGrowth). 코치는 9종×5레벨에 레벨업 비용 8*(lv+1)이라 완주에
+      //    1,080억이 들고, 그 전까지 아래 lks 분기에 도달하지 못한다 — 12시즌 계측에서
+      //    devLevel이 baseDevLevel 그대로 고정돼 성장티어 {1,2,3}이 영구화됐고, 전력SD가
+      //    3.45→11.14로 발산했다(최종 전력 순위가 성장티어와 완전히 일치).
+      //    경계가 사정권일 때만 우선하므로, 뒤처진 팀(티어 경계가 가까운 팀)이 먼저 집행해
+      //    음의 피드백으로 작동한다. 티어를 막 넘은 팀은 다음 경계가 25~30p라 종전 순서를 탄다.
+      //    비용·증가폭은 아래 lks 분기 값을 그대로 쓰고 경계 30/60/90도 기존 성장 공식의
+      //    것이라, 새로 도입한 밸런스 상수는 없다.
+      const _dev=team.devLevel||0, _edge=(Math.floor(_dev/30)+1)*30;
+      if(_edge<=90 && _edge-_dev<=12 && spend(rand(6,10))){ team.devLevel=clamp(_dev+rand(3,6),0,100); continue; }
       const cks=Object.keys(team.coachStaff).filter(k=>(team.coachStaff[k]||0)<5);
       if(cks.length){ const k=pick(cks),lv=team.coachStaff[k]||0; if(spend(8*(lv+1))){team.coachStaff[k]=lv+1;continue;} }
       if((team.slumpCareLevel||0)<4 && spend(FACILITY4_COSTS[team.slumpCareLevel||0])){team.slumpCareLevel=(team.slumpCareLevel||0)+1;continue;}

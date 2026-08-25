@@ -272,6 +272,22 @@ function _pickReliever(team, inn, lead){
   return _commit(bp[0]);
 }
 
+// 등판 상황 라벨 (표시 전용) — _pickReliever의 역할 우선순위와 같은 분기를 읽어 재구성한다.
+// 선택 로직과 라벨을 한 파일에 두어, 규칙을 바꿀 때 둘이 어긋나지 않게 한다.
+function _relieverTag(p, inn, lead){
+  if(!p) return '🔄 불펜';
+  if(inn>=9 && lead>=1 && lead<=3 && p.pos==='CP')       return '🔒 마무리';
+  if(inn>=9 && lead>=1 && p.pos==='SU')                  return '⚡ 필승조(마무리 대행)';
+  if(inn>=9 && lead>=4 && (p.pos==='MR'||p.pos==='LR'))  return '🔄 추격조';
+  if(inn>=7 && lead>=0 && p.pos==='SU')                  return '⚡ 필승조';
+  if(inn>=6 && lead<0 && lead>=-4 && p.pos==='MR')       return '🔄 추격조';
+  if(p.pos==='LR') return '📋 롱릴리프';
+  if(p.pos==='CP') return '🔒 마무리';
+  if(p.pos==='SU') return '⚡ 필승조';
+  if(p.pos==='MR') return '🔄 추격조';
+  return '🔄 불펜';
+}
+
 // ── OVR 구간별 동적 레벨업 요구 XP (계단식 성장) ──
 function getRequiredXP(p){
   const o=ovr(p);

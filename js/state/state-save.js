@@ -49,6 +49,11 @@ function _buildSnapshot(){
     teamIdx:G.teamIdx, trainingCooldown:G.trainingCooldown||0, matchSpeed:G.matchSpeed,
     currentMarketTab:G.currentMarketTab,
     testMode:G.testMode,
+    // 드래프트 스카우팅 티켓 — 빠져 있으면 새 세션 로드 시 undefined가 되고, 소비처가 둘 다
+    // `G._scoutTickets||0` 로 읽어 0장이 된다(renderDraft의 12장 폴백은 draftPool이 빈
+    // 경우에만 도는데 draftPool은 여기 저장되므로 도달하지 않는다).
+    _scoutTickets:G._scoutTickets,
+    expandedEntryNotified:G.expandedEntryNotified||false,
     phase:G.phase,
     _stoveSettledSeason:G._stoveSettledSeason||0,
     _faMarketSeason:G._faMarketSeason||0, // FA 시장 구성 멱등 가드 (미저장 시 재로드로 리롤 부활)
@@ -101,6 +106,9 @@ function _restoreFromData(d){
   G.teamIdx=d.teamIdx||0; G.trainingCooldown=d.trainingCooldown||0;
   G.matchSpeed=d.matchSpeed||500; G.currentMarketTab=d.currentMarketTab||'bat';
   G.testMode=d.testMode!=null?d.testMode:false;
+  // 구 세이브(_scoutTickets 이전)는 시즌 초 지급량으로 폴백 — 스키마 증가 불필요
+  G._scoutTickets=d._scoutTickets!=null?d._scoutTickets:12;
+  G.expandedEntryNotified=d.expandedEntryNotified||false;
   G.matchInProgress=false;
   // Phase & new fields 복원
   G.phase=d.phase||'preseason';

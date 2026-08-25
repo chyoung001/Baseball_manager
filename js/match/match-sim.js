@@ -59,8 +59,8 @@ function _simAIGame(teamA,teamB){
   const pitB=spB.length>0?spB[teamB.rotationIdx%spB.length]:null;
   // 현재/마지막 투수 — 경기 단위로 유지한다. 이전엔 `curPitA/B` 선언이 이닝 for 루프 안에 있어
   // 매 이닝 선발로 되돌아갔고(릴리버는 1이닝 초과 불가), 불펜 소진 시 탈진한 선발이 마운드에 복귀했다.
-  let curPitA=pitA, curPitB=pitB;
-  let lastPitA=pitA, lastPitB=pitB;
+  // 투수 참조({p:현재, last:마지막}) — simHalf의 이닝 중 교체가 여기로 전파된다(simHalfFull과 동일 구조)
+  const pitRefA={p:pitA,last:pitA}, pitRefB={p:pitB,last:pitB};
   let runsA=0,runsB=0;
   const _boA={i:0},_boB={i:0}; // 게임 단위 타순 연속
   const spAOutsBefore=pitA&&pitA.ss?(pitA.ss.outs||0):0;
@@ -78,9 +78,10 @@ function _simAIGame(teamA,teamB){
   // walkoffTarget>0: 끝내기 상황, runs>=walkoffTarget이면 즉시 종료
   // `inning`/`lead`는 고레버리지 판정용 — 관전 경로(match-flow)와 동일 공식을 쓰기 위해 받는다.
   // `lead`는 **수비(투수)팀 기준** 점수차 (simHalfFull·_pickReliever와 동일 기준으로 통일).
-  function simHalf(batTeam,batters,pitcher,fldTeam,inning,lead,walkoffTarget,ord){
+  function simHalf(batTeam,batters,pitRef,fldTeam,inning,lead,walkoffTarget,ord){
     ord=ord||{i:0}; // 타순 연속 (게임 단위 유지 — 이닝마다 1번부터 리셋 금지)
     let outs=0,runs=0,pa=0;
+    let pitcher=pitRef.p;
     if(!pitcher||batters.length===0)return rand(0,3);
     const _pf=getParkFactor(teamA); // 홈구장(teamA) 파크팩터 — 양팀 공통
     // 팀 컨셉 보너스는 resolvePA가 ctx.batConcept/fldConcept에서 단일 계산
@@ -99,6 +100,15 @@ function _simAIGame(teamA,teamB){
     let bases=[null,null,null];
 
     while(outs<3&&pa<50){
+      // 이닝 중 강판 (shouldHookPitcher 통합) — 교체 시 pitRef로 호출부에 전파.
+      // 이전엔 AI 경기만 이닝 선두에서만 판정해, 한 이닝에 대량 실점이 나도 그 이닝이 끝날
+      // 때까지 같은 투수가 던졌다. 리그 8경기 중 7경기가 이 경로라 실점 분포·순위·전력지표가
+      // 관전/자동 경로와 어긋나 있었다.
+      const _curER=((pitcher.ss&&pitcher.ss.er)||0)-(pitcher._simERBase||0);
+      if(shouldHookPitcher(pitcher,inning,_curER,fldTeam.concept)){
+        const emgPick=_pickReliever(fldTeam,inning,lead);
+        if(emgPick){pitcher=emgPick;pitcher._simNP=0;pitRef.p=pitcher;pitRef.last=pitcher;}
+      }
       const b=batters[ord.i%batters.length];ord.i++;pa++;
       const bs=b.ss||(initSeasonStats(b),b.ss);
       const ps=pitcher.ss||(initSeasonStats(pitcher),pitcher.ss);
@@ -150,39 +160,34 @@ function _simAIGame(teamA,teamB){
     return runs;
   }
 
+  // 이닝 선두 강판 (simHalfFull 호출부와 동일 헬퍼 형태)
+  const _hook=(ref,inn,lead,team)=>{
+    if(shouldHookPitcher(ref.p,inn,_todayER(ref.p),team.concept)){
+      const pick=_pickReliever(team,inn,lead);
+      if(pick){ref.p=pick;ref.last=pick;}
+    }
+  };
+
   // 9이닝 시뮬 (Away=teamB 선공, Home=teamA 후공)
   for(let inn=1;inn<=9;inn++){
-    // NP·당일 실점 기반 강판 판정 (shouldHookPitcher 통합)
-    if(shouldHookPitcher(curPitA,inn,_todayER(curPitA),teamA.concept)){
-      const pickA=_pickReliever(teamA,inn,runsA-runsB);
-      if(pickA){curPitA=pickA;lastPitA=pickA;}
-    }
-    if(shouldHookPitcher(curPitB,inn,_todayER(curPitB),teamB.concept)){
-      const pickB=_pickReliever(teamB,inn,runsB-runsA);
-      if(pickB){curPitB=pickB;lastPitB=pickB;}
-    }
-    runsB+=simHalf(teamB,batB,curPitA,teamA,inn,runsA-runsB,0,_boB);
+    _hook(pitRefA,inn,runsA-runsB,teamA);
+    _hook(pitRefB,inn,runsB-runsA,teamB);
+    runsB+=simHalf(teamB,batB,pitRefA,teamA,inn,runsA-runsB,0,_boB);
     if(inn===9&&runsA>runsB) break;
     const wotA=inn>=9?(runsB-runsA+1):0;
-    runsA+=simHalf(teamA,batA,curPitB,teamB,inn,runsB-runsA,wotA,_boA);
+    runsA+=simHalf(teamA,batA,pitRefB,teamB,inn,runsB-runsA,wotA,_boA);
     if(inn>=9&&runsA>runsB) break;
   }
 
   // 연장전 (10~12회)
   if(runsA===runsB){
     for(let inn=10;inn<=12;inn++){
-      if(shouldHookPitcher(curPitA,inn,_todayER(curPitA),teamA.concept)){
-        const pickA=_pickReliever(teamA,inn,runsA-runsB);
-        if(pickA){curPitA=pickA;lastPitA=pickA;}
-      }
-      if(shouldHookPitcher(curPitB,inn,_todayER(curPitB),teamB.concept)){
-        const pickB=_pickReliever(teamB,inn,runsB-runsA);
-        if(pickB){curPitB=pickB;lastPitB=pickB;}
-      }
-      runsB+=simHalf(teamB,batB,curPitA,teamA,inn,runsA-runsB,0,_boB);
+      _hook(pitRefA,inn,runsA-runsB,teamA);
+      _hook(pitRefB,inn,runsB-runsA,teamB);
+      runsB+=simHalf(teamB,batB,pitRefA,teamA,inn,runsA-runsB,0,_boB);
       if(runsA>runsB) break;
       const wotA=runsB-runsA+1;
-      runsA+=simHalf(teamA,batA,curPitB,teamB,inn,runsB-runsA,wotA,_boA);
+      runsA+=simHalf(teamA,batA,pitRefB,teamB,inn,runsB-runsA,wotA,_boA);
       if(runsA!==runsB) break;
     }
   }
@@ -211,33 +216,33 @@ function _simAIGame(teamA,teamB){
   if(aWin){
     // 승리 투수 (A팀)
     if(pitA&&pitA.ss&&spAOuts>=SP_WIN_MIN_OUTS)pitA.ss.w++;
-    else if(lastPitA&&lastPitA!==pitA&&lastPitA.ss)lastPitA.ss.w++;
+    else if(pitRefA.last&&pitRefA.last!==pitA&&pitRefA.last.ss)pitRefA.last.ss.w++;
     else if(pitA&&pitA.ss)pitA.ss.w++;
     // 패배 투수 (B팀): 선발 5이닝 미만 → SP, 5이닝+ → 마지막 릴리버
     if(spBOuts<SP_WIN_MIN_OUTS){
       if(pitB&&pitB.ss)pitB.ss.l++;
     }else{
-      if(lastPitB&&lastPitB!==pitB&&lastPitB.ss)lastPitB.ss.l++;
+      if(pitRefB.last&&pitRefB.last!==pitB&&pitRefB.last.ss)pitRefB.last.ss.l++;
       else if(pitB&&pitB.ss)pitB.ss.l++;
     }
   }else{
     // 승리 투수 (B팀)
     if(pitB&&pitB.ss&&spBOuts>=SP_WIN_MIN_OUTS)pitB.ss.w++;
-    else if(lastPitB&&lastPitB!==pitB&&lastPitB.ss)lastPitB.ss.w++;
+    else if(pitRefB.last&&pitRefB.last!==pitB&&pitRefB.last.ss)pitRefB.last.ss.w++;
     else if(pitB&&pitB.ss)pitB.ss.w++;
     // 패배 투수 (A팀): 선발 5이닝 미만 → SP, 5이닝+ → 마지막 릴리버
     if(spAOuts<SP_WIN_MIN_OUTS){
       if(pitA&&pitA.ss)pitA.ss.l++;
     }else{
-      if(lastPitA&&lastPitA!==pitA&&lastPitA.ss)lastPitA.ss.l++;
+      if(pitRefA.last&&pitRefA.last!==pitA&&pitRefA.last.ss)pitRefA.last.ss.l++;
       else if(pitA&&pitA.ss)pitA.ss.l++;
     }
   }
   // SV: 승리팀 마지막 투수 (선발이 아니고, 실제 등판했고, 최종 점수차 3점 이하)
   const _margin=Math.abs(runsA-runsB);
   const _threw=p=>!!p&&(p._simNP||0)>0; // 교체 예약만 되고 등판 전 경기 종료된 투수 배제
-  if(aWin&&lastPitA&&lastPitA!==pitA&&lastPitA.ss&&_threw(lastPitA)&&_margin<=3)lastPitA.ss.sv++;
-  if(!aWin&&lastPitB&&lastPitB!==pitB&&lastPitB.ss&&_threw(lastPitB)&&_margin<=3)lastPitB.ss.sv++;
+  if(aWin&&pitRefA.last&&pitRefA.last!==pitA&&pitRefA.last.ss&&_threw(pitRefA.last)&&_margin<=3)pitRefA.last.ss.sv++;
+  if(!aWin&&pitRefB.last&&pitRefB.last!==pitB&&pitRefB.last.ss&&_threw(pitRefB.last)&&_margin<=3)pitRefB.last.ss.sv++;
 }
 
 // ===================== AUTO-SIM (빠른 진행) =====================
