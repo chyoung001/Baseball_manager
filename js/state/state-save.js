@@ -47,7 +47,7 @@ function _buildSnapshot(){
   return {
     _v:5, season:G.season, gameNum:G.gameNum, totalGames:G.totalGames,
     teamIdx:G.teamIdx, trainingCooldown:G.trainingCooldown||0, matchSpeed:G.matchSpeed,
-    currentMarketTab:G.currentMarketTab, fanEventUsedThisGame:G.fanEventUsedThisGame,
+    currentMarketTab:G.currentMarketTab,
     testMode:G.testMode,
     phase:G.phase,
     _stoveSettledSeason:G._stoveSettledSeason||0,
@@ -100,7 +100,7 @@ function _restoreFromData(d){
   G.season=d.season||1; G.gameNum=d.gameNum||0; G.totalGames=d.totalGames||TOTAL_REGULAR;
   G.teamIdx=d.teamIdx||0; G.trainingCooldown=d.trainingCooldown||0;
   G.matchSpeed=d.matchSpeed||500; G.currentMarketTab=d.currentMarketTab||'bat';
-  G.fanEventUsedThisGame=d.fanEventUsedThisGame||false; G.testMode=d.testMode!=null?d.testMode:false;
+  G.testMode=d.testMode!=null?d.testMode:false;
   G.matchInProgress=false;
   // Phase & new fields 복원
   G.phase=d.phase||'preseason';

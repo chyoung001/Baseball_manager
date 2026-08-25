@@ -8,28 +8,28 @@ function generateDraftPool(){
   // 이전엔 seasonModifiers.draftQualityBonus가 어디서도 소비되지 않아 가결해도 효과 0이던 죽은 modifier.
   const dq=(G.seasonModifiers&&G.seasonModifiers.draftQualityBonus)||0;
   // 1. 최소 보장 (1~3픽용 대어) — 풍년 시 3번째 대어도 S로 승급
-  pool.push(genDraftProspect(Math.random()<0.5, 'S'));
-  pool.push(genDraftProspect(Math.random()<0.5, 'A'));
-  pool.push(genDraftProspect(Math.random()<0.5, dq>0?'S':'A'));
+  pool.push(genDraftProspect(rnd()<0.5, 'S'));
+  pool.push(genDraftProspect(rnd()<0.5, 'A'));
+  pool.push(genDraftProspect(rnd()<0.5, dq>0?'S':'A'));
   // 2. 나머지 45명 확률형 생성 (풍년 시 상위 등급 임계 확대 → D↓)
   for(let i=0;i<45;i++){
-    const r=Math.random()*100;
+    const r=rnd()*100;
     let g='D';
     if(r<0.5+dq*0.3) g='S';       // 기본 0.5% (황금 세대 잭팟)
     else if(r<12.0+dq*2.5) g='A'; // 기본 11.5%
     else if(r<56.0+dq*3) g='B';   // 기본 44.0%
     else if(r<90.0+dq*2) g='C';   // 기본 34.0%
     // 나머지 = D급
-    pool.push(genDraftProspect(Math.random()<0.5, g));
+    pool.push(genDraftProspect(rnd()<0.5, g));
   }
   // 3. 스카우팅 블라인드 (셔플)
-  return pool.sort(()=>Math.random()-0.5);
+  return shuffle(pool);
 }
 
 // ═══════════════════════════════════════════════════════
 // TEAM ROSTER GENERATION (등급 분포 적용)
 // ═══════════════════════════════════════════════════════
-function genTeamRoster(_tier, concept, isMyTeam){
+function genTeamRoster(concept, isMyTeam){
   const _t=isMyTeam ? 'my' : null;
   const roster=[];
 
@@ -43,7 +43,7 @@ function genTeamRoster(_tier, concept, isMyTeam){
   // 벤치 5명: C~D 급 위주
   const benchPos=['C','SS','CF','1B','RF'];
   benchPos.forEach(pos=>{
-    const benchGrade=Math.random()<0.6 ? 'B' : 'C';
+    const benchGrade=rnd()<0.6 ? 'B' : 'C';
     const p=genBatter(pos, benchGrade, concept, _t);
     p.role='bench';
     roster.push(p);
@@ -59,13 +59,13 @@ function genTeamRoster(_tier, concept, isMyTeam){
   // 2군: C~D급 (DH 제외)
   const fieldPos=['C','1B','2B','3B','SS','LF','CF','RF'];
   for(let i=0;i<5;i++){
-    const g=Math.random()<0.4 ? 'D' : 'C';
+    const g=rnd()<0.4 ? 'D' : 'C';
     const p=genBatter(pick(fieldPos), g, null, _t);
     p.role='bench'; p.status='futures';
     roster.push(p);
   }
   for(let i=0;i<4;i++){
-    const g=Math.random()<0.4 ? 'D' : 'C';
+    const g=rnd()<0.4 ? 'D' : 'C';
     const p=genPitcher(pick(['SP','SP','MR','MR']), g, null, _t);
     p.status='futures';
     roster.push(p);

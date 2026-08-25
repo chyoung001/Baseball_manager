@@ -1,11 +1,34 @@
 // ===================== UTILS-CORE (Pure Utilities & Formatting) =====================
-function rand(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
+
+// ── 시드 가능 PRNG (mulberry32) — 전 난수의 단일 소스 ──
+// rand/pick/randGauss/randomGaussian이 모두 rnd()를 경유하므로, srand(N)으로 상태를 고정하면
+// 시즌 전체가 결정론적으로 재현된다(수정 전후 비교를 표본 흔들림과 분리하기 위한 장치).
+// 시드 미지정 시 Date.now()로 자동 시드 → 일반 플레이는 기존과 동일한 비결정론이 기본값.
+// ⚠️ 런타임 전용 — 세이브 스키마에 넣지 않는다 (_v 불변).
+let _rngState=(Date.now()^0x9E3779B9)>>>0;
+let _rngSeed=_rngState;
+function srand(seed){_rngSeed=seed>>>0;_rngState=_rngSeed;}
+function getSeed(){return _rngSeed;}
+function rnd(){
+  _rngState=(_rngState+0x6D2B79F5)|0;
+  let t=Math.imul(_rngState^(_rngState>>>15),1|_rngState);
+  t=(t+Math.imul(t^(t>>>7),61|t))^t;
+  return ((t^(t>>>14))>>>0)/4294967296;
+}
+// Fisher-Yates — 균등 순열 보장. sort(()=>rnd()-0.5)는 비일관 비교자라 명세상 구현 정의 동작이고
+// 실제로 균등하지 않다(V8에서 앞쪽 원소가 앞에 남는 편향). in-place 셔플 후 같은 배열을 반환.
+function shuffle(arr){
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));const t=arr[i];arr[i]=arr[j];arr[j]=t;}
+  return arr;
+}
+
+function rand(a,b){return Math.floor(rnd()*(b-a+1))+a;}
 function pick(arr){return arr[rand(0,arr.length-1)];}
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
 // Box-Muller 정규분포 난수 (평균 mean, 표준편차 stdDev)
 function randomGaussian(mean,stdDev){
   let u,v,s;
-  do{u=Math.random()*2-1;v=Math.random()*2-1;s=u*u+v*v;}while(s>=1||s===0);
+  do{u=rnd()*2-1;v=rnd()*2-1;s=u*u+v*v;}while(s>=1||s===0);
   const mul=Math.sqrt(-2*Math.log(s)/s);
   return mean+stdDev*u*mul;
 }

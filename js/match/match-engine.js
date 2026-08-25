@@ -157,7 +157,7 @@ function resolveBaserunning(kind, bases, batter, ctx){
   if(kind==='HIT'){
     batter._errorRunner=false;
     const tripleRate=_n(ctx.tripleRate,0), xbhRate=_n(ctx.xbhRate,0);
-    const hitRoll=Math.random();
+    const hitRoll=rnd();
     if(hitRoll<tripleRate){
       bases.forEach((b,i)=>{if(b){runs++; if(!b._errorRunner)earned++; bases[i]=null;}});
       bases[2]=batter;
@@ -168,7 +168,7 @@ function resolveBaserunning(kind, bases, batter, ctx){
       if(bases[1]){runs++; if(!bases[1]._errorRunner)earned++; bases[1]=null;}
       if(bases[0]){
         const r0=bases[0];
-        if(spd(r0)>59&&Math.random()*100<spd(r0)*armPen*0.55){runs++; if(!r0._errorRunner)earned++; bases[0]=null;}
+        if(spd(r0)>59&&rnd()*100<spd(r0)*armPen*0.55){runs++; if(!r0._errorRunner)earned++; bases[0]=null;}
         else{bases[2]=bases[0]; bases[0]=null;}
       }
       bases[1]=batter;
@@ -178,12 +178,12 @@ function resolveBaserunning(kind, bases, batter, ctx){
     if(bases[2]){runs++; if(!bases[2]._errorRunner)earned++; bases[2]=null;}
     if(bases[1]){
       const r1=bases[1];
-      if(Math.random()*100<Math.min(75,spd(r1)*armPen*1.5)){runs++; if(!r1._errorRunner)earned++; bases[1]=null;}
+      if(rnd()*100<Math.min(75,spd(r1)*armPen*1.5)){runs++; if(!r1._errorRunner)earned++; bases[1]=null;}
       else if(!bases[2]){bases[2]=bases[1]; bases[1]=null;}
     }
     if(bases[0]){
       const r0=bases[0];
-      if(spd(r0)>75&&Math.random()*100<spd(r0)*armPen*0.35&&!bases[2]) bases[2]=r0;
+      if(spd(r0)>75&&rnd()*100<spd(r0)*armPen*0.35&&!bases[2]) bases[2]=r0;
       else bases[1]=r0;
       bases[0]=null;
     }
@@ -193,10 +193,10 @@ function resolveBaserunning(kind, bases, batter, ctx){
 
   // ── 범타 아웃 — 땅볼(병살 체크) / 뜬공(희생플라이 체크) ──
   const outs=_n(ctx.outs,0);
-  if(Math.random()<_n(ctx.gbRate,0.45)){
+  if(rnd()<_n(ctx.gbRate,0.45)){
     const bs=_n(ctx.batSpeed,50);
     const speedDpMod=bs<=42?1.4:bs>=75?0.6:1.0;
-    if(outs<2&&bases[0]&&Math.random()<_n(ctx.dpBase,0.09)*speedDpMod){
+    if(outs<2&&bases[0]&&rnd()<_n(ctx.dpBase,0.09)*speedDpMod){
       if(outs===0&&bases[2]){runs++; if(!bases[2]._errorRunner)earned++; bases[2]=null;}
       if(bases[1]&&!bases[2]){bases[2]=bases[1];bases[1]=null;}
       bases[0]=null;
@@ -205,12 +205,12 @@ function resolveBaserunning(kind, bases, batter, ctx){
     return {runs, earned, outsAdded:1, type:'GB'};
   }
   // 뜬공 — 라인드라이브(30%)는 태그업 불가
-  const isLine=Math.random()<0.3;
+  const isLine=rnd()<0.3;
   outsAdded=1;
   if(!isLine&&bases[2]&&outs+1<3){
     const sfRunner=bases[2];
     const sfChance=clamp(0.50+(spd(sfRunner)-50)/330, 0.30, 0.70);
-    if(Math.random()<sfChance){
+    if(rnd()<sfChance){
       runs++; if(!sfRunner._errorRunner)earned++;
       bases[2]=null;
       return {runs, earned, outsAdded, type:'SF', sfRunner};

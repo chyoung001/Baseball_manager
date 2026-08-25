@@ -66,54 +66,7 @@ function renderInvestFinance() {
     </div>`;
 }
 
-// ===================== 🎪 팬 이벤트 (비활성화 — 무한 흑자 익스플로잇 방지) =====================
-function renderInvestEvents() {
-  const used = G.fanEventUsedThisGame;
-  const inMatch = G.matchInProgress;
-  $('investContent').innerHTML = `
-    <div class="card">
-      <div class="card-title">▸ 팬 이벤트 프로모션</div>
-      <p style="font-size:0.72rem;color:var(--text-dim);margin-bottom:4px;">
-        경기 전 이벤트 개최 → 인기도 상승 + 경기 시작 시 선수단 사기 부스트 + 경기 후 추가 수익.
-      </p>
-      <p style="font-size:0.72rem;margin-bottom:14px;color:${used||inMatch?'#ef4444':'var(--accent2)'};">
-        ${inMatch ? '⚠️ 경기 중에는 이벤트를 개최할 수 없습니다.' : used ? '✅ 이번 경기 이벤트 사용 완료 (경기당 1회).' : '🎪 경기당 1회 개최 가능.'}
-      </p>
-      <div class="market-grid">
-        ${FAN_EVENTS.map((ev, i) => `
-          <div class="market-card" style="${used||inMatch?'opacity:0.5;':''}">
-            <div style="font-size:2rem;margin-bottom:6px;">${ev.icon}</div>
-            <div style="font-weight:700;font-size:0.9rem;margin-bottom:4px;">${ev.name}</div>
-            <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:10px;">${ev.desc}</div>
-            <div style="font-size:0.72rem;color:var(--accent2);line-height:1.8;margin-bottom:10px;">
-              📈 인기도 +${ev.popMin}~+${ev.popMax}<br>
-              💪 사기 부스트 +${ev.morale}<br>
-              💰 경기 후 수익 +${won(ev.revenue)}
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <span style="color:var(--accent);font-weight:700;">💰 ${won(ev.cost)}</span>
-              <button class="btn btn-primary btn-sm" onclick="investHoldFanEvent(${i})" ${used||inMatch?'disabled':''}>개최</button>
-            </div>
-          </div>`).join('')}
-      </div>
-    </div>`;
-}
-
-function investHoldFanEvent(idx) {
-  if(G.fanEventUsedThisGame) { alert('이번 경기에 이미 이벤트를 진행했습니다!'); return; }
-  if(G.matchInProgress) { alert('경기 중에는 이벤트를 개최할 수 없습니다!'); return; }
-  const ev = FAN_EVENTS[idx];
-  if(!canSpend(G.myTeam,ev.cost)) { showToast('🚫 사용 가능 자금 부족!'); return; }
-
-  G.myTeam.budget -= ev.cost;
-  const popGain = rand(ev.popMin, ev.popMax);
-  G.myTeam.popularity = clamp(G.myTeam.popularity + popGain, 0, 100);
-  G.myTeam.moralBoost  = ev.morale;
-  G.myTeam.eventRevenue = ev.revenue;
-  G.fanEventUsedThisGame = true;
-
-  updateHeader();
-  renderInvestEvents();
-  showToast(`🎉 ${ev.name} 개최! 인기도 +${popGain} | 다음 경기 사기 +${ev.morale} | 경기 후 수익 +${won(ev.revenue)}`);
-  saveGame();
-}
+// ===================== 🎪 팬 이벤트 (삭제됨 — 무한 흑자 익스플로잇 방지) =====================
+// index.html에서 탭이 제거되고 invest.js에 라우팅이 없어 도달 불가였고, 참조하던 FAN_EVENTS 상수도
+// 정의되지 않아 호출 시 ReferenceError였다. 지원 배선(moralBoost/eventRevenue/fanEventUsedThisGame)까지
+// 함께 제거. 되살리려면 FAN_EVENTS 상수 정의부터 필요하다.

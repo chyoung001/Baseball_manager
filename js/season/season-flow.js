@@ -432,7 +432,7 @@ function _aiOptimizeRoster(team){
 function _startNextSeason(){
   $('seasonModal').classList.remove('active');
   G.season++;G.gameNum=0;G.phase='preseason';
-  G.fanEventUsedThisGame=false;G.trainingCooldown=0;G.expandedEntryNotified=false;
+  G.trainingCooldown=0;G.expandedEntryNotified=false;
   G.allStars=[];G.awards=[];G.postseasonBracket=null;
   // faPool은 비우지 않는다 — 미계약 FA는 다음 스토브리그로 이월된다(소멸 방지).
   // 정리는 showStoveLeague의 _faYears 한계 필터가 담당한다.
@@ -510,7 +510,6 @@ function _startNextSeason(){
   // 시즌 리셋
   G.teams.forEach(t=>{
     t.wins=0;t.losses=0;t.rs=0;t.ra=0;t.rotationIdx=0;t.streak=0;t.recentResults=[];t.scoutCampUsed=0;t.overseasUsedThisSeason=0;t.medicalUsedThisSeason=0;
-    if(t===G.myTeam){t.moralBoost=0;t.eventRevenue=0;}
 
     // 해외연수 강제 복귀 (스탯 부스트)
     t.roster.forEach(p=>{

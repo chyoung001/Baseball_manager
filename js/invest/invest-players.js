@@ -103,7 +103,7 @@ function investSendOverseas(rosterIdx) {
 
   // 프로의식 연동: _workEthic 높으면 추가 보너스 스탯 (1~100)
   const we=hiddenEff(p,'_workEthic');
-  if(we>=60 && Math.random()<(we/125)){ // ethic 60~100 → 48~80% 확률
+  if(we>=60 && rnd()<(we/125)){ // ethic 60~100 → 48~80% 확률
     const extraBoost=rand(1,2);
     const extraStats=p.isPitcher?['stuff','control','movement']:['contact','power','eye'];
     const es=pick(extraStats);

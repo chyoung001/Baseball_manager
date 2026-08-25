@@ -58,7 +58,7 @@ function showNegotiationModal(p, context, onAccept, onFail, extraData){
   const exp=getExpectedContract(p,context);
   const aLv=G.myTeam.analyticsLevel||0;
   // 데이터 분석팀 레벨에 따른 에이전트 요구 조건 힌트 정확도
-  const hintSalary=aLv>=60?exp.salary:aLv>=30?Math.floor(exp.salary*(0.8+Math.random()*0.4)):Math.floor(exp.salary*(0.5+Math.random()));
+  const hintSalary=aLv>=60?exp.salary:aLv>=30?Math.floor(exp.salary*(0.8+rnd()*0.4)):Math.floor(exp.salary*(0.5+rnd()));
   const hintYears=aLv>=60?exp.years:aLv>=30?clamp(exp.years+rand(-1,1),1,6):clamp(exp.years+rand(-2,2),1,6);
 
   // 참을성(상황 C): 협상 인내 — 높으면 역제안 기회 4회, 낮으면 2회

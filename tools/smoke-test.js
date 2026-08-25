@@ -2054,6 +2054,78 @@ check('T41: _simSeries가 POSTSEASON_SPREAD 사용 (구 비율식 부재)',
   g('_simSeries.toString()').includes('POSTSEASON_SPREAD') &&
   !/strA\s*\/\s*\(\s*strA\s*\+\s*strB/.test(g('_simSeries.toString()')));
 
+section('T42. 시드 RNG 결정론 가드 (refactor/#26)');
+// 전 난수가 Math.random() 직결이던 동안에는 "고쳤다"를 증명할 수 없었다 — 수정 전후 차이가
+// 표본 흔들림과 구분되지 않는다. rand/pick/randGauss/randomGaussian이 모두 rnd()를 경유하므로
+// srand(N)이 리그 생성부터 시즌 완주까지를 재현 가능하게 만든다.
+vm.runInContext(`
+  // 시드 하나로 팀 생성 → 정규시즌 완주까지 돌리고 리그 총계 지문을 뽑는다.
+  // (드래프트는 UI 대기라 T28/aiRestProbe처럼 페이즈만 넘겨 63경기를 무중단 진행)
+  function __seasonFingerprint(seed){
+    srand(seed);
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=0; G.phase='first_half';
+    let guard=0;
+    while(G.gameNum<TOTAL_REGULAR && guard++<200){
+      if(G.gameNum>=FIRST_HALF_END && G.phase==='first_half') G.phase='second_half';
+      __harnessFixRoster();
+      const b=G.gameNum; _simMyGame(); if(G.gameNum===b) break;
+    }
+    let W=0,AB=0,H=0,HR=0,BB=0,K=0,OUTS=0,ER=0;
+    G.teams.forEach(t=>{W+=t.wins; t.roster.forEach(p=>{const s=p.ss; if(!s)return;
+      if(!p.isPitcher){AB+=s.ab||0;H+=s.h||0;HR+=s.hr||0;BB+=s.bb||0;K+=s.k||0;}
+      else {OUTS+=s.outs||0;ER+=s.er||0;}});});
+    return {g:G.gameNum,W:W,AB:AB,H:H,HR:HR,BB:BB,K:K,OUTS:OUTS,ER:ER,ERA:OUTS>0?ER*27/OUTS:0};
+  }
+`, ctx);
+
+const det = g(`(function(){try{
+  const a=__seasonFingerprint(20260814);
+  const b=__seasonFingerprint(20260814);   // 같은 시드 재실행
+  const c=__seasonFingerprint(99991);      // 다른 시드
+  return {a:a,b:b,c:c,err:null};
+}catch(e){return {err:e.message}}})()`);
+const _sameFp = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+check(`T42: 동일 시드 2회 → 시즌 지문 완전 일치 (${det.a ? det.a.g+'경기 · '+det.a.W+'승 · '+det.a.AB+'타수 · '+det.a.HR+'홈런 · ERA '+det.a.ERA.toFixed(3) : '—'})`,
+  !det.err && det.a.g === g('TOTAL_REGULAR') && _sameFp(det.a, det.b), JSON.stringify(det));
+// 시드를 바꿔도 같으면 치환이 아니라 난수가 죽은 것 — 가드가 자기 자신을 속이지 않게 하는 대조군
+check('T42: 다른 시드 → 지문 불일치 (난수가 실제로 결과를 좌우)',
+  !det.err && !_sameFp(det.a, det.c), JSON.stringify({a:det.a, c:det.c}));
+
+// 단일 funnel 가드 — rand/randomGaussian이 rnd()를 경유해야 265개 호출부가 함께 결정론이 된다
+check('T42: rand·randomGaussian이 rnd() 경유 (Math.random 직결 부재)',
+  g('rand.toString()').includes('rnd()') && g('randomGaussian.toString()').includes('rnd()') &&
+  !g('rand.toString()').includes('Math.random') && !g('randomGaussian.toString()').includes('Math.random'));
+
+// 소스 스캔 — 게임플레이 경로에 Math.random 직접 호출이 되살아나면 결정론이 조용히 깨진다.
+// _uid 생성 3건만 예외(Date.now()와 결합, 게임 결과 미영향)로 허용한다.
+const _mrHits = [];
+(function scanMR(dir){
+  fs.readdirSync(dir, { withFileTypes: true }).forEach((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) scanMR(p);
+    else if (e.name.endsWith('.js')) fs.readFileSync(p, 'utf8').split('\n').forEach((ln, i) => {
+      if (ln.includes('Math.random')) _mrHits.push(path.relative(ROOT, p).split(path.sep).join('/') + ':' + (i+1) + (ln.includes('_uid') ? ' [uid]' : ' [!]'));
+    });
+  });
+})(path.join(ROOT, 'js'));
+check(`T42: 게임플레이 경로에 Math.random 직접 호출 없음 (잔존 ${_mrHits.length}건 = _uid 생성)`,
+  _mrHits.length === 3 && _mrHits.every((h) => h.endsWith('[uid]')), JSON.stringify(_mrHits));
+
+// Fisher-Yates 균등성 — 구 sort(()=>Math.random()-0.5)는 비일관 비교자라 균등 순열을 만들지 않았다
+// (V8에서 앞쪽 원소가 앞에 남는 편향). 드래프트 풀 블라인드와 1년차 드래프트 순서가 여기 걸려 있었다.
+const shuf = g(`(function(){
+  srand(7);
+  const N=6, TRIALS=12000, pos=Array.from({length:N},()=>0);
+  for(let i=0;i<TRIALS;i++){ const a=shuffle([0,1,2,3,4,5]); pos[a.indexOf(0)]++; }
+  return {pos:pos, exp:TRIALS/N};
+})()`);
+check(`T42: shuffle 균등 순열 — 원소 0의 착지 분포가 균등 (기대 ${shuf.exp} · 관측 ${JSON.stringify(shuf.pos)})`,
+  shuf.pos.every((c) => Math.abs(c - shuf.exp) / shuf.exp < 0.10), JSON.stringify(shuf));
+check('T42: 편향 셔플 소스 부재 (generateDraftPool·_startRookieDraft가 shuffle 사용)',
+  !g('generateDraftPool.toString()').includes('Math.random()-0.5') &&
+  g('generateDraftPool.toString()').includes('shuffle(') &&
+  g('_startRookieDraft.toString()').includes('shuffle('));
+
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {
   console.log('\n══════════════════════════════════');
