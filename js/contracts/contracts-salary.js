@@ -112,7 +112,11 @@ function _declineAllRenewals(){
 }
 
 // ── 연봉 협상 ───────────────────────────────────────────────────
-function _calcNewSalary(p){
+// `team` 미지정 시 내 팀 — 기존 호출부(유저 협상)의 동작은 그대로다.
+// fix/#28: AI 팀도 이 함수를 쓰게 되면서 팀 인자를 받는다. 이전엔 말미의 컨셉 배율이
+// `G.myTeam.concept`을 하드코딩해, AI 선수에게 **유저 팀의 컨셉 배율**이 적용될 뻔했다.
+function _calcNewSalary(p, team){
+  team=team||G.myTeam;
   const pOvr=ovr(p);
   const war=approxWAR(p);
   const st=p._serviceTime||0;
@@ -147,9 +151,9 @@ function _calcNewSalary(p){
     if(war>=3)newSalary=+(newSalary*1.15).toFixed(1);
     else if(war<0.5&&pOvr<47)newSalary=Math.max(SALARY_MIN,+(newSalary-0.5).toFixed(1));
   }
-  // 팀 컨셉 연봉 배율
-  if(G.myTeam.concept==='pitching')newSalary=+(newSalary*1.05).toFixed(1);
-  if(G.myTeam.concept==='prospect')newSalary=+(newSalary*1.10).toFixed(1);
+  // 팀 컨셉 연봉 배율 (선수가 속한 팀 기준)
+  if(team&&team.concept==='pitching')newSalary=+(newSalary*1.05).toFixed(1);
+  if(team&&team.concept==='prospect')newSalary=+(newSalary*1.10).toFixed(1);
   return +newSalary;
 }
 

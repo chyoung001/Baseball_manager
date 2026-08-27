@@ -1,5 +1,19 @@
 // ===================== CONTRACTS FA (FA 시장 — AI 경쟁 입찰 / 유저 영입) =====================
 
+// ── 포지션 그룹 뎁스 기반 니즈 판정 (fix/#28) ──────────────
+// "그 FA가 우리 팀 해당 포지션 주전을 유의미하게 개선하는가"를 묻는다.
+// 구 규칙(1군 인원수 < 11/10)은 리그 최소 정원보다 낮아 도달 불가능한 死코드였다.
+// 그룹 분류는 OVR 엔진의 _ovrCalibGroup()을 재사용한다 (C / MIF / CIF / OF / SP / RP).
+function _faTeamNeed(team, fa){
+  const grp=_ovrCalibGroup(fa);
+  const need=FA_NEED_STARTERS[grp]||3;
+  const depth=team.roster
+    .filter(p=>(p.status||'active')==='active' && _ovrCalibGroup(p)===grp)
+    .map(p=>ovr(p)).sort((a,b)=>b-a);
+  if(depth.length<need) return true;                      // 그룹 인원 미달 = 무조건 니즈
+  return ovr(fa)>depth[need-1]+FA_NEED_MARGIN;            // 주전 최하위를 마진 이상 개선
+}
+
 function _runAIFreeAgentBidding(){
   if(!G.faPool||G.faPool.length===0)return;
   G.faBiddingLog=[];  // 입찰 로그 (UI 표시용)
@@ -8,12 +22,9 @@ function _runAIFreeAgentBidding(){
   const pool=[...G.faPool].sort((a,b)=>ovr(b)-ovr(a));
   const aiTeams=G.teams.filter(t=>t!==G.myTeam);
 
-  // AI 팀별 예산/니즈 계산
-  function teamNeed(team){
-    const batCount=team.roster.filter(p=>!p.isPitcher&&(p.status||'active')==='active').length;
-    const pitCount=team.roster.filter(p=>p.isPitcher&&(p.status||'active')==='active').length;
-    return {needBat:batCount<11, needPit:pitCount<10, budget:team.budget||0};
-  }
+  // 팀당 영입 슬롯 — 풀이 OVR 내림차순이라 각 팀은 상위 선수부터 슬롯을 쓴다.
+  // 상한이 없으면 예산 최대 팀이 낙찰 정렬 1위를 독점해 풀을 통째로 가져간다.
+  const signCount=new Map();
 
   pool.forEach(fa=>{
     const pOvr=ovr(fa);
@@ -24,27 +35,29 @@ function _runAIFreeAgentBidding(){
     const contractYears=_calcContractYears(pOvr);
     const transferFee=+(pOvr*0.3+rand(5,15)).toFixed(1);
 
-    // OVR 55 미만: AI 경쟁 없음 → 유저 전용 FA 시장으로
-    if(pOvr<59){
+    // AI 입찰 진입선 미만: 경쟁 없음 → 유저 전용 FA 시장으로 (풀에 남김)
+    if(pOvr<FA_AI_MIN_OVR){
       fa.salary=marketSalary;
       fa._contractYears=contractYears;
       fa.price=transferFee;
-      return;  // faPool에 남김
+      return;
     }
 
-    // AI 팀 입찰: 예산 여유 + 포지션 니즈 + OVR 기반 + 샐러리캡 가드
+    // AI 팀 입찰: 포지션 뎁스 니즈 + 슬롯/정원/예산/샐러리캡 가드
     const bidders=aiTeams.filter(t=>{
-      const need=teamNeed(t);
-      const posMatch=fa.isPitcher?need.needPit:need.needBat;
-      const canAfford=need.budget>(marketSalary*contractYears+transferFee);
+      if((signCount.get(t)||0)>=FA_AI_MAX_SIGNINGS) return false; // 오프시즌 영입 슬롯 소진
+      if(t.roster.length>=FUTURES_ORG_MAX) return false;          // 조직 정원 초과
       // P2-4: 소프트캡(사치세 라인) 근접 시 추가 영입 중단 — AI가 모르고 세금 구간에 눌러앉는 것 방지
       const payroll=getPayroll(t);
       if(payroll+marketSalary>getLuxuryTaxLine()*1.05) return false;
+      if((t.budget||0)<=(marketSalary*contractYears+transferFee)) return false;
+      if(!_faTeamNeed(t,fa)) return false;                        // 뎁스 니즈 미성립
+      // 니즈가 성립해도 즉시 확정은 아니다 — 구단 성향 롤로 편차를 남긴다.
+      // (구 코드에선 이 롤이 **유일한** 판정축이었다. 이제는 니즈 통과 후의 2차 필터라 상향한다.)
       // 잉여 현금 팀은 캡 근처까지 경쟁적으로 전력 보강 (설계: 지출로 잉여 소모·사치세 활성)
-      // 예산 여유 크고 페이롤이 소프트캡에 여유 있을 때만 — 세금 구간 눌러앉기 방지
       const surplus=(t.budget||0)>250 && payroll<getLuxuryTaxLine()*0.80;
-      const interest=surplus?92:(pOvr>=84?60:pOvr>=75?45:pOvr>=67?30:20);
-      return canAfford&&(posMatch||rand(1,100)<=interest);
+      const interest=surplus?92:(pOvr>=84?85:pOvr>=75?75:pOvr>=67?65:55);
+      return rand(1,100)<=interest;
     });
 
     if(bidders.length===0) {
@@ -72,6 +85,7 @@ function _runAIFreeAgentBidding(){
     initSeasonStats(fa);
     winner.roster.push(fa);
     winner.budget=+(winner.budget-transferFee).toFixed(1);
+    signCount.set(winner,(signCount.get(winner)||0)+1);
     // 로스터 비대 방지 — 정원 초과 시 최저 가치 2군/벤치 방출 (공격 영입의 부작용 상쇄)
     if(winner.roster.length>FUTURES_ORG_MAX){
       const cut=winner.roster.filter(p=>p!==fa&&(p.status==='futures'||p.status==='developmental'||p.role==='bench'))
