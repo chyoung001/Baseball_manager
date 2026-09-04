@@ -104,15 +104,21 @@ function showStoveLeague(){
       }
     });
 
-    // P2-4 샐러리 플로어 (탱킹 방지): 미달액 50% 선수 분배 + 50% 소각 → 전액 벌과금 지출
+    // P2-4 샐러리 플로어 (탱킹 방지)
+    // fix/#28: 벌과금이 미달액과 **정확히 같아** `페이롤 + 벌과금 = 플로어`로 지출 총액이 동일했다.
+    // 즉 적게 쓰나 많이 쓰나 현금이 같아서 **페이롤을 올릴 재정적 유인이 0**이었고,
+    // 12시즌 누적 벌과금 539억을 내면서도 구단 예산은 118 → 250억으로 증가했다(현금만 순환).
+    // → 배율을 곱해 **덜 쓰는 쪽이 반드시 더 비싸지게** 만든다. 이제 플로어를 채우는 것이
+    //   항상 이득이므로 벌금이 실제로 행동을 유도한다.
     const _floorLine=getSalaryFloor();
     const _floorFail=new Set();
     G.teams.forEach(team=>{
       const shortfall=+(_floorLine-getPayroll(team)).toFixed(1);
       if(shortfall>0){
         _floorFail.add(team);
-        team.budget=+(team.budget-shortfall).toFixed(1);
-        if(team===G.myTeam)showToast(`🚨 샐러리 플로어(${won(_floorLine)}) 미달! 벌과금 ${won(shortfall)} + 분배금 수령 박탈`);
+        const penalty=+(shortfall*SALARY_FLOOR_PENALTY_RATE).toFixed(1);
+        team.budget=+(team.budget-penalty).toFixed(1);
+        if(team===G.myTeam)showToast(`🚨 샐러리 플로어(${won(_floorLine)}) 미달! 벌과금 ${won(penalty)} (미달액 ${won(shortfall)}의 ${SALARY_FLOOR_PENALTY_RATE}배) + 분배금 수령 박탈`);
       }
     });
 
@@ -453,6 +459,17 @@ function _startNextSeason(){
     team.coachStaff=team.coachStaff||{};
     let guard=0;
     while(war>=8 && guard++<60){
+      // ① 육성 티어 돌파 — floor(devLevel/30)이 오르면 소속 전 선수의 연간 성장이 +1이 된다
+      //    (season-core의 baseGrowth). 코치는 9종×5레벨에 레벨업 비용 8*(lv+1)이라 완주에
+      //    1,080억이 들고, 그 전까지 아래 lks 분기에 도달하지 못한다 — 12시즌 계측에서
+      //    devLevel이 baseDevLevel 그대로 고정돼 성장티어 {1,2,3}이 영구화됐고, 전력SD가
+      //    3.45→11.14로 발산했다(최종 전력 순위가 성장티어와 완전히 일치).
+      //    경계가 사정권일 때만 우선하므로, 뒤처진 팀(티어 경계가 가까운 팀)이 먼저 집행해
+      //    음의 피드백으로 작동한다. 티어를 막 넘은 팀은 다음 경계가 25~30p라 종전 순서를 탄다.
+      //    비용·증가폭은 아래 lks 분기 값을 그대로 쓰고 경계 30/60/90도 기존 성장 공식의
+      //    것이라, 새로 도입한 밸런스 상수는 없다.
+      const _dev=team.devLevel||0, _edge=(Math.floor(_dev/30)+1)*30;
+      if(_edge<=90 && _edge-_dev<=12 && spend(rand(6,10))){ team.devLevel=clamp(_dev+rand(3,6),0,100); continue; }
       const cks=Object.keys(team.coachStaff).filter(k=>(team.coachStaff[k]||0)<5);
       if(cks.length){ const k=pick(cks),lv=team.coachStaff[k]||0; if(spend(8*(lv+1))){team.coachStaff[k]=lv+1;continue;} }
       if((team.slumpCareLevel||0)<4 && spend(FACILITY4_COSTS[team.slumpCareLevel||0])){team.slumpCareLevel=(team.slumpCareLevel||0)+1;continue;}
@@ -498,12 +515,21 @@ function _startNextSeason(){
     // ② Math.round가 최저 연봉 0.3억을 0으로 만들어(관측 2명) 페이롤이 과소 계상됐다
     //    — 페이롤은 사치세·샐러리 플로어 판정의 입력이라 재정 규칙까지 함께 어긋난다.
     // 정밀도도 프로젝트 전반의 0.1억 단위(toFixed(1))에 맞춘다.
+    // fix/#28: 구 규칙은 `mult = pOvr>=70 ? 1.2 : pOvr<31 ? 0.8 : 0`이었고, 배율 0이면 조기 return이라
+    // **OVR 31~69 만료 계약자는 연봉이 영구 동결**됐다(계측: 만료자 기준 동결률 83~97%).
+    // 리그 대다수가 이 밴드라 Arb 밴드 1인당 연봉이 1.02 → 0.56억으로 반토막 났다.
+    // → 유저 팀이 쓰는 것과 **같은 산정기**(_calcNewSalary: 프리Arb 유지 / Arb 연차 인상 / FA 시장가)로
+    //   통일한다. 규칙이 두 벌이면 유저와 AI의 연봉 곡선이 갈리고, 그 차이가 사치세·플로어 판정의
+    //   입력을 오염시킨다.
     team.roster.forEach(p=>{
       if((p._contractYears||0)>0) return; // 계약 유효 → 산정액 유지
-      const pOvr=ovr(p);
-      const mult=pOvr>=70?1.2:pOvr<31?0.8:0;
-      if(!mult) return;
-      p.salary=Math.max(SALARY_MIN,+((p.salary||SALARY_MIN)*mult).toFixed(1));
+      if(p._salaryAdjSeason===G.season) return; // 시즌당 1회 (재진입 복리 인상 방지)
+      // Arb 연차 누적 — 유저 경로(contracts-salary.js)와 동일 규칙. 이전엔 AI가 이 카운터를
+      // 올리지 않아 AI의 Arb 선수는 영원히 1년차 베이스라인에 머물렀다.
+      if(getContractPhase(p)==='arb')p._arbYears=(p._arbYears||0)+1;
+      p.salary=Math.max(SALARY_MIN,+_calcNewSalary(p,team).toFixed(1));
+      p._contractYears=1;
+      p._salaryAdjSeason=G.season;
     });
   });
 

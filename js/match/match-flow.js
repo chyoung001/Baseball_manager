@@ -148,60 +148,22 @@ function simulatePlay(){
   let pitcher=matchState.currentPitcher[fldKey];
   if(!pitcher){endMatch();return;}
 
-  // ── 불펜 등판 로직 (shouldHookPitcher 통합) ──
+  // ── 불펜 등판 로직 — 시뮬 경로와 동일한 _pickReliever 단일 소스 ──
+  // 이전엔 여기에 45줄짜리 인라인 규칙이 따로 있어 같은 상황에서 시뮬과 다른 투수가 나왔다.
+  // 인라인은 상황별 '첫 역할'만 찾고 없으면 다음 규칙으로 흘러 폴백 bp[0](아무나)에 닿았고,
+  // _pickReliever는 역할 우선순위 배열로 순차 폴백한다 — 7회 동점에 SU 없이 MR만 있으면
+  // 전자는 아무나, 후자는 MR을 올렸다. 등판 확정(_pitchedThisGame) 마킹도 함께 통일된다.
   const todayER=(pitcher.today&&pitcher.today.er)||0;
   if(shouldHookPitcher(pitcher, matchState.inning, todayER, fldTeam.concept)){
-    const bp=getBullpen(fldTeam).filter(p=>(p._consecutiveDaysPitched||0)<3&&(p.condition||100)>=20&&!matchState.relieversUsed[fldKey].includes(p));
-    if(bp.length>0){
-      // 현재 점수 상황 계산
-      const myRuns=matchState.score[fldKey].reduce((a,b)=>a+b,0);
-      const oppRuns=matchState.score[fldKey==='home'?'away':'home'].reduce((a,b)=>a+b,0);
-      const lead=myRuns-oppRuns;
-      const inn=matchState.inning;
-      let pick_p=null, logTag='';
-
-      // CP: 9회+, 1~3점 리드 (세이브 상황)
-      if(inn>=9 && lead>=1 && lead<=3){
-        pick_p=bp.find(p=>p.pos==='CP');
-        if(pick_p)logTag='🔒 마무리';
-      }
-      // SU: 7~8회, 리드 또는 동점
-      if(!pick_p && inn>=7 && inn<=8 && lead>=0){
-        pick_p=bp.find(p=>p.pos==='SU');
-        if(pick_p)logTag='⚡ 필승조';
-      }
-      // MR: 6~8회, 1~4점 뒤지는 상황 (추격조)
-      if(!pick_p && inn>=6 && lead>=-4 && lead<0){
-        pick_p=bp.find(p=>p.pos==='MR');
-        if(pick_p)logTag='🔄 추격조';
-      }
-      // LR: 선발 조기강판(5회 이전) 또는 5점+ 차이 (대량 리드/대량 열세)
-      if(!pick_p && (inn<=5 || Math.abs(lead)>=5)){
-        pick_p=bp.find(p=>p.pos==='LR');
-        if(pick_p)logTag='📋 롱릴리프';
-      }
-      // CP 확장 등판: 9회+, 4점 이상 리드 → CP 아끼고 MR 투입
-      if(!pick_p && inn>=9 && lead>=4){
-        pick_p=bp.find(p=>p.pos==='MR')||bp.find(p=>p.pos==='LR');
-        if(pick_p)logTag='🔄 추격조';
-      }
-      // 필승조 확장: CP 없으면 필승조가 마무리 대행
-      if(!pick_p && inn>=9 && lead>=1){
-        pick_p=bp.find(p=>p.pos==='SU');
-        if(pick_p)logTag='⚡ 필승조(마무리 대행)';
-      }
-      // 폴백: 아무나 가용한 투수
-      if(!pick_p){
-        pick_p=bp[0];
-        logTag='🔄 불펜';
-      }
-
-      if(pick_p){
-        pitcher=pick_p;
-        matchState.currentPitcher[fldKey]=pick_p;
-        matchState.relieversUsed[fldKey].push(pick_p);
-        addLog(`${logTag} ${pick_p.name} 등판!`,'pitching');
-      }
+    const myRuns=matchState.score[fldKey].reduce((a,b)=>a+b,0);
+    const oppRuns=matchState.score[fldKey==='home'?'away':'home'].reduce((a,b)=>a+b,0);
+    const lead=myRuns-oppRuns;   // 수비(투수)팀 기준 — _pickReliever·simHalf와 동일 기준
+    const pick_p=_pickReliever(fldTeam, matchState.inning, lead);
+    if(pick_p){
+      pitcher=pick_p;
+      matchState.currentPitcher[fldKey]=pick_p;
+      matchState.relieversUsed[fldKey].push(pick_p);   // GP 집계용 (중복 방지는 _pitchedThisGame이 담당)
+      addLog(`${_relieverTag(pick_p, matchState.inning, lead)} ${pick_p.name} 등판!`,'pitching');
     }
   }
 

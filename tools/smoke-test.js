@@ -10,8 +10,9 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const H = require('./harness');
 
-const ROOT = path.join(__dirname, '..');
+const ROOT = H.ROOT;
 
 // ── 결과 수집 ───────────────────────────────────────────────
 let passed = 0, failed = 0;
@@ -21,111 +22,35 @@ function check(name, cond, detail) {
   else { failed++; failures.push(name + (detail ? ` — ${detail}` : '')); console.log(`  ❌ ${name}${detail ? ' — ' + detail : ''}`); }
 }
 function section(title) { console.log(`\n━━ ${title} ━━`); }
+// 소스 검사 가드용 — Function.prototype.toString()은 **주석까지 포함**한다.
+// "구 코드가 사라졌는가"를 볼 땐 주석을 벗기고 봐야 한다
+// (실제로 구 규칙을 설명하는 주석이 매칭돼 T47 가드가 오탐한 적이 있다).
+const _noComments = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-// ── DOM 스텁 ────────────────────────────────────────────────
-const NOOP_METHODS = new Set([
-  'addEventListener','removeEventListener','setAttribute','removeAttribute','click','focus','blur',
-  'remove','scrollIntoView','scrollTo','prepend','append','insertBefore','removeChild','select',
-]);
-function makeFakeEl(tag) {
-  const store = {
-    style: {}, dataset: {}, children: [], disabled: false,
-    classList: { add(){}, remove(){}, toggle(){}, contains(){ return false; }, replace(){} },
-  };
-  return new Proxy(store, {
-    get(t, prop) {
-      if (prop in t) return t[prop];
-      if (prop === 'innerHTML' || prop === 'textContent' || prop === 'value' || prop === 'className') return '';
-      if (prop === 'querySelectorAll') return () => [];
-      if (prop === 'querySelector') return () => null;
-      if (prop === 'closest') return () => null;
-      if (prop === 'appendChild') return (x) => x;
-      if (prop === 'getBoundingClientRect') return () => ({ top:0,left:0,right:0,bottom:0,width:0,height:0 });
-      if (prop === 'getAttribute') return () => null;
-      if (prop === 'getContext') return () => new Proxy({}, { get: () => () => {} }); // canvas 흡수
-      if (NOOP_METHODS.has(prop)) return () => {};
-      return undefined;
-    },
-    set(t, prop, v) { t[prop] = v; return true; },
-  });
-}
-const elCache = new Map();
-function getEl(id) {
-  if (!elCache.has(id)) elCache.set(id, makeFakeEl('div'));
-  return elCache.get(id);
-}
-
-function makeStorage() {
-  const m = new Map();
-  return {
-    getItem: (k) => (m.has(k) ? m.get(k) : null),
-    setItem: (k, v) => m.set(k, String(v)),
-    removeItem: (k) => m.delete(k),
-    clear: () => m.clear(),
-    _map: m,
-  };
-}
-
-// ── vm 컨텍스트 구성 ────────────────────────────────────────
-const timeouts = []; // setTimeout은 큐잉만 (AI 드래프트 체인 등 비동기 연출은 스모크 범위 밖)
-const sandbox = {
-  console,
-  document: {
-    getElementById: getEl,
-    querySelector: () => null,
-    querySelectorAll: () => [],
-    createElement: (tag) => makeFakeEl(tag),
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    body: makeFakeEl('body'),
-    documentElement: makeFakeEl('html'),
-  },
-  localStorage: makeStorage(),
-  sessionStorage: makeStorage(),
-  alert: () => {},
-  confirm: () => true,
-  prompt: () => null,
-  setTimeout: (fn) => { timeouts.push(fn); return timeouts.length; },
-  clearTimeout: () => {},
-  setInterval: () => 0,
-  clearInterval: () => {},
-  requestAnimationFrame: (fn) => { timeouts.push(fn); return timeouts.length; },
-  navigator: { userAgent: 'smoke-test' },
-  location: { reload: () => {}, href: '' },
-  URL: { createObjectURL: () => 'blob:fake', revokeObjectURL: () => {} },
-  Blob: function Blob() {},
-  FileReader: function FileReader() { this.readAsText = () => {}; },
-  Image: function Image() {},
-  performance: { now: () => Date.now() },
-};
-sandbox.window = sandbox;
-sandbox.globalThis = sandbox;
-const ctx = vm.createContext(sandbox);
+// ── 부트스트랩 (DOM 스텁 · vm 컨텍스트 · 모듈 로더 · 하네스 헬퍼) ──
+// 구현은 tools/harness.js — 계측 프로브(tools/probe-*.js)와 공유한다.
+// 예전엔 이 205줄이 스모크에만 있어서 프로브가 통째로 복사해 썼고, 스텁이나 로스터 보수 규칙이
+// 갈리면 "스모크는 통과하는데 프로브만 다른 결과"가 나와 원인 추적이 불가능했다 (미해결 이슈 E-1).
+const h = H.createHarness();
+const { ctx, timeouts } = h;
 
 // ── 모듈 로드 (index.html 순서) ─────────────────────────────
 section('T1. 모듈 로드');
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-const srcs = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
+const { srcs, loadErrors, errors } = H.loadModules(h);
 check(`index.html에서 스크립트 ${srcs.length}개 발견 (>=50)`, srcs.length >= 50, `발견: ${srcs.length}`);
-
-let loadErrors = 0;
-for (const src of srcs) {
-  const file = path.join(ROOT, src);
-  try {
-    vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: src });
-  } catch (e) {
-    loadErrors++;
-    console.log(`  ❌ 로드 실패: ${src} → ${e.message}`);
-  }
-}
+errors.forEach((e) => console.log(`  ❌ 로드 실패: ${e.src} → ${e.message}`));
 check('전 모듈 로드 에러 0건', loadErrors === 0, `${loadErrors}건 실패`);
 
-function g(expr) { return vm.runInContext(expr, ctx); }
+const g = h.g;
 const REQUIRED_GLOBALS = ['G','TEAMS_DATA','initTeams','_simMyGame','showStoveLeague','_showSalaryNegotiation','validateActiveRoster','ovr','saveGame','loadGame','getPayroll','TOTAL_REGULAR','FIRST_HALF_END'];
 for (const name of REQUIRED_GLOBALS) {
   check(`전역 심볼 존재: ${name}`, g(`typeof ${name}!=='undefined'`));
 }
 if (failed > 0) { report(); process.exit(1); } // 로드 실패 시 이후 무의미
+
+// 하네스 전용 헬퍼 주입 (__harnessFixRoster · __playHalf) — 유저의 UI 조작을 대신하는 대체물.
+// 함수 선언만 하므로 여기서 미리 주입해도 호출 시점 동작은 이전(각 섹션 직전 주입)과 동일하다.
+H.installHelpers(h);
 
 // ── T2. 신규 게임 초기화 ────────────────────────────────────
 section('T2. 초기화 & 테스트 잔재 회귀 (H4/H5)');
@@ -151,58 +76,8 @@ check(`② 1군 OVR 중앙값 ~50 (48~55): ${activeMed}`, activeMed >= 48 && act
 
 // ── T3. 정규시즌 전체 자동 시뮬 ─────────────────────────────
 section(`T3. 정규시즌 ${g('TOTAL_REGULAR')}경기 자동 시뮬`);
-// 부상(IL) 등으로 라인업이 무너지면 유저가 로스터 탭에서 수동 보수하는 상황을 흉내내는
-// 하네스 전용 자동 보수 로직 (게임 코드는 무변경 — 실제 유저 행동의 대체물)
-vm.runInContext(`
-  function __harnessFixRoster(){
-    const t=G.myTeam;
-    const REQ=['C','1B','2B','3B','SS','LF','CF','RF'];
-    // 2군 → 육성 순으로 한 명 활성화 (유저의 콜업 행동 대체)
-    const pull=(pred)=>{
-      let c=t.roster.filter(p=>p.status==='futures'&&pred(p)).sort((a,b)=>ovr(b)-ovr(a))[0];
-      if(!c)c=t.roster.filter(p=>p.status==='developmental'&&pred(p)).sort((a,b)=>ovr(b)-ovr(a))[0];
-      if(c){c.status='active';c.role=c.isPitcher?'bullpen':'bench';c.isOnIL=false;c.ilGamesLeft=0;c.rehabGamesLeft=0;}
-      return c;
-    };
-    // 1) 카테고리별 최소 인원 콜업 (타자12/투수11/총원27)
-    let gd=0;
-    while(countActiveBatters(t)<12&&gd++<50){if(!pull(p=>!p.isPitcher))break;}
-    while(countActivePitchers(t)<11&&gd++<100){if(!pull(p=>p.isPitcher))break;}
-    while(getActiveCount(t)<27&&gd++<150){if(!pull(()=>true))break;}
-    // 2) 라인업 전면 재구성: 야수 전원 벤치로 → 포지션별 최적 배치 + DH
-    const activeBat=()=>t.roster.filter(p=>!p.isPitcher&&(p.status||'active')==='active'&&p.role!=='overseas');
-    activeBat().forEach(p=>{p.role='bench';});
-    const pool=activeBat().sort((a,b)=>ovr(b)-ovr(a));
-    const used=new Set();
-    REQ.forEach(pos=>{
-      let c=pool.find(p=>!used.has(p)&&p.pos===pos)||pool.find(p=>!used.has(p));
-      if(c){c.pos=pos;c.role='starting';used.add(c);}
-    });
-    const dh=pool.find(p=>!used.has(p));
-    if(dh){dh.pos='DH';dh.role='starting';used.add(dh);}
-    // 3) 벤치 포지션 재지정으로 포수2/내야5/외야4 충족 (유저의 포지션 변경 대체)
-    const benchBats=()=>activeBat().filter(p=>p.role!=='starting');
-    // "그 선수를 다른 포지션으로 빼도 원 카테고리 최소치가 유지되는가" — 카테고리 간 상호 강탈 방지
-    const canTake=(p)=>{
-      if(p.pos==='C'&&countActiveCatchers(t)<=2)return false;
-      if(['C','1B','2B','3B','SS'].includes(p.pos)&&countActiveIF(t)<=5)return false;
-      if(['LF','CF','RF'].includes(p.pos)&&countActiveOF(t)<=4)return false;
-      return true;
-    };
-    gd=0;
-    // 벤치 후보가 없으면 2군/육성에서 콜업해서라도 충족 (pull 폴백)
-    while(countActiveCatchers(t)<2&&gd++<20){let c=benchBats().find(p=>p.pos!=='C'&&canTake(p));if(!c)c=pull(p=>!p.isPitcher);if(!c)break;c.pos='C';}
-    while(countActiveIF(t)<5&&gd++<40){let c=benchBats().find(p=>!['C','1B','2B','3B','SS'].includes(p.pos)&&canTake(p));if(!c)c=pull(p=>!p.isPitcher);if(!c)break;c.pos='2B';}
-    while(countActiveOF(t)<4&&gd++<60){let c=benchBats().find(p=>!['LF','CF','RF'].includes(p.pos)&&canTake(p));if(!c)c=pull(p=>!p.isPitcher);if(!c)break;c.pos='LF';}
-    // 4) 투수 role 밸런스: 로테이션 5 / 불펜 6
-    const activePit=()=>t.roster.filter(p=>p.isPitcher&&(p.status||'active')==='active'&&p.role!=='overseas');
-    const rot=()=>activePit().filter(p=>p.role==='rotation');
-    const bp=()=>activePit().filter(p=>p.role==='bullpen');
-    while(rot().length<5&&bp().length>6){bp().sort((a,b)=>ovr(b)-ovr(a))[0].role='rotation';}
-    while(bp().length<6&&rot().length>5){rot().sort((a,b)=>ovr(a)-ovr(b))[0].role='bullpen';}
-    activePit().filter(p=>p.role!=='rotation'&&p.role!=='bullpen').forEach(p=>{p.role='bullpen';});
-  }
-`, ctx);
+// 라인업이 무너졌을 때 유저의 로스터 탭 수동 보수를 흉내내는 __harnessFixRoster는
+// tools/harness.js의 installHelpers()가 이미 주입해 두었다 (게임 코드는 무변경).
 const t0 = Date.now();
 const simResult = vm.runInContext(`
   (function(){
@@ -1407,27 +1282,8 @@ check(`G: 관전 ${schedProbe.played}경기 후 전 구단 소화 경기 수 균
 // 6명/시즌 유입이 빠진 채로 오진할 수 있었다. 여기서는 실제 버튼 전이를 그대로 재현해 사이클을 완주한다.
 section('T28. 시즌 사이클 end-to-end (오프시즌 페이즈 실구동)');
 
-// setTimeout 큐를 실제로 실행 (드래프트 AI 픽 체인은 setTimeout 재귀로 진행됨)
-function drainTimers(cap = 20000) {
-  let n = 0;
-  while (timeouts.length && n++ < cap) { const fn = timeouts.shift(); try { fn(); } catch (e) { /* 연출 코드 무시 */ } }
-  return n;
-}
-
-vm.runInContext(`
-  // 한 시즌 완주: 프리시즌 → 전반기 → 올스타·드래프트 → 후반기 → 포스트시즌 → 시상식 → GM회의 → 스토브 → 다음시즌
-  // 각 페이즈의 "버튼 onclick"이 하던 전이를 하네스가 대신한다(게임 코드 무변경).
-  function __playHalf(limit){
-    let guard=0;
-    while(G.gameNum<limit && guard++<200){
-      __harnessFixRoster();
-      const before=G.gameNum;
-      _simMyGame();
-      if(G.gameNum===before) break; // 로스터 미달 등으로 진행 불가
-    }
-    return G.gameNum;
-  }
-`, ctx);
+// setTimeout 큐를 실제로 실행 (드래프트 AI 픽 체인은 setTimeout 재귀로 진행됨) — 구현은 tools/harness.js
+const drainTimers = (cap) => h.drainTimers(cap);
 
 const cycle = g(`(function(){
   const rec={phases:[], err:null};
@@ -2125,6 +1981,277 @@ check('T42: 편향 셔플 소스 부재 (generateDraftPool·_startRookieDraft가
   !g('generateDraftPool.toString()').includes('Math.random()-0.5') &&
   g('generateDraftPool.toString()').includes('shuffle(') &&
   g('_startRookieDraft.toString()').includes('shuffle('));
+
+section('T43. AI 재투자 — 육성 티어 돌파 (fix/#27)');
+// 결함 C(전력 런어웨이): floor(devLevel/30) 성장티어가 baseDevLevel 그대로 12시즌 고정돼
+// 최종 전력 순위가 티어와 완전히 일치했다(전력SD 3.45→11.14 발산). 원인은 코치 9종×5레벨
+// (완주 1,080억)이 재투자 루프의 첫 분기를 독점해 육성·시설 분기에 영구 미도달한 것.
+// 티어 경계가 사정권일 때 육성을 최우선으로 집행해 뒤처진 팀이 스스로 인양되게 한다.
+const reinv = g(`(function(){try{
+  const out=[];
+  [4242, 777, 31337].forEach(function(sd){
+    srand(sd);
+    G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=TOTAL_REGULAR; G.phase='stove_league';
+    const ai=G.teams.filter(t=>t!==G.myTeam);
+    ai.forEach(t=>{ t.budget=300; });   // war=(300-120)*0.45=81억 — 육성 투자 6~10억을 충분히 감당
+    ai[0].devLevel=55;                  // 경계 60까지 5p → 사정권 → 티어 1→2로 올라야 한다
+    _startNextSeason();
+    const a0=G.teams.filter(t=>t!==G.myTeam)[0];
+    out.push({dev:a0.devLevel, tier:Math.floor(a0.devLevel/30)});
+  });
+  return {out:out, err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T43: 티어 경계 사정권(dev 55) 팀이 육성 투자를 집행 — 3시드 모두 티어 1→2 (관측 ${reinv.out ? reinv.out.map(o=>o.dev+'/'+o.tier).join(' · ') : '—'})`,
+  !reinv.err && reinv.out.length === 3 && reinv.out.every(o => o.dev >= 60 && o.tier >= 2), JSON.stringify(reinv));
+// 순서가 핵심이다 — 코치 분기 뒤에 두면 1,080억을 다 쓸 때까지 도달하지 못해 처방이 무효가 된다
+const _sf = g('_startNextSeason.toString()');
+const _iEdge = _sf.indexOf('_edge'), _iCoach = _sf.indexOf('Object.keys(team.coachStaff)');
+check('T43: 육성 티어 분기가 코치 분기보다 앞 (순서가 뒤집히면 처방이 무효)',
+  _iEdge >= 0 && _iCoach >= 0 && _iEdge < _iCoach, JSON.stringify({edge:_iEdge, coach:_iCoach}));
+// 사정권 밖(경계까지 25~30p)은 종전 순서를 타야 한다 — 무제한 우선이면 AI 전 팀이 dev 90으로
+// 몰려 '육성 명가' 컨셉이 사라지고 절대능력 인플레가 커진다(계측: raw 41.9 → 47.9).
+check('T43: 사정권 상한 12p·경계 90 유지 (무제한 육성 우선 아님)',
+  /_edge\s*<=\s*90/.test(_sf) && /_edge\s*-\s*_dev\s*<=\s*12/.test(_sf));
+
+section('T44. 상태 영속·불펜 경로 정합 (fix/#27 후속)');
+
+// ── A-1. 스카우팅 티켓이 새 세션 로드 후 보존되는가 ──
+// _scoutTickets가 스냅샷에 없어 새 세션에서 undefined가 됐고, 소비처가 둘 다 `||0`으로 읽어
+// 0장이 됐다. renderDraft의 12장 폴백은 draftPool이 빈 경우에만 도는데 draftPool은 저장되므로
+// 도달하지 않는다. ⚠️ 같은 컨텍스트에서 G를 비우지 않고 라운드트립하면 기존 값이 남아
+// 가드가 그냥 통과해 버린다 — 반드시 필드를 지우고 복원해야 한다.
+const tick = g(`(function(){try{
+  srand(555); G.teamIdx=0; initTeams(0); G.season=1; G.gameNum=5; G.phase='first_half';
+  G._scoutTickets=12; G.draftPool=generateDraftPool(); G._scoutTickets=3;   // 9장 소비
+  const snap=JSON.parse(JSON.stringify(_buildSnapshot()));
+  const inSnap=('_scoutTickets' in snap);
+  delete G._scoutTickets; G.draftPool=[]; G.teams=[]; G.myTeam=null;        // 새 세션 흉내
+  _restoreFromData(snap);
+  const afterLoad=G._scoutTickets;
+  renderDraft();
+  const afterRender=G._scoutTickets, ui=(G._scoutTickets||0);
+  // 구 세이브(필드 없음) 폴백 — 시즌 초 지급량으로 복원돼야 한다
+  const old=JSON.parse(JSON.stringify(snap)); delete old._scoutTickets;
+  delete G._scoutTickets; G.teams=[]; G.myTeam=null;
+  _restoreFromData(old);
+  return {inSnap:inSnap, afterLoad:afterLoad, afterRender:afterRender, ui:ui, legacy:G._scoutTickets, err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T44: _scoutTickets가 스냅샷에 포함 (관측 ${tick.inSnap})`, !tick.err && tick.inSnap === true, JSON.stringify(tick));
+check(`T44: 새 세션 로드 후 잔여 티켓 보존 — 3장 (로드 ${tick.afterLoad} · 드래프트 진입 후 ${tick.afterRender} · UI ${tick.ui})`,
+  !tick.err && tick.afterLoad === 3 && tick.afterRender === 3 && tick.ui === 3, JSON.stringify(tick));
+check(`T44: 구 세이브(_scoutTickets 없음)는 12장 폴백 (관측 ${tick.legacy})`,
+  !tick.err && tick.legacy === 12, JSON.stringify(tick));
+
+// ── A-2. 불펜 선택이 단일 소스인가 ──
+// 관전 경로에 45줄 인라인 규칙이 따로 있어, 상황별 '첫 역할'만 찾고 없으면 다음 규칙으로
+// 흘러 폴백 bp[0](아무나)에 닿았다. _pickReliever는 역할 우선순위 배열로 순차 폴백한다.
+const _sp = g('simulatePlay.toString()');
+check('T44: 관전 경로가 _pickReliever를 사용 (인라인 역할 탐색 부재)',
+  _sp.includes('_pickReliever(') && !/bp\.find\(\s*p\s*=>\s*p\.pos\s*===/.test(_sp),
+  JSON.stringify({usesPick:_sp.includes('_pickReliever('), hasInline:/bp\.find\(\s*p\s*=>\s*p\.pos\s*===/.test(_sp)}));
+// 같은 상황·같은 불펜이면 두 경로가 같은 투수를 골라야 한다 (SU 없이 MR만 있는 7회 동점)
+const same = g(`(function(){try{
+  srand(31337); G.teamIdx=0; initTeams(0);
+  const t=G.teams[1];
+  getPitchers(t).forEach(p=>{p._pitchedThisGame=false;p.condition=100;p._consecutiveDaysPitched=0;});
+  const bp=getBullpen(t);
+  bp.forEach(p=>{p.pos='MR';});          // SU·CP·LR 없음 — 인라인 규칙이 폴백으로 새던 조합
+  const a=_pickReliever(t,7,0);          // 7회 동점
+  bp.forEach(p=>{p._pitchedThisGame=false;});
+  const b=_pickReliever(t,7,0);
+  return {a:a?a.name:null, b:b?b.name:null, tag:_relieverTag(a,7,0), err:null};
+}catch(e){return {err:e.message}}})()`);
+check(`T44: 7회 동점·MR만 있는 불펜에서 결정론적 동일 선택 (관측 ${same.a} / ${same.b} · ${same.tag})`,
+  !same.err && same.a !== null && same.a === same.b, JSON.stringify(same));
+
+// ── A-3. AI 경기에도 이닝 중 강판이 있는가 ──
+// 관전·자동시뮬은 타석마다 판정하는데 _simAIGame이 쓰는 simHalf에는 판정 자체가 없어,
+// 한 이닝에 대량 실점이 나도 그 이닝이 끝날 때까지 같은 투수가 던졌다. 리그 8경기 중 7경기가
+// 이 경로라 실점 분포·순위·전력지표가 다른 경로와 어긋나 있었다.
+const _ai = g('_simAIGame.toString()');
+const _iHalf = _ai.indexOf('function simHalf('), _iLoop = _ai.indexOf('for(let inn=1');
+const _halfBody = (_iHalf >= 0 && _iLoop > _iHalf) ? _ai.slice(_iHalf, _iLoop) : '';
+check('T44: simHalf(AI 반이닝) 안에 이닝 중 강판 판정 존재',
+  _halfBody.includes('shouldHookPitcher') && _halfBody.includes('_pickReliever'),
+  JSON.stringify({found:_iHalf>=0, hasHook:_halfBody.includes('shouldHookPitcher')}));
+check('T44: 교체가 pitRef로 호출부에 전파 (값 전달이면 이닝 밖에서 유실)',
+  _halfBody.includes('pitRef.p') && _ai.includes('pitRefA') && _ai.includes('pitRefB'));
+
+// ══ T45. AI FA 영입 니즈 (fix/#28) ══════════════════════════
+// 구 규칙 `needBat:batCount<11 / needPit:pitCount<10`은 리그 최소 정원(타자 12·투수 11)보다
+// 낮아 **유효 로스터에서 도달 불가능한 死코드**였다. 그 결함이 오래 숨은 이유는 "값이 틀렸다"가
+// 아니라 "임계가 다른 규칙과 모순됐다"는 형태였기 때문이다. 여기서는 값이 아니라 **도달 가능성**을
+// 가드한다 — 니즈가 양방향으로 실제 성립/불성립하는지 본다.
+section('T45. AI FA 영입 니즈 — 뎁스 기반 (fix/#28)');
+
+check('T45: _faTeamNeed 존재 (인원수 기반 teamNeed 대체)', g(`typeof _faTeamNeed==='function'`));
+const _faSrc = g('_runAIFreeAgentBidding.toString()');
+check('T45: 인원수 기반 死코드 부재 (needBat/needPit/posMatch)',
+  !/needBat|needPit|posMatch/.test(_noComments(_faSrc)), '입찰 함수에 구 심볼 잔존');
+check('T45: 뎁스 니즈가 입찰 조건에 배선', _faSrc.includes('_faTeamNeed'));
+check('T45: 슬롯 상한이 입찰 조건에 배선', _faSrc.includes('FA_AI_MAX_SIGNINGS'));
+
+// 무인지대 회귀: AI 입찰 진입선이 원소속팀 재계약 자격선(51)보다 높으면
+// "원소속팀은 방출하는데 아무도 볼 수 없는" OVR 구간이 다시 생긴다 (계측 110명 소멸).
+const _renewGate = /pOvr>=(\d+)\s*&&\s*rand/.exec(g('showStoveLeague.toString()'));
+check(`T45: 무인지대 부재 — AI 진입선(${g('FA_AI_MIN_OVR')}) <= 재계약 자격선(${_renewGate ? _renewGate[1] : '?'})`,
+  !!_renewGate && g('FA_AI_MIN_OVR') <= Number(_renewGate[1]),
+  JSON.stringify({ aiMin: g('FA_AI_MIN_OVR'), renew: _renewGate && _renewGate[1] }));
+
+// 양방향 도달성: 약팀+강FA는 니즈 성립, 강팀+약FA는 불성립. 한쪽만 성립하면 게이트가 굳은 것.
+const _needProbe = g(`(function(){
+  const t=G.teams.find(x=>x!==G.myTeam);
+  const grpOf=p=>_ovrCalibGroup(p);
+  // 실재하는 그룹 하나를 골라 그 팀의 주전 최하위 OVR을 구한다
+  const grp='OF', need=FA_NEED_STARTERS[grp];
+  const depth=t.roster.filter(p=>(p.status||'active')==='active'&&grpOf(p)===grp)
+    .map(p=>ovr(p)).sort((a,b)=>b-a);
+  if(depth.length<need) return {skip:'그룹 인원 미달'};
+  const worst=depth[need-1];
+  // 가짜 FA 두 명 — 주전 최하위보다 확실히 위/아래
+  const mk=o=>{const p=genBatter('LF',null);['contact','power','eye','speed','fielding','arm']
+    .forEach(k=>{p[k]=o;});return p;};
+  const strong=mk(Math.min(99,worst+30)), weak=mk(Math.max(1,worst-30));
+  return {worst, strongOvr:ovr(strong), weakOvr:ovr(weak),
+          strongNeed:_faTeamNeed(t,strong), weakNeed:_faTeamNeed(t,weak)};
+})()`);
+check(`T45: 니즈 양방향 도달 — 강FA(OVR ${_needProbe.strongOvr}) 성립 · 약FA(OVR ${_needProbe.weakOvr}) 불성립 (주전 최하위 ${_needProbe.worst})`,
+  _needProbe.skip ? true : (_needProbe.strongNeed === true && _needProbe.weakNeed === false),
+  JSON.stringify(_needProbe));
+
+// 슬롯 상한 실효: 한 오프시즌의 팀별 낙찰이 상한을 넘지 않는다
+const _slot = g(`(function(){
+  const cnt={};
+  (G.faBiddingLog||[]).forEach(b=>{cnt[b.team]=(cnt[b.team]||0)+1;});
+  const over=Object.entries(cnt).filter(([k,v])=>v>FA_AI_MAX_SIGNINGS);
+  return {max:FA_AI_MAX_SIGNINGS, counts:cnt, over:over.length};
+})()`);
+check(`T45: 팀당 오프시즌 영입이 상한 ${_slot.max}명 이내 (초과 팀 ${_slot.over})`,
+  _slot.over === 0, JSON.stringify(_slot.counts));
+
+// ══ T46. 도달 가능성 불변량 (fix/#28) ═══════════════════════
+// 이번 작업에서 나온 결함 4종은 전부 같은 모양이었다 — **개별로는 타당한 상수가 서로
+// 도달 불가능한 조합을 이루는 것**. 값이 틀린 게 아니라 관계가 정의되지 않은 형태라
+// 단위 테스트로는 잡히지 않고, 다시즌 계측을 돌려야만 드러난다.
+//   · needBat<11        vs ACTIVE_MIN_BATTERS=12          (FA 니즈 死코드)
+//   · AI 진입선 59       vs 재계약 자격선 51                (무인지대 110명)
+//   · a=S/E=4.3         vs FA_SERVICE_TIME_THRESHOLD=6    (FA 도달 불가)
+// 여기서는 개별 값이 아니라 **관계**를 가드한다.
+section('T46. 도달 가능성 불변량 (fix/#28)');
+
+// ── I2: FA 도달 가능성 ──
+// 적립 = a×1.0 + f×c ≥ FA_SERVICE_TIME_THRESHOLD
+//   a = S/E  (1군 슬롯 / 연간 유입) — 선수 1인이 평균적으로 확보하는 1군 시즌
+//   c        = 팜 1시즌 적립분 (게임 자체 함수로 계산 — 프로브가 규칙을 재구현하면 어긋난다)
+//   f = 3    = 전형적 팜 체류 시즌 (계측 기반 가정)
+const inv = g(`(function(){
+  const S=G.teams.length*ACTIVE_ROSTER_MAX;
+  const E=DRAFT_ROUNDS*G.teams.length+FA_OTHER_INFLOW_EST;
+  const a=S/E;
+  const c=_serviceGainFromGames(Math.round(TOTAL_REGULAR*FARM_SERVICE_CREDIT));
+  const f=3;
+  return {S:S, E:E, a:+a.toFixed(2), c:c, f:f, total:+(a+f*c).toFixed(2),
+          need:FA_SERVICE_TIME_THRESHOLD, activeOnly:+a.toFixed(2)};
+})()`);
+check(`T46/I2: 평균 커리어가 FA 자격에 도달 — 1군 ${inv.a} + 팜 ${inv.f}×${inv.c} = ${inv.total} >= ${inv.need}`,
+  inv.total >= inv.need,
+  JSON.stringify(inv));
+// 팜 적립이 없으면(구 동작) 도달 불가였음을 함께 기록 — 이 가드가 무엇을 막는지 남긴다
+check(`T46/I2: 팜 적립 없이는 도달 불가였음을 확인 (1군만 ${inv.activeOnly} < ${inv.need})`,
+  inv.activeOnly < inv.need, `${inv.activeOnly} — 슬롯만으로 충분하면 이 가드는 무의미해진다`);
+// 팜 적립이 1군 풀타임을 넘어서면 1군 기용의 의미가 사라진다.
+// ⚠️ 여기엔 **불연속 절벽**이 있다 — _serviceGainFromGames는 SERVICE_FULL_SERIES(15시리즈=45경기)
+//    이상이면 계단식으로 1.0을 준다. TOTAL_REGULAR=63 기준 크레딧이 45/63 = 0.714를 넘으면
+//    팜이 곧바로 1군과 동급이 된다. 0.65 → 0.72처럼 "조금만" 올려도 0.62 → 1.0으로 튄다.
+const cliff = g(`Math.round(SERVICE_FULL_SERIES*SERIES_LENGTH)/TOTAL_REGULAR`);
+check(`T46/I2: 팜 1시즌 적립(${inv.c})이 1군 풀타임(1.0) 미만`, inv.c > 0 && inv.c < 1.0);
+check(`T46/I2: 팜 크레딧 ${g('FARM_SERVICE_CREDIT')}이 풀시즌 절벽(${cliff.toFixed(3)}) 아래`,
+  g('FARM_SERVICE_CREDIT') < cliff,
+  `절벽을 넘으면 팜 선수가 1군 풀타임과 동일하게 적립한다`);
+
+// ── I3: 게이트 임계가 다른 규칙의 강제 하한과 모순 없을 것 ──
+// FA 니즈가 인원수 임계로 되돌아가면 리그 최소 정원보다 낮게 잡히는 사고가 재발한다.
+check('T46/I3: FA 니즈가 인원수 임계로 회귀하지 않음',
+  !/batCount\s*<|pitCount\s*</.test(g('_runAIFreeAgentBidding.toString()')) &&
+  !/batCount\s*<|pitCount\s*</.test(g('_faTeamNeed.toString()')));
+
+// ── I4: 조직 정원이 연간 유입 + 최소 정원을 수용할 것 ──
+const cap = g(`(function(){
+  return {org:FUTURES_ORG_MAX, min:ORG_MIN_TOTAL, picks:DRAFT_ROUNDS,
+          need:ORG_MIN_TOTAL+DRAFT_ROUNDS};
+})()`);
+check(`T46/I4: 조직 정원 ${cap.org} >= 최소 정원 ${cap.min} + 연간 지명 ${cap.picks}`,
+  cap.org >= cap.need, JSON.stringify(cap));
+
+// 정원이 찬 AI 팀은 드래프트에서 자동 방출로 자리를 만든다 (체인이 멈추지 않는다).
+// 유저 팀은 의도적으로 거부 + 안내(season-core.js:315)라 대상이 아니다.
+check('T46/I4: 정원 초과 AI 팀은 지명 시 자동 방출 경로 보유',
+  /roster\.length>=FUTURES_ORG_MAX/.test(g('_processDraftPick.toString()')),
+  'AI 픽 경로에 정원 처리가 없으면 체인이 정지한다');
+
+// ── 팜 적립 실동작 (상수만 있고 배선이 빠지는 것을 막는다) ──
+const accrue = g(`(function(){
+  const t=G.myTeam;
+  const a=t.roster.find(p=>(p.status||'active')==='active');
+  const f=t.roster.find(p=>p.status==='futures');
+  if(!a||!f)return {skip:true};
+  const a0=a._svcGames||0, f0=f._svcGames||0;
+  _accrueServiceDay();
+  return {activeGain:+( (a._svcGames||0)-a0 ).toFixed(2),
+          farmGain:  +( (f._svcGames||0)-f0 ).toFixed(2)};
+})()`);
+check(`T46: 1군 경기당 적립 1.0 · 팜 ${g('FARM_SERVICE_CREDIT')} (관측 ${accrue.activeGain} / ${accrue.farmGain})`,
+  accrue.skip ? true : (accrue.activeGain === 1 && accrue.farmGain === g('FARM_SERVICE_CREDIT')),
+  JSON.stringify(accrue));
+
+// ══ T47. 연봉 재산정 · 플로어 실효화 (fix/#28) ══════════════
+section('T47. 연봉 재산정 · 플로어 실효화 (fix/#28)');
+
+// ── H1: AI 만료 계약 재산정이 유저와 같은 산정기를 쓴다 ──
+// 구 규칙은 `mult = pOvr>=70 ? 1.2 : pOvr<31 ? 0.8 : 0`이고 배율 0이면 조기 return이라
+// OVR 31~69 만료 계약자가 영구 동결됐다(동결률 83~97% · Arb 단가 1.02 → 0.56억 반토막).
+const _sns = g('_startNextSeason.toString()');
+const _snsCode = _noComments(_sns);
+check('T47/H1: AI 재산정이 _calcNewSalary(유저와 동일 산정기)를 사용',
+  _snsCode.includes('_calcNewSalary(p,team)'));
+check('T47/H1: 구 OVR 배율 게이트 부재 (mult 0 → 영구 동결)',
+  !/\(p\.salary\|\|SALARY_MIN\)\s*\*/.test(_snsCode),
+  '구 배율 대입식이 남아 있으면 중간 대역이 다시 동결된다');
+check('T47/H1: AI도 Arb 연차를 누적 (_arbYears)', _snsCode.includes('_arbYears'));
+// 컨셉 배율이 팀 인자를 따르는지 — 이전엔 G.myTeam.concept 하드코딩이라 AI 선수에게
+// 유저 팀 컨셉이 적용될 뻔했다.
+check('T47/H1: _calcNewSalary 컨셉 배율이 선수 소속팀 기준',
+  !/G\.myTeam\.concept/.test(_noComments(g('_calcNewSalary.toString()'))));
+
+// 실동작: 중간 대역(OVR 31~69) 만료 계약자의 연봉이 실제로 재산정되는가.
+// 값이 아니라 "동결되지 않는다"를 본다 — 이게 H1의 계약이다.
+const reRate = g(`(function(){
+  const t=G.teams.find(x=>x!==G.myTeam);
+  const p=t.roster.find(x=>{const o=ovr(x);return o>=31&&o<70&&(x._serviceTime||0)>=ARB_MIN_SERVICE;});
+  if(!p)return {skip:true};
+  const before=p.salary;
+  const after=_calcNewSalary(p,t);
+  return {ovr:ovr(p), st:p._serviceTime, before:before, after:after, changed:after!==before};
+})()`);
+check(`T47/H1: 중간 대역 Arb 만료자가 재산정됨 (OVR ${reRate.ovr} · ${reRate.before} → ${reRate.after})`,
+  reRate.skip ? true : reRate.changed, JSON.stringify(reRate));
+
+// ── H3: 플로어가 현금 중립이 아니다 ──
+// 배율 1.0이면 `페이롤 + 벌과금 = 플로어`로 지출 총액이 같아져 페이롤을 올릴 유인이 0이 된다.
+// 실제로 12시즌 벌과금 539억을 내면서 예산은 118 → 250억으로 늘었다(현금만 순환).
+check(`T47/H3: 플로어 벌과금 배율 ${g('SALARY_FLOOR_PENALTY_RATE')} > 1.0 (현금 중립 아님)`,
+  g('SALARY_FLOOR_PENALTY_RATE') > 1.0,
+  '1.0이면 덜 쓰는 쪽과 채우는 쪽의 지출이 같아져 벌금이 행동을 바꾸지 못한다');
+check('T47/H3: 정산이 배율을 실제로 적용',
+  /shortfall\s*\*\s*SALARY_FLOOR_PENALTY_RATE/.test(_noComments(g('showStoveLeague.toString()'))),
+  '상수만 있고 배선이 빠지면 무의미하다');
+// 부등식으로 확인: 미달 상태의 총지출(페이롤+벌과금) > 플로어를 채웠을 때의 지출
+const floorMath = g(`(function(){
+  const floor=getSalaryFloor(), payroll=floor*0.6, short=floor-payroll;
+  return {underspend:+(payroll+short*SALARY_FLOOR_PENALTY_RATE).toFixed(1), meetFloor:floor};
+})()`);
+check(`T47/H3: 미달 시 총지출 ${floorMath.underspend} > 플로어 충족 시 ${floorMath.meetFloor}`,
+  floorMath.underspend > floorMath.meetFloor, JSON.stringify(floorMath));
 
 // ── 리포트 ──────────────────────────────────────────────────
 function report() {

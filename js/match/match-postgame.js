@@ -15,8 +15,16 @@ function _restRecoveryBonus(p){
 }
 // P2-3 서비스타임 적립 (전 구단, 게임일당 1회) — 반드시 그날의 부상 롤 "이전"에 호출
 // (부상 롤 뒤에 두면 출전했지만 당일 부상당한 선수가 등록 크레딧을 잃는다)
+// 팜(2군·육성)도 FARM_SERVICE_CREDIT 비율로 적립한다 — 근거는 constants.js의 상수 주석 참조.
+// `_svcGames`는 이제 정수가 아니라 소수일 수 있다. 소비처 `_serviceGainFromGames`가
+// `Math.floor(games/SERIES_LENGTH)`로 시리즈를 세므로 소수도 그대로 처리되고,
+// 구 세이브(정수)와도 호환된다 — 마이그레이션 불필요(`_v` 불변).
 function _accrueServiceDay(){
-  G.teams.forEach(tm=>tm.roster.forEach(p=>{if((p.status||'active')==='active'&&p.role!=='overseas')p._svcGames=(p._svcGames||0)+1;}));
+  G.teams.forEach(tm=>tm.roster.forEach(p=>{
+    const st=(p.status||'active');
+    if(st==='active'&&p.role!=='overseas')      p._svcGames=(p._svcGames||0)+1;
+    else if(st==='futures'||st==='developmental')p._svcGames=(p._svcGames||0)+FARM_SERVICE_CREDIT;
+  }));
 }
 // 슬럼프 발동 롤: 성공 시 지속 경기 수, 아니면 0 (P2-5 슬럼프 완화 시설 반영)
 function _rollSlumpOnset(p,team){
